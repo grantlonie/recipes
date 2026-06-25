@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urldefrag
+from urllib.parse import urljoin, urldefrag, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -131,6 +131,20 @@ UNIT_ALIASES = {
     "teaspoons": "tsp",
     "tsp": "tsp",
 }
+NUMBER_WORDS = {
+    "1": ("one", "a", "an"),
+    "2": ("two",),
+    "3": ("three",),
+    "4": ("four",),
+    "5": ("five",),
+    "6": ("six",),
+    "7": ("seven",),
+    "8": ("eight",),
+    "9": ("nine",),
+    "10": ("ten",),
+    "11": ("eleven",),
+    "12": ("twelve",),
+}
 
 
 @dataclass(frozen=True)
@@ -236,14 +250,17 @@ def convert_file(
     title = first_non_empty(lines) or source_path.stem.replace("_", " ")
     source_url = first_url(lines)
     metadata, body_start = extract_metadata(lines, title, source_url)
+    slug = unique_slug(slugify(title), used_slugs)
+    destination_path = destination / f"{slug}.cook"
+    existing_image = existing_metadata_value(destination_path, "image")
     if fetch_images and source_url:
-        image_url, image_warning = scrape_image_url(source_url)
+        image_url, image_warning = scrape_image_url(canonical_source_url(source_url))
         if image_url:
             metadata["image"] = image_url
         elif image_warning:
             warnings.append(image_warning)
-    slug = unique_slug(slugify(title), used_slugs)
-    destination_path = destination / f"{slug}.cook"
+    if "image" not in metadata and existing_image:
+        metadata["image"] = existing_image
 
     if prefer_url_import and source_url:
         imported_content = import_with_cooklang(source_url, metadata, warnings)
@@ -503,11 +520,43 @@ def inline_ingredients(steps: list[str], ingredients: list[IngredientEntry]) -> 
 
 def replace_ingredient_once(step: str, ingredient: IngredientEntry) -> tuple[str, bool]:
     for alias in ingredient_aliases(ingredient.name):
-        pattern = re.compile(rf"(?<![@A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])", re.IGNORECASE)
+        pattern = ingredient_pattern(alias, ingredient)
         updated, used = replace_outside_markers(step, pattern, ingredient.marker)
         if used:
             return updated, True
     return step, False
+
+
+def ingredient_pattern(alias: str, ingredient: IngredientEntry) -> re.Pattern[str]:
+    amount_prefix = amount_prefix_pattern(ingredient)
+    prefix = rf"(?P<amount>{amount_prefix})?" if amount_prefix else ""
+    return re.compile(rf"(?<![@A-Za-z0-9]){prefix}{re.escape(alias)}(?![A-Za-z0-9])", re.IGNORECASE)
+
+
+def amount_prefix_pattern(ingredient: IngredientEntry) -> str:
+    if not ingredient.quantity or not ingredient.unit:
+        return ""
+
+    quantity_pattern = quantity_phrase_pattern(ingredient.quantity)
+    unit_pattern = unit_phrase_pattern(ingredient.unit)
+    return rf"(?:{quantity_pattern})\s+(?:{unit_pattern})(?:\s+of)?\s+"
+
+
+def quantity_phrase_pattern(quantity: str) -> str:
+    variants = [quantity]
+    variants.extend(NUMBER_WORDS.get(quantity, ()))
+    return "|".join(re.escape(variant) for variant in variants)
+
+
+def unit_phrase_pattern(unit: str) -> str:
+    variants = {unit}
+    normalized = unit.casefold()
+    variants.update(alias for alias, canonical in UNIT_ALIASES.items() if canonical.casefold() == normalized)
+    if normalized.endswith("s"):
+        variants.add(normalized.removesuffix("s"))
+    else:
+        variants.add(f"{normalized}s")
+    return "|".join(re.escape(variant) for variant in sorted(variants, key=len, reverse=True))
 
 
 def replace_outside_markers(step: str, pattern: re.Pattern[str], marker: str) -> tuple[str, bool]:
@@ -517,25 +566,36 @@ def replace_outside_markers(step: str, pattern: re.Pattern[str], marker: str) ->
     for match in MARKER_RE.finditer(step):
         plain = step[cursor : match.start()]
         if not used and pattern.search(plain):
-            plain = pattern.sub(marker, plain, count=1)
+            plain = pattern.sub(lambda match: replacement_marker(match, marker), plain, count=1)
             used = True
         parts.append(plain)
         parts.append(match.group(0))
         cursor = match.end()
     plain = step[cursor:]
     if not used and pattern.search(plain):
-        plain = pattern.sub(marker, plain, count=1)
+        plain = pattern.sub(lambda match: replacement_marker(match, marker), plain, count=1)
         used = True
     parts.append(plain)
     return "".join(parts), used
 
 
+def replacement_marker(match: re.Match[str], marker: str) -> str:
+    amount = match.groupdict().get("amount")
+    if not amount:
+        return marker
+    amount = re.sub(r"\s+of\s+$", " ", amount, flags=re.IGNORECASE)
+    return f"{amount}{marker}"
+
+
 def ingredient_aliases(name: str) -> list[str]:
-    aliases = [name]
+    words = [word for word in re.split(r"[\s/]+", name) if word]
+    aliases = []
+    if len(words) == 2 and words[-1].casefold() == "pasta":
+        aliases.append(words[0])
+    aliases.append(name)
     without_descriptor = re.sub(r"^(?:chopped|crushed|dried|fresh|ground)\s+", "", name, flags=re.IGNORECASE)
     if without_descriptor != name:
         aliases.append(without_descriptor)
-    words = [word for word in re.split(r"[\s/]+", name) if word]
     stop_words = {
         "a",
         "an",
@@ -598,7 +658,7 @@ def convert_ingredient_line(line: str) -> str | None:
         amount = "{}"
 
     suffix = ""
-    if name != cook_name and line.endswith(name):
+    if name.casefold() != cook_name.casefold() and line.endswith(name):
         suffix = line.removesuffix(name).strip()
     return f"{prefix}@{cook_name}{amount}{(' ' + suffix) if suffix else ''}"
 
@@ -742,6 +802,29 @@ def merge_front_matter(content: str, metadata: dict[str, Any]) -> str:
     return f"---\n{chr(10).join(lines)}\n---\n\n{body.lstrip()}"
 
 
+def existing_metadata_value(path: Path, key: str) -> str | None:
+    if not path.exists():
+        return None
+
+    match = FRONT_MATTER_RE.match(path.read_text(encoding="utf-8"))
+    if not match:
+        return None
+
+    metadata_match = re.search(rf"^{re.escape(key)}:\s*(?P<value>.+)$", match.group("front_matter"), re.MULTILINE)
+    if not metadata_match:
+        return None
+
+    return metadata_match.group("value").strip().strip("'\"") or None
+
+
+def canonical_source_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.netloc.casefold().endswith("google.com") and parsed.path.startswith("/amp/s/"):
+        path = parsed.path.removeprefix("/amp/s/").removesuffix("/amp")
+        return f"https://{path}"
+    return url
+
+
 def scrape_image_url(url: str) -> tuple[str | None, str | None]:
     request_url = urldefrag(url).url
     try:
@@ -883,7 +966,7 @@ def normalize_cook_name(value: str) -> str:
     ascii_value = re.sub(r"\([^)]*\)", "", ascii_value)
     ascii_value = ascii_value.split(",", 1)[0]
     ascii_value = re.sub(r"[^A-Za-z0-9_./' -]+", " ", ascii_value)
-    return re.sub(r"\s+", " ", ascii_value).strip(" -")
+    return re.sub(r"\s+", " ", ascii_value).strip(" -").casefold()
 
 
 def replace_unicode_fractions(value: str) -> str:

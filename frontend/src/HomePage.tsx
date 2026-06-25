@@ -153,8 +153,8 @@ function RecipeCard({ recipe }: RecipeCardProps) {
           src={recipe.image}
         />
       ) : (
-        <div className="flex h-40 items-center justify-center bg-orange-100 text-orange-700">
-          No image
+        <div className="flex h-40 items-center justify-center bg-orange-100">
+          <img alt="" className="h-28 w-28 object-contain opacity-90" src="/web-app-icon-512.png" />
         </div>
       )}
       <div className="space-y-3 p-4">

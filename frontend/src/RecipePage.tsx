@@ -1,10 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
 import { getRecipe, getScaledRecipe, updateRecipe } from './api'
 import { useAuth } from './AuthContext'
+
+const LOWERCASE_INGREDIENT_WORDS = new Set(['and', 'as', 'for', 'in', 'of', 'or', 'the', 'to', 'with'])
+const AMOUNT_PREFIX_RE =
+  /((?:\b(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:bags?|bottles?|boxes?|bunch(?:es)?|cans?|cloves?|cups?|dashes?|gallons?|grams?|kg|lbs?|ml|ounces?|oz|packages?|packets?|pieces?|pinches?|pints?|pounds?|quarts?|slices?|shots?|sprigs?|sticks?|tablespoons?|tbsp|teaspoons?|tsp)(?:\s+of)?\s+)?)@([^{}@]+)\{([^}]*)\}/gi
 
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
@@ -129,7 +133,7 @@ export function RecipePage() {
                   className="flex justify-between gap-3 text-sm"
                   key={`${ingredient.name}-${index}`}
                 >
-                  <span>{ingredient.name}</span>
+                  <span>{titleCaseIngredient(ingredient.name)}</span>
                   <span className="text-right text-stone-600">
                     {ingredient.scaled_quantity ?? ingredient.quantity ?? ''}
                     {ingredient.unit ? ` ${ingredient.unit}` : ''}
@@ -172,7 +176,7 @@ export function RecipePage() {
                   <span className="mb-2 block text-sm font-semibold text-orange-700">
                     Step {index + 1}
                   </span>
-                  <p className="whitespace-pre-line text-stone-800">{step}</p>
+                  <p className="whitespace-pre-line text-stone-800">{renderCooklangStep(step)}</p>
                 </li>
               ))}
             </ol>
@@ -230,4 +234,70 @@ export function RecipePage() {
     }
     await navigator.clipboard.writeText(recipe.public_url)
   }
+}
+
+function titleCaseIngredient(value: string) {
+  let wordIndex = 0
+
+  return value.replace(/[A-Za-z][A-Za-z']*/g, word => {
+    const lower = word.toLowerCase()
+    const formatted =
+      wordIndex > 0 && LOWERCASE_INGREDIENT_WORDS.has(lower)
+        ? lower
+        : `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`
+    wordIndex += 1
+    return formatted
+  })
+}
+
+function renderCooklangStep(step: string) {
+  const rendered: ReactNode[] = []
+  let cursor = 0
+  let markerIndex = 0
+
+  AMOUNT_PREFIX_RE.lastIndex = 0
+  for (const match of step.matchAll(AMOUNT_PREFIX_RE)) {
+    const [marker, prefix, name, amount] = match
+    const matchIndex = match.index ?? 0
+    if (matchIndex > cursor) {
+      rendered.push(step.slice(cursor, matchIndex))
+    }
+
+    const normalizedPrefix = prefix.replace(/\s+of\s+$/i, ' ')
+    const ingredient = normalizedPrefix
+      ? `${normalizedPrefix}${name.trim()}`
+      : formatIngredientPhrase(name.trim(), amount)
+    rendered.push(
+      <span
+        className="inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900"
+        key={`${matchIndex}-${markerIndex}`}
+      >
+        {ingredient}
+      </span>,
+    )
+    cursor = matchIndex + marker.length
+    markerIndex += 1
+  }
+
+  if (cursor < step.length) {
+    rendered.push(step.slice(cursor))
+  }
+
+  return rendered.length ? rendered : step
+}
+
+function formatIngredientPhrase(name: string, amount: string) {
+  const { quantity, unit } = splitAmount(amount)
+  if (!quantity) {
+    return name
+  }
+  if (!unit) {
+    return `${quantity} ${name}`
+  }
+  return `${quantity} ${unit} ${name}`
+}
+
+function splitAmount(amount: string) {
+  const [quantity, unit] = amount.split('%', 2).map(part => part.trim())
+  return { quantity: quantity?.replace(/^=/, '') ?? '', unit: unit ?? '' }
 }
