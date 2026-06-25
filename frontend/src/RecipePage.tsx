@@ -1,10 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import type { ChangeEvent, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
-import { getRecipe, getScaledRecipe } from './api'
+import { createGroup, getGroups, getRecipe, getScaledRecipe, updateGroup } from './api'
 import { useAuth } from './AuthContext'
+import type { Group } from './types'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
   'and',
@@ -23,24 +24,61 @@ const AMOUNT_PREFIX_RE =
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
   const { auth } = useAuth()
+  const queryClient = useQueryClient()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () => getRecipe(slug),
     queryKey: ['recipe', slug],
   })
   const [servings, setServings] = useState(1)
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
+  const [groupSearch, setGroupSearch] = useState('')
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false)
+  const groupsQuery = useQuery({
+    enabled: auth.authenticated,
+    queryFn: getGroups,
+    queryKey: ['groups'],
+  })
   const scaledQuery = useQuery({
     enabled: Boolean(slug) && servings !== recipeQuery.data?.servings,
     queryFn: () => getScaledRecipe(slug, servings),
     queryKey: ['recipe', slug, 'scale', servings],
   })
+  const addToGroupMutation = useMutation({
+    mutationFn: (group: Group) =>
+      updateGroup(group.slug, {
+        recipes: group.recipes.includes(slug) ? group.recipes : [...group.recipes, slug],
+        title: group.title,
+      }),
+    onSuccess: () => invalidateGroups(),
+  })
+  const createGroupMutation = useMutation({
+    mutationFn: (title: string) => createGroup({ recipes: [slug], title }),
+    onSuccess: () => {
+      setGroupSearch('')
+      setGroupMenuOpen(false)
+      invalidateGroups()
+    },
+  })
   const recipe = scaledQuery.data ?? recipeQuery.data
+  const recipeGroups = (groupsQuery.data ?? []).filter(group => group.recipes.includes(slug))
+  const filteredGroups = (groupsQuery.data ?? []).filter(group =>
+    group.title.toLowerCase().includes(groupSearch.trim().toLowerCase())
+  )
+  const trimmedGroupSearch = groupSearch.trim()
+  const groupTitleExists = (groupsQuery.data ?? []).some(
+    group => group.title.toLowerCase() === trimmedGroupSearch.toLowerCase()
+  )
 
   useEffect(() => {
     if (recipeQuery.data) {
       setServings(recipeQuery.data.servings)
     }
   }, [recipeQuery.data])
+
+  useEffect(() => {
+    setCompletedSteps(new Set())
+  }, [slug])
 
   if (recipeQuery.isLoading) {
     return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
@@ -56,11 +94,11 @@ export function RecipePage() {
         Back to recipes
       </Link>
 
-      <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
+      <section className="rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
         {recipe.image ? (
           <img
             alt=""
-            className="max-h-[420px] w-full object-cover"
+            className="max-h-[420px] w-full rounded-t-3xl object-cover"
             referrerPolicy="no-referrer"
             src={recipe.image}
           />
@@ -74,7 +112,7 @@ export function RecipePage() {
                 {recipe.servings} servings
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex max-w-full flex-wrap gap-2">
               <button
                 className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
                 onClick={handleShare}
@@ -82,6 +120,70 @@ export function RecipePage() {
               >
                 Share
               </button>
+              {auth.authenticated ? (
+                <div className="relative">
+                  <button
+                    className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-200"
+                    onClick={() => setGroupMenuOpen(open => !open)}
+                    type="button"
+                  >
+                    {recipeGroups.length
+                      ? `Groups (${recipeGroups.length})`
+                      : 'Add to group'}
+                  </button>
+                  {groupMenuOpen ? (
+                    <div className="absolute right-0 z-20 mt-2 w-[calc(100vw-2rem)] max-w-72 rounded-2xl bg-white p-3 shadow-lg ring-1 ring-orange-100">
+                      <label className="block">
+                        <span className="sr-only">Find or create a group</span>
+                        <input
+                          className="w-full rounded-xl border border-orange-200 px-3 py-2 text-sm outline-none ring-orange-500 focus:ring-2"
+                          onChange={event => setGroupSearch(event.target.value)}
+                          placeholder="Find or create group"
+                          value={groupSearch}
+                        />
+                      </label>
+                      <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
+                        {filteredGroups.length ? (
+                          filteredGroups.map(group => {
+                            const added = group.recipes.includes(slug)
+
+                            return (
+                              <button
+                                className="flex w-full items-center justify-between gap-3 rounded-xl bg-orange-50 px-3 py-2 text-left text-sm hover:bg-orange-100 disabled:cursor-default disabled:opacity-70"
+                                disabled={added || addToGroupMutation.isPending}
+                                key={group.slug}
+                                onClick={() => handleAddToGroup(group)}
+                                type="button"
+                              >
+                                <span>{group.title}</span>
+                                {added ? (
+                                  <span className="text-xs font-semibold text-orange-700">
+                                    Added
+                                  </span>
+                                ) : null}
+                              </button>
+                            )
+                          })
+                        ) : (
+                          <p className="rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                            No matching groups.
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        className="mt-3 w-full rounded-xl bg-orange-600 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+                        disabled={
+                          !trimmedGroupSearch || groupTitleExists || createGroupMutation.isPending
+                        }
+                        onClick={handleCreateGroup}
+                        type="button"
+                      >
+                        {createGroupMutation.isPending ? 'Creating...' : createGroupLabel()}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {recipe.original_url ? (
                 <a
                   className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
@@ -178,20 +280,58 @@ export function RecipePage() {
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
             <h2 className="text-lg font-semibold">Steps</h2>
             <ol className="mt-4 space-y-4">
-              {recipe.steps.map((step, index) => (
-                <li className="rounded-xl bg-orange-50 p-4" key={`${step}-${index}`}>
-                  <span className="mb-2 block text-sm font-semibold text-orange-700">
-                    Step {index + 1}
-                  </span>
-                  <p className="whitespace-pre-line text-stone-800">{renderCooklangStep(step)}</p>
-                </li>
-              ))}
+              {recipe.steps.map((step, index) => {
+                const completed = completedSteps.has(index)
+                const checkboxId = `step-${index + 1}-complete`
+
+                return (
+                  <li
+                    className={`rounded-xl bg-orange-50 p-4 transition-all ${
+                      completed ? 'py-2' : ''
+                    }`}
+                    key={`${step}-${index}`}
+                  >
+                    <label
+                      className={`flex cursor-pointer items-center gap-3 text-sm font-semibold text-orange-700 ${
+                        completed ? '' : 'mb-2'
+                      }`}
+                      htmlFor={checkboxId}
+                    >
+                      <input
+                        checked={completed}
+                        className="h-4 w-4 rounded border-orange-300 text-orange-600 accent-orange-600"
+                        id={checkboxId}
+                        onChange={() => toggleStepCompletion(index)}
+                        type="checkbox"
+                      />
+                      <span>Step {index + 1}</span>
+                    </label>
+                    {completed ? null : (
+                      <p className="whitespace-pre-line text-stone-800">
+                        {renderCooklangStep(step)}
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
             </ol>
           </section>
         </div>
       </div>
     </article>
   )
+
+  function toggleStepCompletion(index: number) {
+    setCompletedSteps(current => {
+      const next = new Set(current)
+      if (next.has(index)) {
+        next.delete(index)
+      } else {
+        next.add(index)
+      }
+      return next
+    })
+  }
 
   function handleServingsChange(event: ChangeEvent<HTMLInputElement>) {
     if (!recipe) {
@@ -210,6 +350,33 @@ export function RecipePage() {
       return
     }
     await navigator.clipboard.writeText(recipe.public_url)
+  }
+
+  async function handleAddToGroup(group: Group) {
+    await addToGroupMutation.mutateAsync(group)
+    setGroupSearch('')
+    setGroupMenuOpen(false)
+  }
+
+  async function handleCreateGroup() {
+    if (!trimmedGroupSearch || groupTitleExists) {
+      return
+    }
+    await createGroupMutation.mutateAsync(trimmedGroupSearch)
+  }
+
+  function createGroupLabel() {
+    if (!trimmedGroupSearch) {
+      return 'Create new group'
+    }
+    if (groupTitleExists) {
+      return 'Group already exists'
+    }
+    return `Create "${trimmedGroupSearch}"`
+  }
+
+  function invalidateGroups() {
+    queryClient.invalidateQueries({ queryKey: ['groups'] })
   }
 }
 

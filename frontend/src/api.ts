@@ -26,6 +26,10 @@ export async function createRecipe(slug: string, content: string): Promise<Recip
   })
 }
 
+export async function deleteGroup(slug: string): Promise<void> {
+  return request(`/api/groups/${slug}`, { method: 'DELETE' })
+}
+
 export async function getAuthState(): Promise<AuthState> {
   return request('/api/auth/me')
 }
@@ -100,6 +104,10 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     const detail = await response.json().catch(() => ({ detail: response.statusText }))
     throw new Error(String(detail.detail ?? response.statusText))
+  }
+
+  if (response.status === 204) {
+    return undefined as T
   }
 
   return response.json() as Promise<T>

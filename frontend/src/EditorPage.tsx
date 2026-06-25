@@ -1,8 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ChangeEvent, FormEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { FormEvent } from 'react'
 import { useState } from 'react'
 
-import { createGroup, createRecipe, getGroups, getRecipes, updateGroup } from './api'
+import { createRecipe } from './api'
 import { useAuth } from './AuthContext'
 
 const emptyRecipe = `---
@@ -19,34 +19,14 @@ Add @ingredient{1%cup}.
 
 export function EditorPage() {
   const { auth, loginError, loginPending, signIn } = useAuth()
-  const [groupRecipes, setGroupRecipes] = useState<string[]>([])
-  const [groupTitle, setGroupTitle] = useState('')
   const [importUrl, setImportUrl] = useState('')
   const [password, setPassword] = useState('')
   const [recipeContent, setRecipeContent] = useState(emptyRecipe)
   const [recipeSlug, setRecipeSlug] = useState('new-recipe')
-  const [selectedGroup, setSelectedGroup] = useState('')
   const [username, setUsername] = useState('editor')
   const queryClient = useQueryClient()
-  const groupsQuery = useQuery({
-    enabled: auth.authenticated,
-    queryFn: getGroups,
-    queryKey: ['groups'],
-  })
-  const recipesQuery = useQuery({
-    enabled: auth.authenticated,
-    queryFn: () => getRecipes(''),
-    queryKey: ['recipes', 'editor'],
-  })
   const createRecipeMutation = useMutation({
     mutationFn: ({ content, slug }: RecipeInput) => createRecipe(slug, content),
-    onSuccess: () => invalidateRecipes(),
-  })
-  const groupMutation = useMutation({
-    mutationFn: () =>
-      selectedGroup
-        ? updateGroup(selectedGroup, { recipes: groupRecipes, title: groupTitle })
-        : createGroup({ recipes: groupRecipes, title: groupTitle }),
     onSuccess: () => invalidateRecipes(),
   })
   if (!auth.authenticated) {
@@ -130,61 +110,6 @@ export function EditorPage() {
           />
         </section>
       </div>
-
-      <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
-        <h2 className="text-xl font-semibold">Groups</h2>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[260px_1fr]">
-          <div className="space-y-3">
-            <button
-              className="w-full rounded-xl bg-orange-100 px-3 py-2 text-left text-sm font-semibold text-orange-800"
-              onClick={handleNewGroup}
-              type="button"
-            >
-              New group
-            </button>
-            {(groupsQuery.data ?? []).map(group => (
-              <button
-                className="w-full rounded-xl bg-stone-100 px-3 py-2 text-left text-sm hover:bg-stone-200"
-                key={group.slug}
-                onClick={() => handleSelectGroup(group.slug)}
-                type="button"
-              >
-                {group.title}
-              </button>
-            ))}
-          </div>
-          <form className="space-y-4" onSubmit={handleSaveGroup}>
-            <input
-              className="w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2"
-              onChange={event => setGroupTitle(event.target.value)}
-              placeholder="Group title"
-              value={groupTitle}
-            />
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(recipesQuery.data ?? []).map(recipe => (
-                <label
-                  className="flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2 text-sm"
-                  key={recipe.slug}
-                >
-                  <input
-                    checked={groupRecipes.includes(recipe.slug)}
-                    onChange={event => handleGroupRecipeChange(recipe.slug, event)}
-                    type="checkbox"
-                  />
-                  {recipe.title}
-                </label>
-              ))}
-            </div>
-            <button
-              className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
-              disabled={!groupTitle || groupMutation.isPending}
-              type="submit"
-            >
-              {groupMutation.isPending ? 'Saving...' : 'Save group'}
-            </button>
-          </form>
-        </div>
-      </section>
     </div>
   )
 
@@ -202,38 +127,8 @@ export function EditorPage() {
     await signIn(username, password)
   }
 
-  function handleNewGroup() {
-    setGroupRecipes([])
-    setGroupTitle('')
-    setSelectedGroup('')
-  }
-
-  function handleSelectGroup(slug: string) {
-    const group = groupsQuery.data?.find(item => item.slug === slug)
-    if (!group) {
-      return
-    }
-    setGroupRecipes(group.recipes)
-    setGroupTitle(group.title)
-    setSelectedGroup(group.slug)
-  }
-
-  async function handleSaveGroup(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    await groupMutation.mutateAsync()
-  }
-
-  function handleGroupRecipeChange(slug: string, event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.checked) {
-      setGroupRecipes(current => [...current, slug])
-    } else {
-      setGroupRecipes(current => current.filter(item => item !== slug))
-    }
-  }
-
   function invalidateRecipes() {
     queryClient.invalidateQueries({ queryKey: ['recipes'] })
-    queryClient.invalidateQueries({ queryKey: ['groups'] })
     queryClient.invalidateQueries({ queryKey: ['tags'] })
   }
 }

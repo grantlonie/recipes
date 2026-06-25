@@ -17,9 +17,6 @@ export function App() {
             <img alt="G&E Recipes" className="h-12 w-auto" src="/logo.png" />
           </Link>
           <nav className="flex items-center gap-3 text-sm font-medium">
-            <Link className="rounded-full px-3 py-2 text-stone-700 hover:bg-orange-100" to="/">
-              Browse
-            </Link>
             {auth.authenticated ? (
               <>
                 <Link
