@@ -1,0 +1,83 @@
+from typing import Any
+
+from pydantic import BaseModel, Field, HttpUrl
+
+
+class Ingredient(BaseModel):
+    fixed: bool = False
+    name: str
+    quantity: str | None = None
+    scaled_quantity: str | None = None
+    unit: str | None = None
+
+
+class RecipeSummary(BaseModel):
+    cook_time: str | None = None
+    image: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    original_url: str | None = None
+    servings: float = 1
+    slug: str
+    tags: list[str] = Field(default_factory=list)
+    title: str
+
+
+class RecipeDetail(RecipeSummary):
+    content: str
+    cookware: list[str] = Field(default_factory=list)
+    ingredients: list[Ingredient] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    public_url: str
+    steps: list[str] = Field(default_factory=list)
+    timers: list[str] = Field(default_factory=list)
+
+
+class RecipeWrite(BaseModel):
+    content: str
+    slug: str
+
+
+class RecipeUpdate(BaseModel):
+    content: str
+
+
+class MetadataUpdate(BaseModel):
+    image: str | None = None
+    servings: float | None = None
+    tags: list[str] | None = None
+
+
+class Group(BaseModel):
+    recipes: list[str] = Field(default_factory=list)
+    slug: str
+    title: str
+
+
+class GroupWrite(BaseModel):
+    recipes: list[str] = Field(default_factory=list)
+    title: str
+
+
+class ImportRequest(BaseModel):
+    url: HttpUrl
+
+
+class ImportPreview(BaseModel):
+    content: str
+    suggested_slug: str
+
+
+class LoginRequest(BaseModel):
+    password: str
+    username: str
+
+
+class AuthState(BaseModel):
+    authenticated: bool
+    username: str | None = None
+
+
+class SearchResult(BaseModel):
+    match: str
+    recipe: RecipeSummary
+    score: int

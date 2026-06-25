@@ -1,0 +1,233 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useParams } from 'react-router-dom'
+import type { ChangeEvent } from 'react'
+import { useEffect, useState } from 'react'
+
+import { getRecipe, getScaledRecipe, updateRecipe } from './api'
+import { useAuth } from './AuthContext'
+
+export function RecipePage() {
+  const { '*': slug = '' } = useParams()
+  const { auth } = useAuth()
+  const queryClient = useQueryClient()
+  const recipeQuery = useQuery({
+    enabled: Boolean(slug),
+    queryFn: () => getRecipe(slug),
+    queryKey: ['recipe', slug],
+  })
+  const [content, setContent] = useState('')
+  const [servings, setServings] = useState(1)
+  const scaledQuery = useQuery({
+    enabled: Boolean(slug) && servings !== recipeQuery.data?.servings,
+    queryFn: () => getScaledRecipe(slug, servings),
+    queryKey: ['recipe', slug, 'scale', servings],
+  })
+  const saveMutation = useMutation({
+    mutationFn: () => updateRecipe(slug, content),
+    onSuccess: recipe => {
+      queryClient.setQueryData(['recipe', slug], recipe)
+      queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+    },
+  })
+  const recipe = scaledQuery.data ?? recipeQuery.data
+
+  useEffect(() => {
+    if (recipeQuery.data) {
+      setContent(recipeQuery.data.content)
+      setServings(recipeQuery.data.servings)
+    }
+  }, [recipeQuery.data])
+
+  if (recipeQuery.isLoading) {
+    return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
+  }
+
+  if (!recipe) {
+    return <p className="rounded-2xl bg-white p-6 text-stone-600">Recipe not found.</p>
+  }
+
+  return (
+    <article className="space-y-8">
+      <Link className="text-sm font-medium text-orange-700 hover:underline" to="/">
+        Back to recipes
+      </Link>
+
+      <section className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
+        {recipe.image ? (
+          <img
+            alt=""
+            className="max-h-[420px] w-full object-cover"
+            referrerPolicy="no-referrer"
+            src={recipe.image}
+          />
+        ) : null}
+        <div className="space-y-5 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight">{recipe.title}</h1>
+              <p className="mt-2 text-stone-600">
+                {recipe.cook_time ? `${recipe.cook_time} · ` : ''}
+                {recipe.servings} servings
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+                onClick={handleShare}
+                type="button"
+              >
+                Share
+              </button>
+              {recipe.original_url ? (
+                <a
+                  className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
+                  href={recipe.original_url}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Original recipe
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {recipe.tags.map(tag => (
+              <span
+                className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800"
+                key={tag}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <aside className="space-y-6">
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+            <label className="block text-sm font-semibold text-stone-700" htmlFor="servings">
+              Scale servings
+            </label>
+            <input
+              className="mt-2 w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2"
+              id="servings"
+              min="1"
+              onChange={handleServingsChange}
+              type="number"
+              value={servings}
+            />
+          </section>
+
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+            <h2 className="text-lg font-semibold">Ingredients</h2>
+            <ul className="mt-4 space-y-2">
+              {recipe.ingredients.map((ingredient, index) => (
+                <li
+                  className="flex justify-between gap-3 text-sm"
+                  key={`${ingredient.name}-${index}`}
+                >
+                  <span>{ingredient.name}</span>
+                  <span className="text-right text-stone-600">
+                    {ingredient.scaled_quantity ?? ingredient.quantity ?? ''}
+                    {ingredient.unit ? ` ${ingredient.unit}` : ''}
+                    {ingredient.fixed ? ' fixed' : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {recipe.cookware.length ? (
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+              <h2 className="text-lg font-semibold">Cookware</h2>
+              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700">
+                {recipe.cookware.map(item => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </aside>
+
+        <div className="space-y-6">
+          {recipe.notes.length ? (
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+              <h2 className="text-lg font-semibold">Notes</h2>
+              <div className="mt-3 space-y-3 text-stone-700">
+                {recipe.notes.map(note => (
+                  <p key={note}>{note}</p>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+            <h2 className="text-lg font-semibold">Steps</h2>
+            <ol className="mt-4 space-y-4">
+              {recipe.steps.map((step, index) => (
+                <li className="rounded-xl bg-orange-50 p-4" key={`${step}-${index}`}>
+                  <span className="mb-2 block text-sm font-semibold text-orange-700">
+                    Step {index + 1}
+                  </span>
+                  <p className="whitespace-pre-line text-stone-800">{step}</p>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          {auth.authenticated ? (
+            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+              <h2 className="text-lg font-semibold">Edit plain text</h2>
+              <textarea
+                className="mt-4 min-h-96 w-full rounded-xl border border-orange-200 bg-orange-50 p-3 font-mono text-sm outline-none ring-orange-500 focus:ring-2"
+                onChange={handleContentChange}
+                value={content}
+              />
+              <button
+                className="mt-4 rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+                disabled={saveMutation.isPending}
+                onClick={handleSave}
+                type="button"
+              >
+                {saveMutation.isPending ? 'Saving...' : 'Save recipe'}
+              </button>
+              {saveMutation.error ? (
+                <p className="mt-2 text-sm text-red-700">{saveMutation.error.message}</p>
+              ) : null}
+            </section>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  )
+
+  function handleContentChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    setContent(event.target.value)
+  }
+
+  async function handleSave() {
+    await saveMutation.mutateAsync()
+  }
+
+  function handleServingsChange(event: ChangeEvent<HTMLInputElement>) {
+    if (!recipe) {
+      return
+    }
+    setServings(Number(event.target.value) || recipe.servings)
+  }
+
+  async function handleShare() {
+    if (!recipe) {
+      return
+    }
+    const shareData = { title: recipe.title, url: recipe.public_url }
+    if (navigator.share) {
+      await navigator.share(shareData)
+      return
+    }
+    await navigator.clipboard.writeText(recipe.public_url)
+  }
+}

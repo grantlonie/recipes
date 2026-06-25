@@ -1,0 +1,26 @@
+services:
+  recipes:
+    build: .
+    container_name: recipes
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_ROOT: /data
+      FRONTEND_DIST: /app/frontend/dist
+    ports:
+      - "8000:8000"
+    volumes:
+      - ${HOST_DATA_ROOT:-/srv/apps/recipes/data}:/data
+    networks:
+      - shared
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+networks:
+  shared:
+    external: true
+    name: personal-infra-shared

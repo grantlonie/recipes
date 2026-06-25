@@ -1,0 +1,1 @@
+"""Cooklang recipe app backend."""

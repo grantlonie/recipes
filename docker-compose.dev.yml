@@ -1,0 +1,39 @@
+services:
+  backend:
+    image: python:3.12-slim
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      APP_BASE_URL: http://localhost:5173
+      COOKIE_SECURE: "false"
+      DATA_ROOT: /data
+      FRONTEND_DIST: /app/frontend/dist
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/data
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    command: >
+      sh -c "pip install -e '.[dev]' &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --app-dir backend"
+
+  frontend:
+    image: node:24-alpine
+    working_dir: /app/frontend
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend_node_modules:/app/frontend/node_modules
+    command: >
+      sh -c "npm install &&
+      npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - backend
+
+volumes:
+  frontend_node_modules:
