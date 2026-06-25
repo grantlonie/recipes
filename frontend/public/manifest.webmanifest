@@ -2,19 +2,23 @@
   "background_color": "#fff7ed",
   "description": "A personal Cooklang recipe collection.",
   "display": "standalone",
+  "id": "/",
   "icons": [
     {
       "src": "/web-app-icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/web-app-icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "name": "G&E Recipes",
+  "scope": "/",
   "short_name": "G&E Recipes",
   "start_url": "/",
   "theme_color": "#f97316"
