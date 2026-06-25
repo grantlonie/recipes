@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useState } from 'react'
 
-import { createGroup, createRecipe, getGroups, getRecipes, importRecipe, updateGroup } from './api'
+import { createGroup, createRecipe, getGroups, getRecipes, updateGroup } from './api'
 import { useAuth } from './AuthContext'
 
 const emptyRecipe = `---
@@ -21,8 +21,6 @@ export function EditorPage() {
   const { auth, loginError, loginPending, signIn } = useAuth()
   const [groupRecipes, setGroupRecipes] = useState<string[]>([])
   const [groupTitle, setGroupTitle] = useState('')
-  const [importContent, setImportContent] = useState('')
-  const [importSlug, setImportSlug] = useState('')
   const [importUrl, setImportUrl] = useState('')
   const [password, setPassword] = useState('')
   const [recipeContent, setRecipeContent] = useState(emptyRecipe)
@@ -51,14 +49,6 @@ export function EditorPage() {
         : createGroup({ recipes: groupRecipes, title: groupTitle }),
     onSuccess: () => invalidateRecipes(),
   })
-  const importMutation = useMutation({
-    mutationFn: importRecipe,
-    onSuccess: preview => {
-      setImportContent(preview.content)
-      setImportSlug(preview.suggested_slug)
-    },
-  })
-
   if (!auth.authenticated) {
     return (
       <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
@@ -106,6 +96,9 @@ export function EditorPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
           <h2 className="text-xl font-semibold">Import from URL</h2>
+          <p className="mt-2 text-sm text-stone-600">
+            Open Cookify in a new tab, then paste the converted Cooklang into the create form.
+          </p>
           <form className="mt-4 space-y-4" onSubmit={handleImport}>
             <input
               className="w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2"
@@ -116,26 +109,12 @@ export function EditorPage() {
             />
             <button
               className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
-              disabled={importMutation.isPending}
+              disabled={!importUrl}
               type="submit"
             >
-              {importMutation.isPending ? 'Importing...' : 'Preview import'}
+              Open in Cookify
             </button>
-            {importMutation.error ? (
-              <p className="text-sm text-red-700">{importMutation.error.message}</p>
-            ) : null}
           </form>
-          {importContent ? (
-            <RecipeSaveForm
-              content={importContent}
-              label="Save imported recipe"
-              onContentChange={setImportContent}
-              onSave={handleSaveImport}
-              onSlugChange={setImportSlug}
-              pending={createRecipeMutation.isPending}
-              slug={importSlug}
-            />
-          ) : null}
         </section>
 
         <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
@@ -213,9 +192,9 @@ export function EditorPage() {
     await createRecipeMutation.mutateAsync({ content: recipeContent, slug: recipeSlug })
   }
 
-  async function handleImport(event: FormEvent<HTMLFormElement>) {
+  function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    await importMutation.mutateAsync(importUrl)
+    window.open(`https://cook.md/${importUrl.trim()}`, '_blank', 'noopener,noreferrer')
   }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
@@ -242,10 +221,6 @@ export function EditorPage() {
   async function handleSaveGroup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await groupMutation.mutateAsync()
-  }
-
-  async function handleSaveImport() {
-    await createRecipeMutation.mutateAsync({ content: importContent, slug: importSlug })
   }
 
   function handleGroupRecipeChange(slug: string, event: ChangeEvent<HTMLInputElement>) {

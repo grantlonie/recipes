@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { EditorPage } from './EditorPage'
 import { HomePage } from './HomePage'
+import { RecipeEditPage } from './RecipeEditPage'
 import { RecipePage } from './RecipePage'
 
 export function App() {
@@ -51,6 +52,7 @@ export function App() {
         <Routes>
           <Route element={<HomePage />} path="/" />
           <Route element={<EditorPage />} path="/editor" />
+          <Route element={<RecipeEditPage />} path="/editor/recipes/*" />
           <Route element={<RecipePage />} path="/recipes/*" />
         </Routes>
       </main>

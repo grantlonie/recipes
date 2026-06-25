@@ -1,44 +1,43 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import type { ChangeEvent, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
-import { getRecipe, getScaledRecipe, updateRecipe } from './api'
+import { getRecipe, getScaledRecipe } from './api'
 import { useAuth } from './AuthContext'
 
-const LOWERCASE_INGREDIENT_WORDS = new Set(['and', 'as', 'for', 'in', 'of', 'or', 'the', 'to', 'with'])
+const LOWERCASE_INGREDIENT_WORDS = new Set([
+  'and',
+  'as',
+  'for',
+  'in',
+  'of',
+  'or',
+  'the',
+  'to',
+  'with',
+])
 const AMOUNT_PREFIX_RE =
   /((?:\b(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:bags?|bottles?|boxes?|bunch(?:es)?|cans?|cloves?|cups?|dashes?|gallons?|grams?|kg|lbs?|ml|ounces?|oz|packages?|packets?|pieces?|pinches?|pints?|pounds?|quarts?|slices?|shots?|sprigs?|sticks?|tablespoons?|tbsp|teaspoons?|tsp)(?:\s+of)?\s+)?)@([^{}@]+)\{([^}]*)\}/gi
 
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
   const { auth } = useAuth()
-  const queryClient = useQueryClient()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () => getRecipe(slug),
     queryKey: ['recipe', slug],
   })
-  const [content, setContent] = useState('')
   const [servings, setServings] = useState(1)
   const scaledQuery = useQuery({
     enabled: Boolean(slug) && servings !== recipeQuery.data?.servings,
     queryFn: () => getScaledRecipe(slug, servings),
     queryKey: ['recipe', slug, 'scale', servings],
   })
-  const saveMutation = useMutation({
-    mutationFn: () => updateRecipe(slug, content),
-    onSuccess: recipe => {
-      queryClient.setQueryData(['recipe', slug], recipe)
-      queryClient.invalidateQueries({ queryKey: ['recipes'] })
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
-    },
-  })
   const recipe = scaledQuery.data ?? recipeQuery.data
 
   useEffect(() => {
     if (recipeQuery.data) {
-      setContent(recipeQuery.data.content)
       setServings(recipeQuery.data.servings)
     }
   }, [recipeQuery.data])
@@ -92,6 +91,14 @@ export function RecipePage() {
                 >
                   Original recipe
                 </a>
+              ) : null}
+              {auth.authenticated ? (
+                <Link
+                  className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+                  to={`/editor/recipes/${slug}`}
+                >
+                  Edit
+                </Link>
               ) : null}
             </div>
           </div>
@@ -181,40 +188,10 @@ export function RecipePage() {
               ))}
             </ol>
           </section>
-
-          {auth.authenticated ? (
-            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
-              <h2 className="text-lg font-semibold">Edit plain text</h2>
-              <textarea
-                className="mt-4 min-h-96 w-full rounded-xl border border-orange-200 bg-orange-50 p-3 font-mono text-sm outline-none ring-orange-500 focus:ring-2"
-                onChange={handleContentChange}
-                value={content}
-              />
-              <button
-                className="mt-4 rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
-                disabled={saveMutation.isPending}
-                onClick={handleSave}
-                type="button"
-              >
-                {saveMutation.isPending ? 'Saving...' : 'Save recipe'}
-              </button>
-              {saveMutation.error ? (
-                <p className="mt-2 text-sm text-red-700">{saveMutation.error.message}</p>
-              ) : null}
-            </section>
-          ) : null}
         </div>
       </div>
     </article>
   )
-
-  function handleContentChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    setContent(event.target.value)
-  }
-
-  async function handleSave() {
-    await saveMutation.mutateAsync()
-  }
 
   function handleServingsChange(event: ChangeEvent<HTMLInputElement>) {
     if (!recipe) {
@@ -273,7 +250,7 @@ function renderCooklangStep(step: string) {
         key={`${matchIndex}-${markerIndex}`}
       >
         {ingredient}
-      </span>,
+      </span>
     )
     cursor = matchIndex + marker.length
     markerIndex += 1
