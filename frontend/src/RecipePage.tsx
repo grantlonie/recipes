@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import type { ChangeEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
 import { deleteRecipe, getRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
@@ -175,17 +175,41 @@ export function RecipePage() {
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
-            <label className="block text-sm font-semibold text-stone-700" htmlFor="servings">
+            <p className="text-sm font-semibold text-stone-700" id="servings-label">
               Scale servings
-            </label>
-            <input
-              className="mt-2 w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2"
-              id="servings"
-              min="1"
-              onChange={handleServingsChange}
-              type="number"
-              value={servings}
-            />
+            </p>
+            <div
+              aria-labelledby="servings-label"
+              className="mt-2 flex items-stretch overflow-hidden rounded-xl border border-orange-200"
+              role="group"
+            >
+              <button
+                aria-label="Decrease servings"
+                className="flex w-12 shrink-0 items-center justify-center bg-orange-50 text-xl font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={servings <= 1}
+                id="servings-decrease"
+                onClick={() => setServings(current => Math.max(1, current - 1))}
+                type="button"
+              >
+                −
+              </button>
+              <output
+                aria-live="polite"
+                className="flex flex-1 items-center justify-center border-x border-orange-200 px-3 py-2 text-sm font-semibold tabular-nums text-stone-900"
+                id="servings"
+              >
+                {servings}
+              </output>
+              <button
+                aria-label="Increase servings"
+                className="flex w-12 shrink-0 items-center justify-center bg-orange-50 text-xl font-semibold text-orange-800 transition hover:bg-orange-100"
+                id="servings-increase"
+                onClick={() => setServings(current => current + 1)}
+                type="button"
+              >
+                +
+              </button>
+            </div>
           </section>
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
@@ -285,13 +309,6 @@ export function RecipePage() {
       }
       return next
     })
-  }
-
-  function handleServingsChange(event: ChangeEvent<HTMLInputElement>) {
-    if (!recipe) {
-      return
-    }
-    setServings(Number(event.target.value) || recipe.servings)
   }
 
   async function handleShare() {
