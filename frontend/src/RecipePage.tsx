@@ -23,6 +23,8 @@ const LOWERCASE_INGREDIENT_WORDS = new Set([
 ])
 const AMOUNT_PREFIX_RE =
   /((?:\b(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:bags?|bottles?|boxes?|bunch(?:es)?|cans?|cloves?|cups?|dashes?|gallons?|grams?|kg|lbs?|ml|ounces?|oz|packages?|packets?|pieces?|pinches?|pints?|pounds?|quarts?|slices?|shots?|sprigs?|sticks?|tablespoons?|tbsp|teaspoons?|tsp)(?:\s+of)?\s+)?)@([^{}@]+)\{([^}]*)\}/gi
+const COOKWARE_RE = /#([^{}#]+)\{\}/g
+const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
@@ -337,31 +339,65 @@ function titleCaseIngredient(value: string) {
 }
 
 function renderCooklangStep(step: string) {
-  const rendered: ReactNode[] = []
-  let cursor = 0
-  let markerIndex = 0
+  const markers: StepMarker[] = []
 
   AMOUNT_PREFIX_RE.lastIndex = 0
   for (const match of step.matchAll(AMOUNT_PREFIX_RE)) {
     const [marker, prefix, name, amount] = match
     const matchIndex = match.index ?? 0
-    if (matchIndex > cursor) {
-      rendered.push(step.slice(cursor, matchIndex))
-    }
-
     const normalizedPrefix = prefix.replace(/\s+of\s+$/i, ' ')
     const ingredient = normalizedPrefix
       ? `${normalizedPrefix}${name.trim()}`
       : formatIngredientPhrase(name.trim(), amount)
+    markers.push({
+      index: matchIndex,
+      length: marker.length,
+      text: ingredient,
+      type: 'ingredient',
+    })
+  }
+
+  COOKWARE_RE.lastIndex = 0
+  for (const match of step.matchAll(COOKWARE_RE)) {
+    const [marker, name] = match
+    markers.push({
+      index: match.index ?? 0,
+      length: marker.length,
+      text: name.trim(),
+      type: 'cookware',
+    })
+  }
+
+  TIMER_RE.lastIndex = 0
+  for (const match of step.matchAll(TIMER_RE)) {
+    const [marker, name, amount] = match
+    markers.push({
+      index: match.index ?? 0,
+      length: marker.length,
+      text: formatTimerPhrase(name.trim(), amount),
+      type: 'timer',
+    })
+  }
+
+  markers.sort((left, right) => left.index - right.index)
+
+  const rendered: ReactNode[] = []
+  let cursor = 0
+  let markerIndex = 0
+
+  for (const marker of markers) {
+    if (marker.index < cursor) {
+      continue
+    }
+    if (marker.index > cursor) {
+      rendered.push(step.slice(cursor, marker.index))
+    }
     rendered.push(
-      <span
-        className="inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900"
-        key={`${matchIndex}-${markerIndex}`}
-      >
-        {ingredient}
+      <span className={STEP_MARKER_CLASS[marker.type]} key={`${marker.index}-${markerIndex}`}>
+        {marker.text}
       </span>
     )
-    cursor = matchIndex + marker.length
+    cursor = marker.index + marker.length
     markerIndex += 1
   }
 
@@ -370,6 +406,22 @@ function renderCooklangStep(step: string) {
   }
 
   return rendered.length ? rendered : step
+}
+
+const STEP_MARKER_CLASS = {
+  cookware:
+    'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900',
+  ingredient:
+    'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900',
+  timer:
+    'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900',
+} as const
+
+type StepMarker = {
+  index: number
+  length: number
+  text: string
+  type: keyof typeof STEP_MARKER_CLASS
 }
 
 function formatIngredientPhrase(name: string, amount: string) {
@@ -381,6 +433,20 @@ function formatIngredientPhrase(name: string, amount: string) {
     return `${quantity} ${name}`
   }
   return `${quantity} ${unit} ${name}`
+}
+
+function formatTimerPhrase(name: string, amount: string) {
+  const { quantity, unit } = splitAmount(amount)
+  if (name) {
+    return name
+  }
+  if (!quantity) {
+    return amount
+  }
+  if (!unit) {
+    return quantity
+  }
+  return `${quantity} ${unit}`
 }
 
 function splitAmount(amount: string) {

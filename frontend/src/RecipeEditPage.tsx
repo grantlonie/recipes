@@ -68,7 +68,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     onSuccess: preview => {
       const parsed = parseImportedDocument(preview.content)
       setRecipeSlug(preview.suggested_slug)
-      applyDocumentState(parsed.metadata, parsed.body)
+      applyDocumentState(parsed.metadata, parsed.body, { skipTags: true })
       setImportUrl('')
     },
   })
@@ -77,8 +77,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     onSuccess: preview => {
       const parsed = parseImportedDocument(preview.content)
       const currentBookmarked = bookmarked
-      applyDocumentState(parsed.metadata, parsed.body)
+      const currentTags = tags
+      applyDocumentState(parsed.metadata, parsed.body, { skipTags: true })
       setBookmarked(currentBookmarked)
+      setTags(currentTags)
     },
   })
 
@@ -125,6 +127,15 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             <h1 className="mt-2 text-3xl font-bold">{title}</h1>
           </div>
           <div className="flex flex-wrap gap-2">
+            {!isNew ? (
+              <Button
+                disabled={!source.trim() || reimportMutation.isPending}
+                onClick={handleReimportFromSource}
+                variant="secondary"
+              >
+                {reimportMutation.isPending ? 'Importing...' : 'Re Import'}
+              </Button>
+            ) : null}
             <Button onClick={handleCancel} variant="ghost">
               Cancel
             </Button>
@@ -177,23 +188,11 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 <input className={inputClassName} onChange={event => setImage(event.target.value)} value={image} />
               </Field>
               <Field className="lg:col-span-2" label="Source URL">
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    className={inputClassName}
-                    onChange={event => setSource(event.target.value)}
-                    value={source}
-                  />
-                  {!isNew ? (
-                    <Button
-                      className="shrink-0"
-                      disabled={!source.trim() || reimportMutation.isPending}
-                      onClick={handleReimportFromSource}
-                      variant="secondary"
-                    >
-                      {reimportMutation.isPending ? 'Re-importing...' : 'Re-import from source'}
-                    </Button>
-                  ) : null}
-                </div>
+                <input
+                  className={inputClassName}
+                  onChange={event => setSource(event.target.value)}
+                  value={source}
+                />
                 {!isNew && reimportMutation.error ? (
                   <p className="mt-2 text-sm text-red-700">{reimportMutation.error.message}</p>
                 ) : null}
@@ -310,10 +309,16 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     )
   }
 
-  function applyDocumentState(metadata: Record<string, unknown>, nextBody: string) {
+  function applyDocumentState(
+    metadata: Record<string, unknown>,
+    nextBody: string,
+    options: { skipTags?: boolean } = {}
+  ) {
     setBaseMetadata(metadata)
     setTitle(getString(metadata.title) || 'New Recipe')
-    setTags(getTagsFromMetadata(metadata.tags))
+    if (!options.skipTags) {
+      setTags(getTagsFromMetadata(metadata.tags))
+    }
     setServings(getNumber(metadata.servings) || getNumber(metadata.serves) || 1)
     setImage(getString(metadata.image) || getString(metadata.picture))
     setSource(getString(metadata.source))
