@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
 import { deleteRecipe, getRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
@@ -208,19 +208,16 @@ export function RecipePage() {
         <aside className="space-y-6">
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
             <h2 className="text-lg font-semibold">Ingredients</h2>
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               {recipe.ingredients.map((ingredient, index) => (
-                <li
-                  className="flex justify-between gap-3 text-sm"
-                  key={`${ingredient.name}-${index}`}
-                >
-                  <span className="shrink-0 tabular-nums text-stone-600">
+                <Fragment key={`${ingredient.name}-${index}`}>
+                  <span className="tabular-nums text-stone-600">
                     {ingredient.scaled_quantity ?? ingredient.quantity ?? ''}
                     {ingredient.unit ? ` ${ingredient.unit}` : ''}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
-                  <span className="text-right">{titleCaseIngredient(ingredient.name)}</span>
-                </li>
+                  <span>{titleCaseIngredient(ingredient.name)}</span>
+                </Fragment>
               ))}
             </ul>
           </section>
