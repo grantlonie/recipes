@@ -1,11 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { ChangeEvent, UIEvent } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 
-import { getRecipes, getTags, updateRecipeMetadata } from './api'
+import { getRecipes, getTags } from './api'
 import { useAuth } from './AuthContext'
-import { BookmarkButton } from './components/BookmarkButton'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { useRecipeListState } from './RecipeListContext'
 import type { RecipeSummary } from './types'
@@ -23,25 +22,19 @@ export function HomePage() {
     setQuery,
     setScrollTop,
   } = useRecipeListState()
-  const queryClient = useQueryClient()
   const recipesScrollRef = useRef<HTMLDivElement | null>(null)
+  const searchQuery = query.trim()
+  const showSearchResults = searchQuery.length >= 2
   const recipesQuery = useQuery({
-    queryFn: () => getRecipes(query),
-    queryKey: ['recipes', query],
+    enabled: showSearchResults,
+    queryFn: () => getRecipes(searchQuery),
+    queryKey: ['recipes', searchQuery],
   })
   const tagsQuery = useQuery({ queryFn: getTags, queryKey: ['tags'] })
   const recipes = useMemo(
     () => filterRecipes(recipesQuery.data ?? [], bookmarkedOnly, activeTags),
     [activeTags, bookmarkedOnly, recipesQuery.data]
   )
-  const isSearching = query.trim().length > 0
-  const bookmarkMutation = useMutation({
-    mutationFn: (recipe: RecipeSummary) =>
-      updateRecipeMetadata(recipe.slug, { bookmarked: !recipe.bookmarked }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipes'] })
-    },
-  })
 
   useEffect(() => {
     if (recipesScrollRef.current) {
@@ -85,34 +78,24 @@ export function HomePage() {
         </div>
       </section>
 
-      {!isSearching ? <RecentRecipes recipes={recentRecipes} /> : null}
+      {!showSearchResults ? (
+        <CompactRecipeGrid recipes={recentRecipes} title="Recently Viewed" />
+      ) : null}
 
       <section
-        className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 pt-5"
+        className="min-h-0 flex-1 overflow-y-auto pr-1 pt-5"
         onScroll={handleRecipesScroll}
         ref={recipesScrollRef}
       >
-        {recipesQuery.isLoading ? (
-          <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
-        ) : recipes.length ? (
-          isSearching ? (
+        {showSearchResults ? (
+          recipesQuery.isLoading ? (
+            <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
+          ) : recipes.length ? (
             <CompactRecipeGrid recipes={recipes} />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {recipes.map(recipe => (
-                <RecipeCard
-                  canBookmark={auth.authenticated}
-                  key={recipe.slug}
-                  onToggleBookmark={handleToggleBookmark}
-                  pendingBookmark={bookmarkMutation.isPending}
-                  recipe={recipe}
-                />
-              ))}
-            </div>
+            <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
           )
-        ) : (
-          <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
-        )}
+        ) : null}
       </section>
 
       <Link
@@ -132,20 +115,6 @@ export function HomePage() {
   function handleRecipesScroll(event: UIEvent<HTMLDivElement>) {
     setScrollTop(event.currentTarget.scrollTop)
   }
-
-  async function handleToggleBookmark(recipe: RecipeSummary) {
-    await bookmarkMutation.mutateAsync(recipe)
-  }
-}
-
-function RecentRecipes({ recipes }: RecentRecipesProps) {
-  if (!recipes.length) {
-    return null
-  }
-
-  return (
-    <CompactRecipeGrid recipes={recipes} title="Recently Viewed" />
-  )
 }
 
 function CompactRecipeGrid({ recipes, title }: CompactRecipeGridProps) {
@@ -188,75 +157,12 @@ function CompactRecipeTile({ recipe }: CompactRecipeTileProps) {
   )
 }
 
-function RecipeCard({ canBookmark, onToggleBookmark, pendingBookmark, recipe }: RecipeCardProps) {
-  return (
-    <article className="group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:shadow-md">
-      {canBookmark ? (
-        <BookmarkButton
-          bookmarked={recipe.bookmarked}
-          className="absolute right-3 top-3 z-10"
-          disabled={pendingBookmark}
-          onToggle={() => onToggleBookmark(recipe)}
-        />
-      ) : null}
-      <Link className="block" to={`/recipes/${recipe.slug}`}>
-        {recipe.image ? (
-          <div className="aspect-video w-full overflow-hidden">
-            <img
-              alt=""
-              className="block h-full w-full object-cover"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              src={recipe.image}
-            />
-          </div>
-        ) : (
-          <div className="flex aspect-video w-full items-center justify-center bg-orange-100">
-            <img
-              alt=""
-              className="h-28 w-28 object-contain opacity-90"
-              src="/web-app-icon-512.png"
-            />
-          </div>
-        )}
-        <div className="space-y-3 p-4">
-          <h2 className="text-xl font-semibold group-hover:text-orange-700">{recipe.title}</h2>
-          <div className="flex flex-wrap gap-2">
-            {recipe.tags.slice(0, 4).map(tag => (
-              <span
-                className="rounded-full bg-orange-100 px-2.5 py-1 text-xs text-orange-800"
-                key={tag}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-          <p className="text-sm text-stone-600">
-            {recipe.servings} servings{recipe.cook_time ? ` · ${recipe.cook_time}` : ''}
-          </p>
-        </div>
-      </Link>
-    </article>
-  )
-}
-
-interface RecentRecipesProps {
-  recipes: RecipeSummary[]
-}
-
 interface CompactRecipeGridProps {
   recipes: RecipeSummary[]
   title?: string
 }
 
 interface CompactRecipeTileProps {
-  recipe: RecipeSummary
-}
-
-interface RecipeCardProps {
-  canBookmark: boolean
-  onToggleBookmark: (recipe: RecipeSummary) => Promise<void>
-  pendingBookmark: boolean
   recipe: RecipeSummary
 }
 
