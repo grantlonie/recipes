@@ -3,7 +3,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from app import cooklang
-from app.models import Group, RecipeDetail, RecipeSummary
+from app.models import RecipeDetail, RecipeSummary
 
 
 class StorageError(ValueError):
@@ -13,13 +13,11 @@ class StorageError(ValueError):
 @dataclass
 class RecipeRepository:
     app_base_url: str
-    groups_root: Path
     recipe_root: Path
     recipes: dict[str, RecipeDetail] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.recipe_root.mkdir(parents=True, exist_ok=True)
-        self.groups_root.mkdir(parents=True, exist_ok=True)
         self.refresh()
 
     def refresh(self) -> None:
@@ -64,6 +62,7 @@ class RecipeRepository:
         self,
         slug: str,
         *,
+        bookmarked: bool | None = None,
         image: str | None = None,
         servings: float | None = None,
         tags: list[str] | None = None,
@@ -71,30 +70,19 @@ class RecipeRepository:
         recipe = self.get_recipe(slug)
         metadata, body = cooklang.parse_document(recipe.content)
         updated_metadata = cooklang.set_metadata_values(
-            metadata, image=image, servings=servings, tags=tags
+            metadata, bookmarked=bookmarked, image=image, servings=servings, tags=tags
         )
         return self.write_recipe(slug, cooklang.render_document(updated_metadata, body))
 
-    def list_groups(self) -> list[Group]:
-        self.groups_root.mkdir(parents=True, exist_ok=True)
-        groups = [self._read_group(path) for path in sorted(self.groups_root.glob("*.menu"))]
-        return sorted(groups, key=lambda group: group.title.casefold())
-
-    def write_group(self, slug: str, title: str, recipes: list[str]) -> Group:
-        path = self.group_path(slug)
-        path.write_text(render_group(title, recipes), encoding="utf-8")
-        return self._read_group(path)
-
-    def delete_group(self, slug: str) -> None:
-        path = self.group_path(slug)
-        if path.exists():
-            path.unlink()
+    def delete_recipe(self, slug: str) -> None:
+        path = self.recipe_path(slug)
+        if not path.exists():
+            raise StorageError("Recipe not found")
+        path.unlink()
+        self.refresh()
 
     def recipe_path(self, slug: str) -> Path:
         return safe_child(self.recipe_root, slug, ".cook")
-
-    def group_path(self, slug: str) -> Path:
-        return safe_child(self.groups_root, slug, ".menu")
 
     def _read_recipe(self, path: Path, slug: str) -> RecipeDetail:
         content = path.read_text(encoding="utf-8")
@@ -102,6 +90,7 @@ class RecipeRepository:
         title = cooklang.metadata_title(metadata, path.stem)
         servings = cooklang.metadata_servings(metadata)
         return RecipeDetail(
+            bookmarked=cooklang.metadata_bookmarked(metadata),
             content=content,
             cook_time=cooklang.metadata_cook_time(metadata),
             cookware=cooklang.parse_cookware(body),
@@ -119,20 +108,9 @@ class RecipeRepository:
             title=title,
         )
 
-    def _read_group(self, path: Path) -> Group:
-        title = path.stem.replace("-", " ").title()
-        recipes: list[str] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("# "):
-                title = stripped[2:].strip()
-            elif stripped.startswith("./"):
-                recipes.append(stripped[2:].split("{", 1)[0].removesuffix(".cook"))
-        return Group(recipes=recipes, slug=path.stem, title=title)
-
-
 def summary_from_detail(recipe: RecipeDetail) -> RecipeSummary:
     return RecipeSummary(
+        bookmarked=recipe.bookmarked,
         cook_time=recipe.cook_time,
         image=recipe.image,
         notes=recipe.notes,
@@ -152,9 +130,3 @@ def safe_child(root: Path, slug: str, suffix: str) -> Path:
     if root_resolved not in path.parents:
         raise StorageError("Invalid path")
     return path
-
-
-def render_group(title: str, recipes: list[str]) -> str:
-    lines = [f"# {title}", ""]
-    lines.extend(f"./{recipe}" for recipe in recipes)
-    return "\n".join(lines).strip() + "\n"

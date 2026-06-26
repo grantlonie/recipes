@@ -7,7 +7,6 @@ from app.search import search_details
 def test_front_matter_updates_preserve_body_and_do_not_create_images(tmp_path):
     repository = RecipeRepository(
         app_base_url="http://testserver",
-        groups_root=tmp_path / "groups",
         recipe_root=tmp_path / "recipes",
     )
     repository.write_recipe(
@@ -25,12 +24,14 @@ Brown @beef{1%lb}.
 
     recipe = repository.update_metadata(
         "dinner/chili",
+        bookmarked=True,
         image="https://example.com/chili.jpg",
         servings=6,
         tags=["dinner", "freezer"],
     )
 
     assert "Brown @beef{1%lb}." in recipe.content
+    assert recipe.bookmarked is True
     assert recipe.image == "https://example.com/chili.jpg"
     assert recipe.servings == 6
     assert recipe.tags == ["dinner", "freezer"]
@@ -40,7 +41,6 @@ Brown @beef{1%lb}.
 def test_recipe_paths_cannot_escape_recipe_root(tmp_path):
     repository = RecipeRepository(
         app_base_url="http://testserver",
-        groups_root=tmp_path / "groups",
         recipe_root=tmp_path / "recipes",
     )
 
@@ -48,10 +48,23 @@ def test_recipe_paths_cannot_escape_recipe_root(tmp_path):
         repository.write_recipe("../secret", "nope")
 
 
+def test_recipe_delete_removes_file_and_refreshes_cache(tmp_path):
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=tmp_path / "recipes",
+    )
+    repository.write_recipe("toast", "Toast @bread{}.\n")
+
+    repository.delete_recipe("toast")
+
+    assert repository.list_recipes() == []
+    with pytest.raises(StorageError):
+        repository.get_recipe("toast")
+
+
 def test_search_ranks_title_matches_before_recipe_text_matches(tmp_path):
     repository = RecipeRepository(
         app_base_url="http://testserver",
-        groups_root=tmp_path / "groups",
         recipe_root=tmp_path / "recipes",
     )
     repository.write_recipe(
@@ -87,7 +100,6 @@ Add @tomato{2}.
 def test_scaling_respects_servings_and_fixed_quantities(tmp_path):
     repository = RecipeRepository(
         app_base_url="http://testserver",
-        groups_root=tmp_path / "groups",
         recipe_root=tmp_path / "recipes",
     )
     repository.write_recipe(

@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ChangeEvent, ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
-import { createGroup, getGroups, getRecipe, getScaledRecipe, updateGroup } from './api'
+import { deleteRecipe, getRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
-import type { Group } from './types'
+import { BookmarkButton } from './components/BookmarkButton'
+import { Button } from './components/Button'
+import { Popover } from './components/Popover'
+import { useRecipeListState } from './RecipeListContext'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
   'and',
@@ -24,7 +27,9 @@ const AMOUNT_PREFIX_RE =
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
   const { auth } = useAuth()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { addRecentRecipe } = useRecipeListState()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () => getRecipe(slug),
@@ -32,49 +37,35 @@ export function RecipePage() {
   })
   const [servings, setServings] = useState(1)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
-  const [groupSearch, setGroupSearch] = useState('')
-  const [groupMenuOpen, setGroupMenuOpen] = useState(false)
-  const groupsQuery = useQuery({
-    enabled: auth.authenticated,
-    queryFn: getGroups,
-    queryKey: ['groups'],
-  })
+  const [actionsOpen, setActionsOpen] = useState(false)
   const scaledQuery = useQuery({
     enabled: Boolean(slug) && servings !== recipeQuery.data?.servings,
     queryFn: () => getScaledRecipe(slug, servings),
     queryKey: ['recipe', slug, 'scale', servings],
   })
-  const addToGroupMutation = useMutation({
-    mutationFn: (group: Group) =>
-      updateGroup(group.slug, {
-        recipes: group.recipes.includes(slug) ? group.recipes : [...group.recipes, slug],
-        title: group.title,
-      }),
-    onSuccess: () => invalidateGroups(),
+  const bookmarkMutation = useMutation({
+    mutationFn: () => updateRecipeMetadata(slug, { bookmarked: !recipeQuery.data?.bookmarked }),
+    onSuccess: recipe => {
+      queryClient.setQueryData(['recipe', slug], recipe)
+      queryClient.invalidateQueries({ queryKey: ['recipes'] })
+    },
   })
-  const createGroupMutation = useMutation({
-    mutationFn: (title: string) => createGroup({ recipes: [slug], title }),
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteRecipe(slug),
     onSuccess: () => {
-      setGroupSearch('')
-      setGroupMenuOpen(false)
-      invalidateGroups()
+      queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+      navigate('/')
     },
   })
   const recipe = scaledQuery.data ?? recipeQuery.data
-  const recipeGroups = (groupsQuery.data ?? []).filter(group => group.recipes.includes(slug))
-  const filteredGroups = (groupsQuery.data ?? []).filter(group =>
-    group.title.toLowerCase().includes(groupSearch.trim().toLowerCase())
-  )
-  const trimmedGroupSearch = groupSearch.trim()
-  const groupTitleExists = (groupsQuery.data ?? []).some(
-    group => group.title.toLowerCase() === trimmedGroupSearch.toLowerCase()
-  )
 
   useEffect(() => {
     if (recipeQuery.data) {
       setServings(recipeQuery.data.servings)
+      addRecentRecipe(recipeQuery.data)
     }
-  }, [recipeQuery.data])
+  }, [addRecentRecipe, recipeQuery.data])
 
   useEffect(() => {
     setCompletedSteps(new Set())
@@ -112,78 +103,10 @@ export function RecipePage() {
                 {recipe.servings} servings
               </p>
             </div>
-            <div className="flex max-w-full flex-wrap gap-2">
-              <button
-                className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-                onClick={handleShare}
-                type="button"
-              >
+            <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
+              <Button onClick={handleShare}>
                 Share
-              </button>
-              {auth.authenticated ? (
-                <div className="relative">
-                  <button
-                    className="rounded-full bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-200"
-                    onClick={() => setGroupMenuOpen(open => !open)}
-                    type="button"
-                  >
-                    {recipeGroups.length
-                      ? `Groups (${recipeGroups.length})`
-                      : 'Add to group'}
-                  </button>
-                  {groupMenuOpen ? (
-                    <div className="absolute right-0 z-20 mt-2 w-[calc(100vw-2rem)] max-w-72 rounded-2xl bg-white p-3 shadow-lg ring-1 ring-orange-100">
-                      <label className="block">
-                        <span className="sr-only">Find or create a group</span>
-                        <input
-                          className="w-full rounded-xl border border-orange-200 px-3 py-2 text-sm outline-none ring-orange-500 focus:ring-2"
-                          onChange={event => setGroupSearch(event.target.value)}
-                          placeholder="Find or create group"
-                          value={groupSearch}
-                        />
-                      </label>
-                      <div className="mt-3 max-h-56 space-y-2 overflow-y-auto">
-                        {filteredGroups.length ? (
-                          filteredGroups.map(group => {
-                            const added = group.recipes.includes(slug)
-
-                            return (
-                              <button
-                                className="flex w-full items-center justify-between gap-3 rounded-xl bg-orange-50 px-3 py-2 text-left text-sm hover:bg-orange-100 disabled:cursor-default disabled:opacity-70"
-                                disabled={added || addToGroupMutation.isPending}
-                                key={group.slug}
-                                onClick={() => handleAddToGroup(group)}
-                                type="button"
-                              >
-                                <span>{group.title}</span>
-                                {added ? (
-                                  <span className="text-xs font-semibold text-orange-700">
-                                    Added
-                                  </span>
-                                ) : null}
-                              </button>
-                            )
-                          })
-                        ) : (
-                          <p className="rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                            No matching groups.
-                          </p>
-                        )}
-                      </div>
-                      <button
-                        className="mt-3 w-full rounded-xl bg-orange-600 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
-                        disabled={
-                          !trimmedGroupSearch || groupTitleExists || createGroupMutation.isPending
-                        }
-                        onClick={handleCreateGroup}
-                        type="button"
-                      >
-                        {createGroupMutation.isPending ? 'Creating...' : createGroupLabel()}
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+              </Button>
               {recipe.original_url ? (
                 <a
                   className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
@@ -195,12 +118,41 @@ export function RecipePage() {
                 </a>
               ) : null}
               {auth.authenticated ? (
-                <Link
-                  className="rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-                  to={`/editor/recipes/${slug}`}
-                >
-                  Edit
-                </Link>
+                <>
+                  <BookmarkButton
+                    bookmarked={recipe.bookmarked}
+                    disabled={bookmarkMutation.isPending}
+                    onToggle={handleToggleBookmark}
+                  />
+                  <Popover
+                    open={actionsOpen}
+                    trigger={
+                      <Button
+                        aria-label="Recipe actions"
+                        className="px-3 text-xl leading-none"
+                        onClick={() => setActionsOpen(open => !open)}
+                        variant="secondary"
+                      >
+                        ...
+                      </Button>
+                    }
+                  >
+                    <Link
+                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
+                      to={`/recipes/edit/${slug}`}
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                      disabled={deleteMutation.isPending}
+                      onClick={handleDelete}
+                      type="button"
+                    >
+                      {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </Popover>
+                </>
               ) : null}
             </div>
           </div>
@@ -352,31 +304,21 @@ export function RecipePage() {
     await navigator.clipboard.writeText(recipe.public_url)
   }
 
-  async function handleAddToGroup(group: Group) {
-    await addToGroupMutation.mutateAsync(group)
-    setGroupSearch('')
-    setGroupMenuOpen(false)
-  }
-
-  async function handleCreateGroup() {
-    if (!trimmedGroupSearch || groupTitleExists) {
+  async function handleToggleBookmark() {
+    if (!recipeQuery.data) {
       return
     }
-    await createGroupMutation.mutateAsync(trimmedGroupSearch)
+    await bookmarkMutation.mutateAsync()
   }
 
-  function createGroupLabel() {
-    if (!trimmedGroupSearch) {
-      return 'Create new group'
+  async function handleDelete() {
+    if (!recipe) {
+      return
     }
-    if (groupTitleExists) {
-      return 'Group already exists'
+    if (!window.confirm(`Delete "${recipe.title}"? This cannot be undone.`)) {
+      return
     }
-    return `Create "${trimmedGroupSearch}"`
-  }
-
-  function invalidateGroups() {
-    queryClient.invalidateQueries({ queryKey: ['groups'] })
+    await deleteMutation.mutateAsync()
   }
 }
 

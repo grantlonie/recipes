@@ -12,6 +12,7 @@ class Ingredient(BaseModel):
 
 
 class RecipeSummary(BaseModel):
+    bookmarked: bool = False
     cook_time: str | None = None
     image: str | None = None
     notes: list[str] = Field(default_factory=list)
@@ -42,20 +43,10 @@ class RecipeUpdate(BaseModel):
 
 
 class MetadataUpdate(BaseModel):
+    bookmarked: bool | None = None
     image: str | None = None
     servings: float | None = None
     tags: list[str] | None = None
-
-
-class Group(BaseModel):
-    recipes: list[str] = Field(default_factory=list)
-    slug: str
-    title: str
-
-
-class GroupWrite(BaseModel):
-    recipes: list[str] = Field(default_factory=list)
-    title: str
 
 
 class ImportRequest(BaseModel):

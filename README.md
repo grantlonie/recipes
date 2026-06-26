@@ -3,9 +3,8 @@
 A small Cooklang filesystem recipe app.
 
 - Public users can browse, search, share, and view recipes.
-- Editor users can sign in with env-configured credentials to create, import, edit, tag, and group recipes.
+- Editor users can sign in with env-configured credentials to create, import, edit, tag, and bookmark recipes.
 - Recipes are stored as plain-text `.cook` files under `/data/recipes`.
-- Groups are stored as plain-text `.menu` files under `/data/groups`.
 - Images are not stored by the app. Recipe `image` metadata should be a public URL.
 
 ## Local Development
@@ -47,8 +46,6 @@ Copy `.env.example` to `.env` and change `RECIPE_EDITOR_PASSWORD` and `SESSION_S
 /data/
   recipes/
     weeknight/chili.cook
-  groups/
-    favorites.menu
 ```
 
 Recipe metadata follows Cooklang front matter conventions:
@@ -58,6 +55,7 @@ Recipe metadata follows Cooklang front matter conventions:
 title: Chili
 tags:
   - dinner
+bookmarked: false
 servings: 6
 image: https://example.com/chili.jpg
 source: https://example.com/original-recipe

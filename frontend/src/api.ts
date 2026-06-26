@@ -1,23 +1,11 @@
 import type {
   AuthState,
-  Group,
   ImportPreview,
   RecipeDetail,
+  RecipeMetadataInput,
   RecipeSummary,
   SearchResult,
 } from './types'
-
-interface GroupInput {
-  recipes: string[]
-  title: string
-}
-
-export async function createGroup(input: GroupInput): Promise<Group> {
-  return request('/api/groups', {
-    body: JSON.stringify(input),
-    method: 'POST',
-  })
-}
 
 export async function createRecipe(slug: string, content: string): Promise<RecipeDetail> {
   return request('/api/recipes', {
@@ -26,16 +14,12 @@ export async function createRecipe(slug: string, content: string): Promise<Recip
   })
 }
 
-export async function deleteGroup(slug: string): Promise<void> {
-  return request(`/api/groups/${slug}`, { method: 'DELETE' })
+export async function deleteRecipe(slug: string): Promise<void> {
+  return request(`/api/recipes/${slug}`, { method: 'DELETE' })
 }
 
 export async function getAuthState(): Promise<AuthState> {
   return request('/api/auth/me')
-}
-
-export async function getGroups(): Promise<Group[]> {
-  return request('/api/groups')
 }
 
 export async function getRecipe(slug: string): Promise<RecipeDetail> {
@@ -77,17 +61,20 @@ export async function logout(): Promise<AuthState> {
   return request('/api/auth/logout', { method: 'POST' })
 }
 
-export async function updateGroup(slug: string, input: GroupInput): Promise<Group> {
-  return request(`/api/groups/${slug}`, {
-    body: JSON.stringify(input),
-    method: 'PUT',
-  })
-}
-
 export async function updateRecipe(slug: string, content: string): Promise<RecipeDetail> {
   return request(`/api/recipes/${slug}`, {
     body: JSON.stringify({ content }),
     method: 'PUT',
+  })
+}
+
+export async function updateRecipeMetadata(
+  slug: string,
+  input: RecipeMetadataInput
+): Promise<RecipeDetail> {
+  return request(`/api/recipes/${slug}/metadata`, {
+    body: JSON.stringify(input),
+    method: 'PATCH',
   })
 }
 

@@ -17,10 +17,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
-    def groups_root(self) -> Path:
-        return self.data_root / "groups"
-
-    @property
     def recipe_root(self) -> Path:
         return self.data_root / "recipes"
 

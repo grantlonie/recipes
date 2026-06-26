@@ -3,12 +3,6 @@ export interface AuthState {
   username?: string | null
 }
 
-export interface Group {
-  recipes: string[]
-  slug: string
-  title: string
-}
-
 export interface Ingredient {
   fixed: boolean
   name: string
@@ -18,6 +12,7 @@ export interface Ingredient {
 }
 
 export interface RecipeSummary {
+  bookmarked: boolean
   cook_time?: string | null
   image?: string | null
   notes: string[]
@@ -47,4 +42,11 @@ export interface SearchResult {
 export interface ImportPreview {
   content: string
   suggested_slug: string
+}
+
+export interface RecipeMetadataInput {
+  bookmarked?: boolean
+  image?: string | null
+  servings?: number | null
+  tags?: string[] | null
 }

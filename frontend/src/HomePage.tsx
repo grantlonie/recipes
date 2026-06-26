@@ -1,116 +1,121 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import type { ChangeEvent } from 'react'
-import { useMemo, useState } from 'react'
+import type { ChangeEvent, UIEvent } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 
-import { deleteGroup, getGroups, getRecipes, getTags, updateGroup } from './api'
+import { getRecipes, getTags, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
-import type { Group, RecipeSummary } from './types'
+import { BookmarkButton } from './components/BookmarkButton'
+import { TagMultiSelect } from './components/TagMultiSelect'
+import { useRecipeListState } from './RecipeListContext'
+import type { RecipeSummary } from './types'
 
 export function HomePage() {
   const { auth } = useAuth()
-  const [activeGroup, setActiveGroup] = useState<string | null>(null)
-  const [activeTag, setActiveTag] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
+  const {
+    activeTags,
+    bookmarkedOnly,
+    query,
+    recentRecipes,
+    scrollTop,
+    setActiveTags,
+    setBookmarkedOnly,
+    setQuery,
+    setScrollTop,
+  } = useRecipeListState()
   const queryClient = useQueryClient()
+  const recipesScrollRef = useRef<HTMLDivElement | null>(null)
   const recipesQuery = useQuery({
     queryFn: () => getRecipes(query),
     queryKey: ['recipes', query],
   })
-  const groupsQuery = useQuery({ queryFn: getGroups, queryKey: ['groups'] })
   const tagsQuery = useQuery({ queryFn: getTags, queryKey: ['tags'] })
   const recipes = useMemo(
-    () => filterRecipes(recipesQuery.data ?? [], activeGroup, activeTag, groupsQuery.data ?? []),
-    [activeGroup, activeTag, groupsQuery.data, recipesQuery.data]
+    () => filterRecipes(recipesQuery.data ?? [], bookmarkedOnly, activeTags),
+    [activeTags, bookmarkedOnly, recipesQuery.data]
   )
-  const selectedGroup = (groupsQuery.data ?? []).find(group => group.slug === activeGroup) ?? null
-  const removeFromGroupMutation = useMutation({
-    mutationFn: ({ group, recipeSlug }: RemoveFromGroupInput) =>
-      updateGroup(group.slug, {
-        recipes: group.recipes.filter(slug => slug !== recipeSlug),
-        title: group.title,
-      }),
+  const bookmarkMutation = useMutation({
+    mutationFn: (recipe: RecipeSummary) =>
+      updateRecipeMetadata(recipe.slug, { bookmarked: !recipe.bookmarked }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
-    },
-  })
-  const deleteGroupMutation = useMutation({
-    mutationFn: (group: Group) => deleteGroup(group.slug),
-    onSuccess: (_, group) => {
-      if (activeGroup === group.slug) {
-        setActiveGroup(null)
-      }
-      queryClient.invalidateQueries({ queryKey: ['groups'] })
+      queryClient.invalidateQueries({ queryKey: ['recipes'] })
     },
   })
 
+  useEffect(() => {
+    if (recipesScrollRef.current) {
+      recipesScrollRef.current.scrollTop = scrollTop
+    }
+  }, [recipes.length, scrollTop])
+
   return (
-    <div className="space-y-8">
-      <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
-        <p className="text-sm font-semibold uppercase tracking-wide text-orange-700">
-          Cooklang collection
-        </p>
-        <h1 className="mt-2 text-4xl font-bold tracking-tight">All your recipes in one place.</h1>
-        <p className="mt-3 max-w-2xl text-stone-600">
-          Search by recipe name first, then tags, notes, ingredients, and recipe text.
-        </p>
-        <label className="mt-6 block">
+    <div className="flex h-[calc(100vh-6rem)] flex-col">
+      <section className="shrink-0 space-y-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+        <label className="block">
           <span className="sr-only">Search recipes</span>
           <input
             className="w-full rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-lg outline-none ring-orange-500 focus:ring-2"
             onChange={handleQueryChange}
-            placeholder="Search recipes"
+            onFocus={event => event.target.select()}
+            placeholder="Search by name, tags, ingredients, or recipe text"
             type="search"
             value={query}
           />
         </label>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        <aside className="space-y-6">
-          <FilterSection
-            active={activeGroup}
-            items={(groupsQuery.data ?? []).map(group => ({
-              group,
-              label: group.title,
-              value: group.slug,
-            }))}
-            onClear={() => setActiveGroup(null)}
-            onDelete={auth.authenticated ? handleDeleteGroup : undefined}
-            pendingDelete={deleteGroupMutation.isPending}
-            onSelect={setActiveGroup}
-            title="Groups"
-          />
-          <FilterSection
-            active={activeTag}
-            items={(tagsQuery.data ?? []).map(tag => ({ label: tag, value: tag }))}
-            onClear={() => setActiveTag(null)}
-            onSelect={setActiveTag}
-            title="Tags"
-          />
-        </aside>
-
-        <div>
-          {recipesQuery.isLoading ? (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
-          ) : recipes.length ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {recipes.map(recipe => (
-                <RecipeCard
-                  activeGroup={selectedGroup}
-                  canEditGroups={auth.authenticated}
-                  key={recipe.slug}
-                  onRemoveFromGroup={handleRemoveFromGroup}
-                  pendingRemove={removeFromGroupMutation.isPending}
-                  recipe={recipe}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
-          )}
+        <div className="flex items-start gap-3">
+          <button
+            aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl shadow-sm ring-1 ring-orange-200 transition hover:bg-orange-100 ${
+              bookmarkedOnly ? 'bg-orange-600 text-white' : 'bg-white text-stone-700'
+            }`}
+            onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
+            type="button"
+          >
+            <span aria-hidden="true">{bookmarkedOnly ? '★' : '☆'}</span>
+          </button>
+          <div className="min-w-0 flex-1">
+            <TagMultiSelect
+              availableTags={tagsQuery.data ?? []}
+              onChange={setActiveTags}
+              placeholder="Filter by tags"
+              value={activeTags}
+            />
+          </div>
         </div>
       </section>
+
+      <section
+        className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 pt-5"
+        onScroll={handleRecipesScroll}
+        ref={recipesScrollRef}
+      >
+        <RecentRecipes recipes={recentRecipes} />
+        {recipesQuery.isLoading ? (
+          <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
+        ) : recipes.length ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {recipes.map(recipe => (
+              <RecipeCard
+                canBookmark={auth.authenticated}
+                key={recipe.slug}
+                onToggleBookmark={handleToggleBookmark}
+                pendingBookmark={bookmarkMutation.isPending}
+                recipe={recipe}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
+        )}
+      </section>
+
+      <Link
+        className="fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-3xl font-light text-white shadow-lg hover:bg-orange-700"
+        to={auth.authenticated ? '/recipes/new' : '/login'}
+      >
+        <span className="sr-only">New recipe</span>
+        +
+      </Link>
     </div>
   )
 
@@ -118,134 +123,71 @@ export function HomePage() {
     setQuery(event.target.value)
   }
 
-  async function handleRemoveFromGroup(group: Group, recipeSlug: string) {
-    await removeFromGroupMutation.mutateAsync({ group, recipeSlug })
+  function handleRecipesScroll(event: UIEvent<HTMLDivElement>) {
+    setScrollTop(event.currentTarget.scrollTop)
   }
 
-  async function handleDeleteGroup(group: Group) {
-    if (
-      group.recipes.length &&
-      !window.confirm(
-        `"${group.title}" still has ${group.recipes.length} recipe${
-          group.recipes.length === 1 ? '' : 's'
-        }. Delete this group anyway?`
-      )
-    ) {
-      return
-    }
-
-    await deleteGroupMutation.mutateAsync(group)
+  async function handleToggleBookmark(recipe: RecipeSummary) {
+    await bookmarkMutation.mutateAsync(recipe)
   }
 }
 
-interface FilterItem {
-  group?: Group
-  label: string
-  value: string
-}
+function RecentRecipes({ recipes }: RecentRecipesProps) {
+  if (!recipes.length) {
+    return null
+  }
 
-interface FilterSectionProps {
-  active: string | null
-  items: FilterItem[]
-  onClear: () => void
-  onDelete?: (group: Group) => void
-  onSelect: (value: string) => void
-  pendingDelete?: boolean
-  title: string
-}
-
-function FilterSection({
-  active,
-  items,
-  onClear,
-  onDelete,
-  onSelect,
-  pendingDelete,
-  title,
-}: FilterSectionProps) {
   return (
-    <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-orange-100">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold">{title}</h2>
-        {active ? (
-          <button
-            className="text-sm text-orange-700 hover:underline"
-            onClick={onClear}
-            type="button"
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
-      <div className="flex flex-wrap gap-2 lg:block lg:space-y-2">
-        {items.map(item => {
-          const activeItem = active === item.value
-          const itemButton = (
-            <button
-              className={`rounded-full px-3 py-1.5 text-sm lg:w-full lg:text-left ${
-                activeItem
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-orange-100 text-stone-700 hover:bg-orange-200'
-              }`}
-              onClick={() => onSelect(item.value)}
-              type="button"
-            >
-              {item.label}
-            </button>
-          )
-
-          if (!onDelete || !item.group) {
-            return <div key={item.value}>{itemButton}</div>
-          }
-
-          return (
-            <div className="flex items-center gap-2" key={item.value}>
-              <div className="min-w-0 flex-1">{itemButton}</div>
-              <button
-                aria-label={`Delete ${item.label}`}
-                className="rounded-full px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
-                disabled={pendingDelete}
-                onClick={() => onDelete(item.group!)}
-                type="button"
-              >
-                Delete
-              </button>
-            </div>
-          )
-        })}
+    <div>
+      <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">Recently Viewed</h2>
+      <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
+        {recipes.map(recipe => (
+          <Link className="w-28 shrink-0" key={recipe.slug} to={`/recipes/${recipe.slug}`}>
+            {recipe.image ? (
+              <img
+                alt=""
+                className="h-24 w-28 rounded-xl object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                src={recipe.image}
+              />
+            ) : (
+              <div className="flex h-24 w-28 items-center justify-center rounded-xl bg-orange-100">
+                <img alt="" className="h-16 w-16 object-contain opacity-90" src="/web-app-icon-512.png" />
+              </div>
+            )}
+            <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{recipe.title}</p>
+          </Link>
+        ))}
       </div>
     </div>
   )
 }
 
-interface RecipeCardProps {
-  activeGroup: Group | null
-  canEditGroups: boolean
-  onRemoveFromGroup: (group: Group, recipeSlug: string) => Promise<void>
-  pendingRemove: boolean
-  recipe: RecipeSummary
-}
-
-function RecipeCard({
-  activeGroup,
-  canEditGroups,
-  onRemoveFromGroup,
-  pendingRemove,
-  recipe,
-}: RecipeCardProps) {
+function RecipeCard({ canBookmark, onToggleBookmark, pendingBookmark, recipe }: RecipeCardProps) {
   return (
-    <article className="group overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="group relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-orange-100 transition hover:-translate-y-0.5 hover:shadow-md">
+      {canBookmark ? (
+        <BookmarkButton
+          bookmarked={recipe.bookmarked}
+          className="absolute right-3 top-3 z-10"
+          disabled={pendingBookmark}
+          onToggle={() => onToggleBookmark(recipe)}
+        />
+      ) : null}
       <Link className="block" to={`/recipes/${recipe.slug}`}>
         {recipe.image ? (
-          <img
-            alt=""
-            className="h-40 w-full object-cover"
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            src={recipe.image}
-          />
+          <div className="aspect-video w-full overflow-hidden">
+            <img
+              alt=""
+              className="block h-full w-full object-cover"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              src={recipe.image}
+            />
+          </div>
         ) : (
-          <div className="flex h-40 items-center justify-center bg-orange-100">
+          <div className="flex aspect-video w-full items-center justify-center bg-orange-100">
             <img
               alt=""
               className="h-28 w-28 object-contain opacity-90"
@@ -270,42 +212,27 @@ function RecipeCard({
           </p>
         </div>
       </Link>
-      {activeGroup && canEditGroups ? (
-        <div className="px-4 pb-4">
-          <button
-            className="w-full rounded-full bg-orange-100 px-3 py-2 text-sm font-semibold text-orange-800 hover:bg-orange-200 disabled:opacity-60"
-            disabled={pendingRemove}
-            onClick={() => onRemoveFromGroup(activeGroup, recipe.slug)}
-            type="button"
-          >
-            Remove from {activeGroup.title}
-          </button>
-        </div>
-      ) : null}
     </article>
   )
 }
 
-interface RemoveFromGroupInput {
-  group: Group
-  recipeSlug: string
+interface RecentRecipesProps {
+  recipes: RecipeSummary[]
 }
 
-function filterRecipes(
-  recipes: RecipeSummary[],
-  activeGroup: string | null,
-  activeTag: string | null,
-  groups: { recipes: string[]; slug: string }[]
-) {
-  const groupRecipes = activeGroup
-    ? new Set(groups.find(group => group.slug === activeGroup)?.recipes ?? [])
-    : null
+interface RecipeCardProps {
+  canBookmark: boolean
+  onToggleBookmark: (recipe: RecipeSummary) => Promise<void>
+  pendingBookmark: boolean
+  recipe: RecipeSummary
+}
 
+function filterRecipes(recipes: RecipeSummary[], bookmarkedOnly: boolean, activeTags: string[]) {
   return recipes.filter(recipe => {
-    if (groupRecipes && !groupRecipes.has(recipe.slug)) {
+    if (bookmarkedOnly && !recipe.bookmarked) {
       return false
     }
-    if (activeTag && !recipe.tags.includes(activeTag)) {
+    if (activeTags.some(tag => !recipe.tags.includes(tag))) {
       return false
     }
     return true

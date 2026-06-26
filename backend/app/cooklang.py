@@ -104,6 +104,15 @@ def metadata_tags(metadata: dict[str, Any]) -> list[str]:
     return []
 
 
+def metadata_bookmarked(metadata: dict[str, Any]) -> bool:
+    value = metadata.get("bookmarked", False)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "yes", "y"}
+    return bool(value)
+
+
 def metadata_title(metadata: dict[str, Any], fallback: str) -> str:
     title = metadata.get("title")
     return str(title).strip() if title else fallback
@@ -160,11 +169,14 @@ def metadata_servings(metadata: dict[str, Any]) -> float:
 def set_metadata_values(
     metadata: dict[str, Any],
     *,
+    bookmarked: bool | None = None,
     image: str | None = None,
     servings: float | None = None,
     tags: list[str] | None = None,
 ) -> dict[str, Any]:
     updated = dict(metadata)
+    if bookmarked is not None:
+        updated["bookmarked"] = bookmarked
     if image is not None:
         updated["image"] = image.strip() or None
     if servings is not None:

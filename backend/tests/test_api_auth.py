@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 def test_public_reads_and_protected_writes(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_BASE_URL", "http://testserver")
+    monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     monkeypatch.setenv("RECIPE_EDITOR_PASSWORD", "secret")
     monkeypatch.setenv("RECIPE_EDITOR_USERNAME", "editor")
