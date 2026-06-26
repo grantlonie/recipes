@@ -84,12 +84,13 @@ export function HomePage() {
         </div>
       </section>
 
+      <RecentRecipes recipes={recentRecipes} />
+
       <section
         className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 pt-5"
         onScroll={handleRecipesScroll}
         ref={recipesScrollRef}
       >
-        <RecentRecipes recipes={recentRecipes} />
         {recipesQuery.isLoading ? (
           <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
         ) : recipes.length ? (
@@ -138,7 +139,7 @@ function RecentRecipes({ recipes }: RecentRecipesProps) {
   }
 
   return (
-    <div>
+    <div className="shrink-0 pt-5">
       <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">Recently Viewed</h2>
       <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
         {recipes.map(recipe => (
