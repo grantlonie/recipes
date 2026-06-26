@@ -94,9 +94,10 @@ recipes.grantlonie.com {
 
 ## URL Import
 
-The protected import endpoint runs `cooklang-import <url>` on the server. Install or include
-`cooklang-import` in the runtime environment before using URL import. If it is missing, the import
-UI will show a server error while the rest of the app continues to work.
+The protected import endpoint sends recipe URLs to [cook.md](https://cook.md/) using the Cooklang
+prefix import flow (`https://cook.md/<recipe-url>`), polls until conversion finishes, and returns
+the resulting Cooklang document to the editor. No local `cooklang-import` binary or AI API keys are
+required on the server.
 
 ## Checks
 

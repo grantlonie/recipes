@@ -72,6 +72,15 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       setImportUrl('')
     },
   })
+  const reimportMutation = useMutation({
+    mutationFn: (url: string) => importRecipe(url),
+    onSuccess: preview => {
+      const parsed = parseImportedDocument(preview.content)
+      const currentBookmarked = bookmarked
+      applyDocumentState(parsed.metadata, parsed.body)
+      setBookmarked(currentBookmarked)
+    },
+  })
 
   useEffect(() => {
     if (recipeQuery.data) {
@@ -167,8 +176,27 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               <Field label="Image URL">
                 <input className={inputClassName} onChange={event => setImage(event.target.value)} value={image} />
               </Field>
-              <Field label="Source URL">
-                <input className={inputClassName} onChange={event => setSource(event.target.value)} value={source} />
+              <Field className="lg:col-span-2" label="Source URL">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <input
+                    className={inputClassName}
+                    onChange={event => setSource(event.target.value)}
+                    value={source}
+                  />
+                  {!isNew ? (
+                    <Button
+                      className="shrink-0"
+                      disabled={!source.trim() || reimportMutation.isPending}
+                      onClick={handleReimportFromSource}
+                      variant="secondary"
+                    >
+                      {reimportMutation.isPending ? 'Re-importing...' : 'Re-import from source'}
+                    </Button>
+                  ) : null}
+                </div>
+                {!isNew && reimportMutation.error ? (
+                  <p className="mt-2 text-sm text-red-700">{reimportMutation.error.message}</p>
+                ) : null}
               </Field>
               <label className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-semibold text-stone-700">
                 <input
@@ -326,6 +354,22 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   async function handleImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await importMutation.mutateAsync(importUrl.trim())
+  }
+
+  async function handleReimportFromSource() {
+    const url = source.trim()
+    if (!url) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Re-importing will overwrite the current recipe title, metadata, and body with the latest version from the source URL. Do you want to continue?'
+    )
+    if (!confirmed) {
+      return
+    }
+
+    await reimportMutation.mutateAsync(url)
   }
 
   function insertIngredient() {
