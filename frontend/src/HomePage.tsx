@@ -34,6 +34,7 @@ export function HomePage() {
     () => filterRecipes(recipesQuery.data ?? [], bookmarkedOnly, activeTags),
     [activeTags, bookmarkedOnly, recipesQuery.data]
   )
+  const isSearching = query.trim().length > 0
   const bookmarkMutation = useMutation({
     mutationFn: (recipe: RecipeSummary) =>
       updateRecipeMetadata(recipe.slug, { bookmarked: !recipe.bookmarked }),
@@ -84,7 +85,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <RecentRecipes recipes={recentRecipes} />
+      {!isSearching ? <RecentRecipes recipes={recentRecipes} /> : null}
 
       <section
         className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 pt-5"
@@ -94,17 +95,21 @@ export function HomePage() {
         {recipesQuery.isLoading ? (
           <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
         ) : recipes.length ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {recipes.map(recipe => (
-              <RecipeCard
-                canBookmark={auth.authenticated}
-                key={recipe.slug}
-                onToggleBookmark={handleToggleBookmark}
-                pendingBookmark={bookmarkMutation.isPending}
-                recipe={recipe}
-              />
-            ))}
-          </div>
+          isSearching ? (
+            <CompactRecipeGrid recipes={recipes} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {recipes.map(recipe => (
+                <RecipeCard
+                  canBookmark={auth.authenticated}
+                  key={recipe.slug}
+                  onToggleBookmark={handleToggleBookmark}
+                  pendingBookmark={bookmarkMutation.isPending}
+                  recipe={recipe}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
         )}
@@ -139,29 +144,47 @@ function RecentRecipes({ recipes }: RecentRecipesProps) {
   }
 
   return (
-    <div className="shrink-0 pt-5">
-      <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">Recently Viewed</h2>
-      <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
+    <CompactRecipeGrid recipes={recipes} title="Recently Viewed" />
+  )
+}
+
+function CompactRecipeGrid({ recipes, title }: CompactRecipeGridProps) {
+  if (!recipes.length) {
+    return null
+  }
+
+  return (
+    <div className={title ? 'shrink-0 pt-5' : undefined}>
+      {title ? (
+        <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{title}</h2>
+      ) : null}
+      <div className={`grid grid-cols-3 gap-3 ${title ? 'mt-2' : ''}`}>
         {recipes.map(recipe => (
-          <Link className="w-28 shrink-0" key={recipe.slug} to={`/recipes/${recipe.slug}`}>
-            {recipe.image ? (
-              <img
-                alt=""
-                className="h-24 w-28 rounded-xl object-cover"
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                src={recipe.image}
-              />
-            ) : (
-              <div className="flex h-24 w-28 items-center justify-center rounded-xl bg-orange-100">
-                <img alt="" className="h-16 w-16 object-contain opacity-90" src="/web-app-icon-512.png" />
-              </div>
-            )}
-            <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{recipe.title}</p>
-          </Link>
+          <CompactRecipeTile key={recipe.slug} recipe={recipe} />
         ))}
       </div>
     </div>
+  )
+}
+
+function CompactRecipeTile({ recipe }: CompactRecipeTileProps) {
+  return (
+    <Link className="min-w-0" to={`/recipes/${recipe.slug}`}>
+      {recipe.image ? (
+        <img
+          alt=""
+          className="aspect-square w-full rounded-xl object-cover"
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          src={recipe.image}
+        />
+      ) : (
+        <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-orange-100">
+          <img alt="" className="h-16 w-16 object-contain opacity-90" src="/web-app-icon-512.png" />
+        </div>
+      )}
+      <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{recipe.title}</p>
+    </Link>
   )
 }
 
@@ -219,6 +242,15 @@ function RecipeCard({ canBookmark, onToggleBookmark, pendingBookmark, recipe }: 
 
 interface RecentRecipesProps {
   recipes: RecipeSummary[]
+}
+
+interface CompactRecipeGridProps {
+  recipes: RecipeSummary[]
+  title?: string
+}
+
+interface CompactRecipeTileProps {
+  recipe: RecipeSummary
 }
 
 interface RecipeCardProps {
