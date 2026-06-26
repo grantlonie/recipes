@@ -99,13 +99,45 @@ export function RecipePage() {
         <div className="space-y-5 p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight">{recipe.title}</h1>
-              <p className="mt-2 text-stone-600">
+              <h1 className="text-xl font-bold tracking-tight">{recipe.title}</h1>
+              <p className="mt-1 text-sm text-stone-600">
                 {recipe.cook_time ? `${recipe.cook_time} · ` : ''}
                 {recipe.servings} servings
               </p>
             </div>
-            <div className="ml-auto flex max-w-full flex-wrap justify-end gap-2">
+            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+              <div
+                aria-label="Scale servings"
+                className="flex items-stretch overflow-hidden rounded-full border border-orange-200 text-xs"
+                role="group"
+              >
+                <button
+                  aria-label="Decrease servings"
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={servings <= 1}
+                  id="servings-decrease"
+                  onClick={() => setServings(current => Math.max(1, current - 1))}
+                  type="button"
+                >
+                  −
+                </button>
+                <output
+                  aria-live="polite"
+                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
+                  id="servings"
+                >
+                  {servings}
+                </output>
+                <button
+                  aria-label="Increase servings"
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
+                  id="servings-increase"
+                  onClick={() => setServings(current => current + 1)}
+                  type="button"
+                >
+                  +
+                </button>
+              </div>
               <Button onClick={handleShare}>
                 Share
               </Button>
@@ -175,44 +207,6 @@ export function RecipePage() {
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
-            <p className="text-sm font-semibold text-stone-700" id="servings-label">
-              Scale servings
-            </p>
-            <div
-              aria-labelledby="servings-label"
-              className="mt-2 flex items-stretch overflow-hidden rounded-xl border border-orange-200"
-              role="group"
-            >
-              <button
-                aria-label="Decrease servings"
-                className="flex w-12 shrink-0 items-center justify-center bg-orange-50 text-xl font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={servings <= 1}
-                id="servings-decrease"
-                onClick={() => setServings(current => Math.max(1, current - 1))}
-                type="button"
-              >
-                −
-              </button>
-              <output
-                aria-live="polite"
-                className="flex flex-1 items-center justify-center border-x border-orange-200 px-3 py-2 text-sm font-semibold tabular-nums text-stone-900"
-                id="servings"
-              >
-                {servings}
-              </output>
-              <button
-                aria-label="Increase servings"
-                className="flex w-12 shrink-0 items-center justify-center bg-orange-50 text-xl font-semibold text-orange-800 transition hover:bg-orange-100"
-                id="servings-increase"
-                onClick={() => setServings(current => current + 1)}
-                type="button"
-              >
-                +
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
             <h2 className="text-lg font-semibold">Ingredients</h2>
             <ul className="mt-4 space-y-2">
               {recipe.ingredients.map((ingredient, index) => (
@@ -220,12 +214,12 @@ export function RecipePage() {
                   className="flex justify-between gap-3 text-sm"
                   key={`${ingredient.name}-${index}`}
                 >
-                  <span>{titleCaseIngredient(ingredient.name)}</span>
-                  <span className="text-right text-stone-600">
+                  <span className="shrink-0 tabular-nums text-stone-600">
                     {ingredient.scaled_quantity ?? ingredient.quantity ?? ''}
                     {ingredient.unit ? ` ${ingredient.unit}` : ''}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
+                  <span className="text-right">{titleCaseIngredient(ingredient.name)}</span>
                 </li>
               ))}
             </ul>
