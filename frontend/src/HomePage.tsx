@@ -24,7 +24,7 @@ export function HomePage() {
   } = useRecipeListState()
   const recipesScrollRef = useRef<HTMLDivElement | null>(null)
   const searchQuery = query.trim()
-  const showSearchResults = searchQuery.length >= 2
+  const showSearchResults = searchQuery.length >= 3
   const recipesQuery = useQuery({
     enabled: showSearchResults,
     queryFn: () => getRecipes(searchQuery),
