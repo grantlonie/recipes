@@ -18,6 +18,23 @@ COOKWARE_RE = re.compile(
 )
 TIMER_RE = re.compile(r"~(?P<name>[A-Za-z0-9_./' -]*?)?\{(?P<amount>[^}]*)\}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
+QUANTITY_PATTERN = (
+    r"(?:\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞])"
+)
+AMOUNT_WITHOUT_SEPARATOR_RE = re.compile(
+    rf"^(?P<quantity>{QUANTITY_PATTERN})(?:\s+(?P<unit>.+))?$"
+)
+UNICODE_FRACTION_MAP = {
+    "¼": Fraction(1, 4),
+    "½": Fraction(1, 2),
+    "¾": Fraction(3, 4),
+    "⅓": Fraction(1, 3),
+    "⅔": Fraction(2, 3),
+    "⅛": Fraction(1, 8),
+    "⅜": Fraction(3, 8),
+    "⅝": Fraction(5, 8),
+    "⅞": Fraction(7, 8),
+}
 
 
 def parse_document(content: str) -> tuple[dict[str, Any], str]:
@@ -194,6 +211,11 @@ def split_amount(amount: str | None) -> tuple[str | None, str | None, bool]:
     if "%" in value:
         quantity, unit = value.split("%", 1)
         return quantity.strip() or None, unit.strip() or None, fixed
+    match = AMOUNT_WITHOUT_SEPARATOR_RE.match(value.strip())
+    if match:
+        quantity = match.group("quantity").strip() or None
+        unit = match.group("unit")
+        return quantity, unit.strip() or None if unit else None, fixed
     return value.strip() or None, None, fixed
 
 
@@ -201,13 +223,42 @@ def scale_quantity(quantity: str | None, factor: float | None, fixed: bool) -> s
     if quantity is None or factor is None or fixed:
         return quantity
 
-    try:
-        number = Fraction(quantity)
-    except ValueError:
+    number = parse_quantity_to_fraction(quantity)
+    if number is None:
         return quantity
 
     scaled = float(number * Fraction(factor).limit_denominator())
     return format(scaled, ".3f").rstrip("0").rstrip(".")
+
+
+def parse_quantity_to_fraction(quantity: str) -> Fraction | None:
+    value = quantity.strip()
+    if not value:
+        return None
+
+    if value in UNICODE_FRACTION_MAP:
+        return UNICODE_FRACTION_MAP[value]
+
+    for char, fraction in UNICODE_FRACTION_MAP.items():
+        if char in value:
+            whole, remainder = value.split(char, maxsplit=1)
+            if remainder.strip():
+                continue
+            try:
+                return Fraction(whole.strip()) + fraction
+            except ValueError:
+                continue
+
+    try:
+        return Fraction(value)
+    except ValueError:
+        parts = value.split()
+        if len(parts) == 2:
+            try:
+                return Fraction(parts[0]) + Fraction(parts[1])
+            except ValueError:
+                return None
+    return None
 
 
 def strip_comments(body: str) -> str:

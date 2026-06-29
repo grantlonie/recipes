@@ -1,4 +1,4 @@
-from app.cooklang import parse_cookware, parse_ingredients
+from app.cooklang import parse_cookware, parse_ingredients, split_amount
 
 
 def test_parse_ingredients_keeps_braced_multi_word_names_together():
@@ -27,3 +27,30 @@ def test_parse_cookware_keeps_braced_multi_word_names_together():
     cookware = parse_cookware("Mix in a #large bowl{} with a #spoon.")
 
     assert cookware == ["large bowl", "spoon"]
+
+
+def test_split_amount_parses_quantity_and_unit_without_separator():
+    assert split_amount("1 cup") == ("1", "cup", False)
+    assert split_amount("¼ cup") == ("¼", "cup", False)
+    assert split_amount("½ teaspoon") == ("½", "teaspoon", False)
+    assert split_amount("1") == ("1", None, False)
+
+
+def test_parse_ingredients_scales_amounts_with_embedded_units():
+    ingredients = parse_ingredients(
+        "Mix @flour{1 cup}, @egg{1}, and @salt{½ teaspoon}.",
+        scale=2,
+        servings=4,
+    )
+
+    flour = next(ingredient for ingredient in ingredients if ingredient.name == "flour")
+    egg = next(ingredient for ingredient in ingredients if ingredient.name == "egg")
+    salt = next(ingredient for ingredient in ingredients if ingredient.name == "salt")
+
+    assert flour.quantity == "1"
+    assert flour.unit == "cup"
+    assert flour.scaled_quantity == "0.5"
+    assert egg.scaled_quantity == "0.5"
+    assert salt.quantity == "½"
+    assert salt.unit == "teaspoon"
+    assert salt.scaled_quantity == "0.25"

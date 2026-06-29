@@ -119,3 +119,32 @@ Mix @flour{500%g} and @yeast{=1%packet}.
     yeast = next(ingredient for ingredient in recipe.ingredients if ingredient.name == "yeast")
     assert flour.scaled_quantity == "1000"
     assert yeast.scaled_quantity == "1"
+
+
+def test_scaling_handles_sourdough_style_amounts(tmp_path):
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=tmp_path / "recipes",
+    )
+    repository.write_recipe(
+        "pancakes",
+        """---
+title: Pancakes
+servings: 4
+---
+
+Mix @sourdough starter{1 cup}, @buttermilk{1 cup}, and @egg{1}.
+Add @melted unsalted butter{¼ cup} and @vanilla extract{½ teaspoon}.
+""",
+    )
+
+    recipe = repository.get_recipe("pancakes", scaled_servings=2)
+
+    scaled = {ingredient.name: ingredient for ingredient in recipe.ingredients}
+    assert scaled["sourdough starter"].scaled_quantity == "0.5"
+    assert scaled["sourdough starter"].unit == "cup"
+    assert scaled["buttermilk"].scaled_quantity == "0.5"
+    assert scaled["egg"].scaled_quantity == "0.5"
+    assert scaled["melted unsalted butter"].scaled_quantity == "0.125"
+    assert scaled["vanilla extract"].scaled_quantity == "0.25"
+    assert scaled["vanilla extract"].unit == "teaspoon"
