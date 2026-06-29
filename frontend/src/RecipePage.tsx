@@ -10,7 +10,7 @@ import { Button } from './components/Button'
 import { Popover } from './components/Popover'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
-import { ensureRecipe, storeRecipe } from './sync'
+import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
   'and',
@@ -37,8 +37,11 @@ export function RecipePage() {
   const { revision, sync } = useRecipeSync()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
-    queryFn: () => ensureRecipe(slug),
-    queryKey: ['recipe', slug, revision],
+    queryFn: () =>
+      loadRecipeStaleFirst(slug, updated =>
+        queryClient.setQueryData(['recipe', slug], updated),
+      ),
+    queryKey: ['recipe', slug],
   })
   const [servings, setServings] = useState(1)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
@@ -51,7 +54,7 @@ export function RecipePage() {
   const bookmarkMutation = useMutation({
     mutationFn: () => updateRecipeMetadata(slug, { bookmarked: !recipeQuery.data?.bookmarked }),
     onSuccess: async recipe => {
-      queryClient.setQueryData(['recipe', slug, revision], recipe)
+      queryClient.setQueryData(['recipe', slug], recipe)
       await storeRecipe(recipe)
       await sync()
     },
@@ -76,7 +79,18 @@ export function RecipePage() {
     setCompletedSteps(new Set())
   }, [slug])
 
-  if (recipeQuery.isLoading) {
+  useEffect(() => {
+    if (!slug || revision === 0) {
+      return
+    }
+    revalidateRecipe(slug).then(updated => {
+      if (updated) {
+        queryClient.setQueryData(['recipe', slug], updated)
+      }
+    })
+  }, [queryClient, revision, slug])
+
+  if (recipeQuery.isLoading && !recipeQuery.data) {
     return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
   }
 

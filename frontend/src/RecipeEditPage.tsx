@@ -11,7 +11,7 @@ import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { getLocalTags } from './db'
 import { useRecipeSync } from './RecipeSyncContext'
-import { ensureRecipe, storeRecipe } from './sync'
+import { loadRecipeStaleFirst, storeRecipe } from './sync'
 
 const emptyBody = 'Add @ingredient{1%cup}.\n'
 
@@ -48,8 +48,11 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const isNew = mode === 'new'
   const recipeQuery = useQuery({
     enabled: auth.authenticated && !isNew && Boolean(slug),
-    queryFn: () => ensureRecipe(slug),
-    queryKey: ['recipe', slug, revision],
+    queryFn: () =>
+      loadRecipeStaleFirst(slug, updated =>
+        queryClient.setQueryData(['recipe', slug], updated),
+      ),
+    queryKey: ['recipe', slug],
   })
 
   useEffect(() => {
@@ -67,7 +70,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     onSuccess: async recipe => {
       await storeRecipe(recipe)
       await sync()
-      queryClient.setQueryData(['recipe', recipe.slug, revision], recipe)
+      queryClient.setQueryData(['recipe', recipe.slug], recipe)
       navigate(`/recipes/${recipe.slug}`)
     },
   })

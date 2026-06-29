@@ -44,33 +44,70 @@ export async function runSync(): Promise<void> {
   await putRecipesDelta(fetched, manifest)
 }
 
-export async function ensureRecipe(slug: string): Promise<RecipeDetail> {
-  const local = await getLocalRecipe(slug)
+export async function loadRecipeLocal(slug: string): Promise<RecipeDetail | null> {
+  return getLocalRecipe(slug)
+}
 
+export async function fetchRecipeFresh(slug: string): Promise<RecipeDetail> {
+  const manifest = await getSyncManifest()
+  const entry = manifest.recipes.find(recipe => recipe.slug === slug)
+  if (!entry) {
+    throw new Error('Recipe not found')
+  }
+
+  const remote = await getRecipe(slug)
+  await putRecipe(remote, entry.updated_at)
+  return remote
+}
+
+export async function revalidateRecipe(slug: string): Promise<RecipeDetail | null> {
   try {
     const manifest = await getSyncManifest()
     const entry = manifest.recipes.find(recipe => recipe.slug === slug)
     if (!entry) {
-      if (local) {
-        return local
-      }
-      throw new Error('Recipe not found')
+      return null
     }
 
     const storedUpdatedAt = await getStoredUpdatedAt(slug)
-    if (local && storedUpdatedAt === entry.updated_at) {
-      return local
+    if (storedUpdatedAt === entry.updated_at) {
+      return null
     }
 
     const remote = await getRecipe(slug)
     await putRecipe(remote, entry.updated_at)
     return remote
-  } catch (error) {
-    if (local) {
-      return local
-    }
-    throw error
+  } catch {
+    return null
   }
+}
+
+export async function loadRecipeStaleFirst(
+  slug: string,
+  onUpdated?: (recipe: RecipeDetail) => void,
+): Promise<RecipeDetail> {
+  const local = await loadRecipeLocal(slug)
+  if (local) {
+    void revalidateRecipe(slug).then(updated => {
+      if (updated) {
+        onUpdated?.(updated)
+      }
+    })
+    return local
+  }
+
+  return fetchRecipeFresh(slug)
+}
+
+export async function ensureRecipe(slug: string): Promise<RecipeDetail> {
+  const local = await loadRecipeLocal(slug)
+  const updated = await revalidateRecipe(slug)
+  if (updated) {
+    return updated
+  }
+  if (local) {
+    return local
+  }
+  return fetchRecipeFresh(slug)
 }
 
 export async function storeRecipe(recipe: RecipeDetail, updatedAt?: string): Promise<void> {

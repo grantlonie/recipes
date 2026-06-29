@@ -27,6 +27,7 @@ export function HomePage() {
   const recipesScrollRef = useRef<HTMLDivElement | null>(null)
   const [summaries, setSummaries] = useState<RecipeSummary[]>([])
   const [details, setDetails] = useState<RecipeDetail[]>([])
+  const [localReady, setLocalReady] = useState(false)
   const searchQuery = query.trim()
   const showSearchResults = searchQuery.length > 0
   const availableTags = useMemo(() => {
@@ -56,10 +57,18 @@ export function HomePage() {
   }, [sync])
 
   useEffect(() => {
+    let cancelled = false
     Promise.all([getLocalSummaries(), getAllStoredRecipes()]).then(([nextSummaries, stored]) => {
+      if (cancelled) {
+        return
+      }
       setSummaries(nextSummaries)
       setDetails(stored.map(record => record.recipe))
+      setLocalReady(true)
     })
+    return () => {
+      cancelled = true
+    }
   }, [revision])
 
   useEffect(() => {
@@ -114,10 +123,12 @@ export function HomePage() {
         ref={recipesScrollRef}
       >
         {showSearchResults ? (
-          status === 'syncing' && !summaries.length ? (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">Syncing recipes...</p>
+          !localReady ? (
+            <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
           ) : recipes.length ? (
             <CompactRecipeGrid recipes={recipes} />
+          ) : status === 'syncing' && !summaries.length ? (
+            <p className="rounded-2xl bg-white p-6 text-stone-600">Syncing recipes...</p>
           ) : (
             <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
           )
