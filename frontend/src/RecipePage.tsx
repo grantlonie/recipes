@@ -99,11 +99,7 @@ export function RecipePage() {
   }
 
   return (
-    <article className="space-y-8">
-      <Link className="text-sm font-medium text-orange-700 hover:underline" to="/">
-        Back to recipes
-      </Link>
-
+    <article className="space-y-8 pb-8">
       <section className="rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
         {recipe.image ? (
           <img

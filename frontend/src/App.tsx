@@ -18,7 +18,7 @@ export function App() {
     <RecipeSyncProvider>
       <RecipeListProvider>
       <div className="min-h-screen bg-orange-50 text-stone-900">
-      <header className="border-b border-orange-200 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-orange-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:gap-4 sm:py-4">
           <Link aria-label="G&E Recipes home" className="inline-flex items-center" to="/">
             <img alt="G&E Recipes" className="h-8 w-auto sm:h-12" src="/logo.png" />

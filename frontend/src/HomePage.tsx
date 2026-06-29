@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom'
 import type { ChangeEvent, UIEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/react/24/outline'
+import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
+
 import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
 import { TagMultiSelect } from './components/TagMultiSelect'
@@ -41,6 +44,10 @@ export function HomePage() {
       left.localeCompare(right, undefined, { sensitivity: 'base' }),
     )
   }, [summaries])
+  const bookmarkedRecipes = useMemo(
+    () => filterRecipes(summaries, true, activeTags),
+    [activeTags, summaries],
+  )
   const recipes = useMemo(() => {
     if (!showSearchResults) {
       return []
@@ -94,13 +101,15 @@ export function HomePage() {
         <div className="flex items-start gap-3">
           <button
             aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
-            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl shadow-sm ring-1 ring-orange-200 transition hover:bg-orange-100 ${
-              bookmarkedOnly ? 'bg-orange-600 text-white' : 'bg-white text-stone-700'
-            }`}
+            className="inline-flex shrink-0 items-center justify-center p-1 text-orange-600 transition hover:text-orange-700"
             onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
             type="button"
           >
-            <span aria-hidden="true">{bookmarkedOnly ? '★' : '☆'}</span>
+            {bookmarkedOnly ? (
+              <BookmarkIconSolid aria-hidden="true" className="h-6 w-6" />
+            ) : (
+              <BookmarkIconOutline aria-hidden="true" className="h-6 w-6" />
+            )}
           </button>
           <div className="min-w-0 flex-1">
             <TagMultiSelect
@@ -114,7 +123,15 @@ export function HomePage() {
       </section>
 
       {!showSearchResults ? (
-        <CompactRecipeGrid recipes={recentRecipes} title="Recently Viewed" />
+        bookmarkedOnly ? (
+          bookmarkedRecipes.length ? (
+            <CompactRecipeGrid recipes={bookmarkedRecipes} title="Bookmarked" />
+          ) : (
+            <p className="shrink-0 pt-5 text-sm text-stone-600">No bookmarked recipes yet.</p>
+          )
+        ) : (
+          <CompactRecipeGrid recipes={recentRecipes} title="Recently Viewed" />
+        )
       ) : null}
 
       <section
