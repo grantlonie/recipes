@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useS
 import type { RecipeSummary } from './types'
 
 const RECENT_RECIPES_KEY = 'recipes.recentlyViewed'
+const RECENT_RECIPES_LIMIT = 18
 
 interface RecipeListState {
   activeTags: string[]
@@ -27,14 +28,17 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
   const [scrollTop, setScrollTop] = useState(0)
 
   useEffect(() => {
-    window.localStorage.setItem(RECENT_RECIPES_KEY, JSON.stringify(recentRecipes.slice(0, 10)))
+    window.localStorage.setItem(
+      RECENT_RECIPES_KEY,
+      JSON.stringify(recentRecipes.slice(0, RECENT_RECIPES_LIMIT)),
+    )
   }, [recentRecipes])
 
   const addRecentRecipe = useCallback((recipe: RecipeSummary) => {
     setRecentRecipes(current => [
       recipe,
       ...current.filter(item => item.slug !== recipe.slug),
-    ].slice(0, 10))
+    ].slice(0, RECENT_RECIPES_LIMIT))
   }, [])
 
   const setActiveTags = useCallback((tags: string[]) => {
@@ -87,7 +91,9 @@ interface RecipeListProviderProps {
 function readRecentRecipes() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(RECENT_RECIPES_KEY) ?? '[]')
-    return Array.isArray(parsed) ? (parsed as RecipeSummary[]).slice(0, 10) : []
+    return Array.isArray(parsed)
+      ? (parsed as RecipeSummary[]).slice(0, RECENT_RECIPES_LIMIT)
+      : []
   } catch {
     return []
   }

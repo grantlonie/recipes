@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 
 import { useAuth } from './AuthContext'
@@ -6,38 +7,55 @@ import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
 import { RecipeListProvider } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
+import { Popover } from './components/Popover'
 
 export function App() {
   const { auth, logoutPending, signOut } = useAuth()
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <RecipeListProvider>
       <div className="min-h-screen bg-orange-50 text-stone-900">
       <header className="border-b border-orange-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:gap-4 sm:py-4">
           <Link aria-label="G&E Recipes home" className="inline-flex items-center" to="/">
-            <img alt="G&E Recipes" className="h-12 w-auto" src="/logo.png" />
+            <img alt="G&E Recipes" className="h-8 w-auto sm:h-12" src="/logo.png" />
           </Link>
           <nav className="flex items-center gap-3 text-sm font-medium">
-            {auth.authenticated ? (
-              <>
+            <Popover
+              open={settingsOpen}
+              trigger={
                 <button
-                  className="rounded-full px-3 py-2 text-stone-700 hover:bg-orange-100"
+                  aria-expanded={settingsOpen}
+                  aria-haspopup="menu"
+                  aria-label="Settings"
+                  className="rounded-full px-3 py-1.5 text-stone-700 hover:bg-orange-100 sm:py-2"
+                  onClick={() => setSettingsOpen(open => !open)}
+                  type="button"
+                >
+                  Settings
+                </button>
+              }
+            >
+              {auth.authenticated ? (
+                <button
+                  className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
                   disabled={logoutPending}
                   onClick={handleSignOut}
                   type="button"
                 >
-                  Sign out
+                  {logoutPending ? 'Signing out...' : 'Sign out'}
                 </button>
-              </>
-            ) : (
-              <Link
-                className="rounded-full bg-orange-600 px-3 py-2 text-white hover:bg-orange-700"
-                to="/login"
-              >
-                Sign in
-              </Link>
-            )}
+              ) : (
+                <Link
+                  className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
+                  onClick={() => setSettingsOpen(false)}
+                  to="/login"
+                >
+                  Sign in
+                </Link>
+              )}
+            </Popover>
           </nav>
         </div>
       </header>
@@ -55,6 +73,7 @@ export function App() {
   )
 
   async function handleSignOut() {
+    setSettingsOpen(false)
     await signOut()
   }
 }

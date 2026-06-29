@@ -43,7 +43,7 @@ export function HomePage() {
   }, [recipes.length, scrollTop])
 
   return (
-    <div className="flex h-[calc(100vh-6rem)] flex-col">
+    <div className="flex h-[calc(100vh-4rem)] flex-col sm:h-[calc(100vh-6rem)]">
       <section className="shrink-0 space-y-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
         <label className="block">
           <span className="sr-only">Search recipes</span>
