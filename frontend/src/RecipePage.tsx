@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 
 import { deleteRecipe, getRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
@@ -240,7 +240,7 @@ export function RecipePage() {
               <h2 className="text-lg font-semibold">Notes</h2>
               <div className="mt-3 space-y-3 text-stone-700">
                 {recipe.notes.map(note => (
-                  <p key={note}>{note}</p>
+                  <ExpandableNote key={note} text={note} />
                 ))}
               </div>
             </section>
@@ -330,6 +330,37 @@ export function RecipePage() {
     }
     await deleteMutation.mutateAsync()
   }
+}
+
+function ExpandableNote({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [clamped, setClamped] = useState(false)
+  const textRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    const element = textRef.current
+    if (!element || expanded) {
+      return
+    }
+    setClamped(element.scrollHeight > element.clientHeight + 1)
+  }, [expanded, text])
+
+  return (
+    <div>
+      <p className={expanded ? undefined : 'line-clamp-4'} ref={textRef}>
+        {text}
+      </p>
+      {clamped || expanded ? (
+        <button
+          className="mt-2 text-sm font-semibold text-orange-700 hover:underline"
+          onClick={() => setExpanded(current => !current)}
+          type="button"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      ) : null}
+    </div>
+  )
 }
 
 function titleCaseIngredient(value: string) {
