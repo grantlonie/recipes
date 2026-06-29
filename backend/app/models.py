@@ -72,3 +72,13 @@ class SearchResult(BaseModel):
     match: str
     recipe: RecipeSummary
     score: int
+
+
+class ManifestEntry(BaseModel):
+    slug: str
+    updated_at: str
+
+
+class SyncManifest(BaseModel):
+    version: int
+    recipes: list[ManifestEntry]

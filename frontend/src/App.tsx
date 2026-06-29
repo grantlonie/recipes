@@ -7,6 +7,7 @@ import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
 import { RecipeListProvider } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
+import { RecipeSyncProvider } from './RecipeSyncContext'
 import { Popover } from './components/Popover'
 
 export function App() {
@@ -14,7 +15,8 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
-    <RecipeListProvider>
+    <RecipeSyncProvider>
+      <RecipeListProvider>
       <div className="min-h-screen bg-orange-50 text-stone-900">
       <header className="border-b border-orange-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2 sm:gap-4 sm:py-4">
@@ -69,7 +71,8 @@ export function App() {
         </Routes>
       </main>
       </div>
-    </RecipeListProvider>
+      </RecipeListProvider>
+    </RecipeSyncProvider>
   )
 
   async function handleSignOut() {

@@ -1,16 +1,18 @@
-import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import type { ChangeEvent, UIEvent } from 'react'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { getRecipes, getTags } from './api'
+import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { useRecipeListState } from './RecipeListContext'
-import type { RecipeSummary } from './types'
+import { useRecipeSync } from './RecipeSyncContext'
+import { searchRecipes } from './search'
+import type { RecipeDetail, RecipeSummary } from './types'
 
 export function HomePage() {
   const { auth } = useAuth()
+  const { revision, status, sync } = useRecipeSync()
   const {
     activeTags,
     bookmarkedOnly,
@@ -23,18 +25,42 @@ export function HomePage() {
     setScrollTop,
   } = useRecipeListState()
   const recipesScrollRef = useRef<HTMLDivElement | null>(null)
+  const [summaries, setSummaries] = useState<RecipeSummary[]>([])
+  const [details, setDetails] = useState<RecipeDetail[]>([])
   const searchQuery = query.trim()
-  const showSearchResults = searchQuery.length >= 3
-  const recipesQuery = useQuery({
-    enabled: showSearchResults,
-    queryFn: () => getRecipes(searchQuery),
-    queryKey: ['recipes', searchQuery],
-  })
-  const tagsQuery = useQuery({ queryFn: getTags, queryKey: ['tags'] })
-  const recipes = useMemo(
-    () => filterRecipes(recipesQuery.data ?? [], bookmarkedOnly, activeTags),
-    [activeTags, bookmarkedOnly, recipesQuery.data]
-  )
+  const showSearchResults = searchQuery.length > 0
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>()
+    for (const recipe of summaries) {
+      for (const tag of recipe.tags) {
+        tags.add(tag)
+      }
+    }
+    return [...tags].sort((left, right) =>
+      left.localeCompare(right, undefined, { sensitivity: 'base' }),
+    )
+  }, [summaries])
+  const recipes = useMemo(() => {
+    if (!showSearchResults) {
+      return []
+    }
+    return filterRecipes(
+      searchRecipes(summaries, details, searchQuery),
+      bookmarkedOnly,
+      activeTags,
+    )
+  }, [activeTags, bookmarkedOnly, details, searchQuery, showSearchResults, summaries])
+
+  useEffect(() => {
+    sync()
+  }, [sync])
+
+  useEffect(() => {
+    Promise.all([getLocalSummaries(), getAllStoredRecipes()]).then(([nextSummaries, stored]) => {
+      setSummaries(nextSummaries)
+      setDetails(stored.map(record => record.recipe))
+    })
+  }, [revision])
 
   useEffect(() => {
     if (recipesScrollRef.current) {
@@ -69,7 +95,7 @@ export function HomePage() {
           </button>
           <div className="min-w-0 flex-1">
             <TagMultiSelect
-              availableTags={tagsQuery.data ?? []}
+              availableTags={availableTags}
               onChange={setActiveTags}
               placeholder="Filter by tags"
               value={activeTags}
@@ -88,8 +114,8 @@ export function HomePage() {
         ref={recipesScrollRef}
       >
         {showSearchResults ? (
-          recipesQuery.isLoading ? (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
+          status === 'syncing' && !summaries.length ? (
+            <p className="rounded-2xl bg-white p-6 text-stone-600">Syncing recipes...</p>
           ) : recipes.length ? (
             <CompactRecipeGrid recipes={recipes} />
           ) : (

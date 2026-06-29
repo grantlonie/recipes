@@ -5,6 +5,7 @@ import type {
   RecipeMetadataInput,
   RecipeSummary,
   SearchResult,
+  SyncManifest,
 } from './types'
 
 export async function createRecipe(slug: string, content: string): Promise<RecipeDetail> {
@@ -16,6 +17,14 @@ export async function createRecipe(slug: string, content: string): Promise<Recip
 
 export async function deleteRecipe(slug: string): Promise<void> {
   return request(`/api/recipes/${slug}`, { method: 'DELETE' })
+}
+
+export async function getSyncManifest(): Promise<SyncManifest> {
+  return request('/api/sync/manifest')
+}
+
+export async function getSyncRecipes(): Promise<RecipeDetail[]> {
+  return request('/api/sync/recipes')
 }
 
 export async function getAuthState(): Promise<AuthState> {
