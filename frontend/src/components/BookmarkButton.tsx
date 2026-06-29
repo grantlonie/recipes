@@ -1,3 +1,6 @@
+import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/react/24/outline'
+import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
+
 interface BookmarkButtonProps {
   bookmarked: boolean
   className?: string
@@ -13,10 +16,12 @@ export function BookmarkButton({
   label,
   onToggle,
 }: BookmarkButtonProps) {
+  const Icon = bookmarked ? BookmarkIconSolid : BookmarkIconOutline
+
   return (
     <button
       aria-label={label ?? (bookmarked ? 'Remove bookmark' : 'Bookmark recipe')}
-      className={`inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-xl shadow-sm ring-1 ring-orange-100 transition hover:bg-orange-100 disabled:opacity-60 ${className}`}
+      className={`inline-flex items-center justify-center p-1 text-orange-600 transition hover:text-orange-700 disabled:opacity-60 ${className}`}
       disabled={disabled}
       onClick={event => {
         event.preventDefault()
@@ -25,7 +30,7 @@ export function BookmarkButton({
       }}
       type="button"
     >
-      <span aria-hidden="true">{bookmarked ? '★' : '☆'}</span>
+      <Icon aria-hidden="true" className="h-6 w-6" />
     </button>
   )
 }
