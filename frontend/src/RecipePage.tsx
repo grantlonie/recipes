@@ -3,12 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Fragment, useEffect, useRef, useState } from 'react'
 
-import { deleteRecipe, getRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
+import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
 import { Popover } from './components/Popover'
 import { useRecipeListState } from './RecipeListContext'
+import { useRecipeSync } from './RecipeSyncContext'
+import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
   'and',
@@ -32,9 +34,13 @@ export function RecipePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addRecentRecipe } = useRecipeListState()
+  const { revision, sync } = useRecipeSync()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
-    queryFn: () => getRecipe(slug),
+    queryFn: () =>
+      loadRecipeStaleFirst(slug, updated =>
+        queryClient.setQueryData(['recipe', slug], updated),
+      ),
     queryKey: ['recipe', slug],
   })
   const [servings, setServings] = useState(1)
@@ -47,16 +53,16 @@ export function RecipePage() {
   })
   const bookmarkMutation = useMutation({
     mutationFn: () => updateRecipeMetadata(slug, { bookmarked: !recipeQuery.data?.bookmarked }),
-    onSuccess: recipe => {
+    onSuccess: async recipe => {
       queryClient.setQueryData(['recipe', slug], recipe)
-      queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      await storeRecipe(recipe)
+      await sync()
     },
   })
   const deleteMutation = useMutation({
     mutationFn: () => deleteRecipe(slug),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipes'] })
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
+    onSuccess: async () => {
+      await sync()
       navigate('/')
     },
   })
@@ -73,7 +79,18 @@ export function RecipePage() {
     setCompletedSteps(new Set())
   }, [slug])
 
-  if (recipeQuery.isLoading) {
+  useEffect(() => {
+    if (!slug || revision === 0) {
+      return
+    }
+    revalidateRecipe(slug).then(updated => {
+      if (updated) {
+        queryClient.setQueryData(['recipe', slug], updated)
+      }
+    })
+  }, [queryClient, revision, slug])
+
+  if (recipeQuery.isLoading && !recipeQuery.data) {
     return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
   }
 

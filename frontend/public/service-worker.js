@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recipes-app-v4'
+const CACHE_NAME = 'recipes-app-v5'
 const APP_SHELL = [
   '/',
   '/apple-touch-icon.png',
@@ -28,11 +28,34 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url)
-  if (url.origin !== self.location.origin || event.request.method !== 'GET') {
+  if (event.request.method !== 'GET') {
     return
   }
 
   if (url.pathname.startsWith('/api/')) {
+    return
+  }
+
+  if (url.origin !== self.location.origin && event.request.destination === 'image') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(cache =>
+        cache.match(event.request).then(cached => {
+          if (cached) {
+            return cached
+          }
+          return fetch(event.request).then(response => {
+            if (response.ok) {
+              cache.put(event.request, response.clone())
+            }
+            return response
+          })
+        }),
+      ),
+    )
+    return
+  }
+
+  if (url.origin !== self.location.origin) {
     return
   }
 

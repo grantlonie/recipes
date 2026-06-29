@@ -20,6 +20,7 @@ from app.models import (
     RecipeUpdate,
     RecipeWrite,
     SearchResult,
+    SyncManifest,
 )
 from app.search import search_details
 from app.storage import RecipeRepository, StorageError, summary_from_detail
@@ -64,6 +65,16 @@ def login(
 @app.post("/api/auth/logout")
 def logout(response: Response) -> AuthState:
     return auth.logout(response)
+
+
+@app.get("/api/sync/manifest")
+def sync_manifest(repository: RecipeRepository = Depends(get_repository)) -> SyncManifest:
+    return repository.manifest()
+
+
+@app.get("/api/sync/recipes")
+def sync_recipes(repository: RecipeRepository = Depends(get_repository)) -> list[RecipeDetail]:
+    return repository.list_all_details()
 
 
 @app.get("/api/recipes")

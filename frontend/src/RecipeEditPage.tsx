@@ -3,12 +3,15 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { createRecipe, getRecipe, getTags, importRecipe, updateRecipe } from './api'
+import { createRecipe, importRecipe, updateRecipe } from './api'
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
+import { getLocalTags } from './db'
+import { useRecipeSync } from './RecipeSyncContext'
+import { loadRecipeStaleFirst, storeRecipe } from './sync'
 
 const emptyBody = 'Add @ingredient{1%cup}.\n'
 
@@ -21,6 +24,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const { auth } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { revision, sync } = useRecipeSync()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [activeTab, setActiveTab] = useState('info')
   const [baseMetadata, setBaseMetadata] = useState<Record<string, unknown>>({})
@@ -38,28 +42,35 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [servings, setServings] = useState(4)
   const [source, setSource] = useState('')
   const [tags, setTags] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [time, setTime] = useState('')
   const [title, setTitle] = useState('New Recipe')
   const isNew = mode === 'new'
   const recipeQuery = useQuery({
     enabled: auth.authenticated && !isNew && Boolean(slug),
-    queryFn: () => getRecipe(slug),
+    queryFn: () =>
+      loadRecipeStaleFirst(slug, updated =>
+        queryClient.setQueryData(['recipe', slug], updated),
+      ),
     queryKey: ['recipe', slug],
   })
-  const tagsQuery = useQuery({
-    enabled: auth.authenticated,
-    queryFn: getTags,
-    queryKey: ['tags'],
-  })
+
+  useEffect(() => {
+    if (!auth.authenticated) {
+      return
+    }
+    getLocalTags().then(setAvailableTags)
+  }, [auth.authenticated, revision])
+
   const saveMutation = useMutation({
     mutationFn: () => {
       const content = buildContent()
       return isNew ? createRecipe(recipeSlug, content) : updateRecipe(slug, content)
     },
-    onSuccess: recipe => {
-      queryClient.setQueryData(['recipe', slug], recipe)
-      queryClient.invalidateQueries({ queryKey: ['recipes'] })
-      queryClient.invalidateQueries({ queryKey: ['tags'] })
+    onSuccess: async recipe => {
+      await storeRecipe(recipe)
+      await sync()
+      queryClient.setQueryData(['recipe', recipe.slug], recipe)
       navigate(`/recipes/${recipe.slug}`)
     },
   })
@@ -215,7 +226,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               </Field>
               <Field className="lg:col-span-2" label="Tags">
                 <TagMultiSelect
-                  availableTags={tagsQuery.data ?? []}
+                  availableTags={availableTags}
                   onChange={setTags}
                   value={tags}
                 />

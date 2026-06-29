@@ -50,3 +50,13 @@ export interface RecipeMetadataInput {
   servings?: number | null
   tags?: string[] | null
 }
+
+export interface ManifestEntry {
+  slug: string
+  updated_at: string
+}
+
+export interface SyncManifest {
+  version: number
+  recipes: ManifestEntry[]
+}
