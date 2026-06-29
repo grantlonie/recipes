@@ -1,9 +1,6 @@
 import { Link } from 'react-router-dom'
-import type { ChangeEvent, UIEvent } from 'react'
+import type { UIEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-
-import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/react/24/outline'
-import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 
 import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
@@ -23,11 +20,11 @@ export function HomePage() {
     recentRecipes,
     scrollTop,
     setActiveTags,
-    setBookmarkedOnly,
-    setQuery,
     setScrollTop,
   } = useRecipeListState()
-  const recipesScrollRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const scrollRestoringRef = useRef(false)
+  const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}`
   const [summaries, setSummaries] = useState<RecipeSummary[]>([])
   const [details, setDetails] = useState<RecipeDetail[]>([])
   const [localReady, setLocalReady] = useState(false)
@@ -79,78 +76,67 @@ export function HomePage() {
   }, [revision])
 
   useEffect(() => {
-    if (recipesScrollRef.current) {
-      recipesScrollRef.current.scrollTop = scrollTop
+    const element = scrollRef.current
+    if (!element) {
+      return
     }
-  }, [recipes.length, scrollTop])
+    scrollRestoringRef.current = true
+    element.scrollTop = scrollTop
+    requestAnimationFrame(() => {
+      scrollRestoringRef.current = false
+    })
+    // Restore scroll when returning to the home view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const element = scrollRef.current
+    if (!element) {
+      return
+    }
+    scrollRestoringRef.current = true
+    element.scrollTop = 0
+    requestAnimationFrame(() => {
+      scrollRestoringRef.current = false
+    })
+  }, [filterKey])
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col sm:h-[calc(100vh-6rem)]">
-      <section className="shrink-0 space-y-4 rounded-3xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
-        <label className="block">
-          <span className="sr-only">Search recipes</span>
-          <input
-            className="w-full rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-lg outline-none ring-orange-500 focus:ring-2"
-            onChange={handleQueryChange}
-            onFocus={event => event.target.select()}
-            placeholder="Search by name, tags, ingredients, or recipe text"
-            type="search"
-            value={query}
-          />
-        </label>
-        <div className="flex items-start gap-3">
-          <button
-            aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
-            className="inline-flex shrink-0 items-center justify-center p-1 text-orange-600 transition hover:text-orange-700"
-            onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
-            type="button"
-          >
-            {bookmarkedOnly ? (
-              <BookmarkIconSolid aria-hidden="true" className="h-6 w-6" />
-            ) : (
-              <BookmarkIconOutline aria-hidden="true" className="h-6 w-6" />
-            )}
-          </button>
-          <div className="min-w-0 flex-1">
-            <TagMultiSelect
-              availableTags={availableTags}
-              onChange={setActiveTags}
-              placeholder="Filter by tags"
-              value={activeTags}
-            />
-          </div>
-        </div>
-      </section>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 pb-2">
+        <TagMultiSelect
+          availableTags={availableTags}
+          onChange={setActiveTags}
+          placeholder="Filter by tags"
+          value={activeTags}
+        />
+      </div>
 
-      {!showSearchResults ? (
-        bookmarkedOnly ? (
-          bookmarkedRecipes.length ? (
-            <CompactRecipeGrid recipes={bookmarkedRecipes} title="Bookmarked" />
-          ) : (
-            <p className="shrink-0 pt-5 text-sm text-stone-600">No bookmarked recipes yet.</p>
-          )
-        ) : (
-          <CompactRecipeGrid recipes={recentRecipes} title="Recently Viewed" />
-        )
-      ) : null}
-
-      <section
-        className="min-h-0 flex-1 overflow-y-auto pr-1 pt-5"
-        onScroll={handleRecipesScroll}
-        ref={recipesScrollRef}
+      <div
+        className="home-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1"
+        onScroll={handleScroll}
+        ref={scrollRef}
       >
-        {showSearchResults ? (
-          !localReady ? (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipes...</p>
-          ) : recipes.length ? (
-            <CompactRecipeGrid recipes={recipes} />
-          ) : status === 'syncing' && !summaries.length ? (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">Syncing recipes...</p>
+        {!showSearchResults ? (
+          bookmarkedOnly ? (
+            bookmarkedRecipes.length ? (
+              <CompactRecipeGrid recipes={bookmarkedRecipes} title="Bookmarked" />
+            ) : (
+              <p className="text-sm text-stone-600">No bookmarked recipes yet.</p>
+            )
           ) : (
-            <p className="rounded-2xl bg-white p-6 text-stone-600">No recipes found.</p>
+            <CompactRecipeGrid recipes={recentRecipes} title="Recently Viewed" />
           )
-        ) : null}
-      </section>
+        ) : !localReady ? (
+          <p className="text-stone-600">Loading recipes...</p>
+        ) : recipes.length ? (
+          <CompactRecipeGrid recipes={recipes} />
+        ) : status === 'syncing' && !summaries.length ? (
+          <p className="text-stone-600">Syncing recipes...</p>
+        ) : (
+          <p className="text-stone-600">No recipes found.</p>
+        )}
+      </div>
 
       <Link
         className="fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-3xl font-light text-white shadow-lg hover:bg-orange-700"
@@ -162,11 +148,10 @@ export function HomePage() {
     </div>
   )
 
-  function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
-    setQuery(event.target.value)
-  }
-
-  function handleRecipesScroll(event: UIEvent<HTMLDivElement>) {
+  function handleScroll(event: UIEvent<HTMLDivElement>) {
+    if (scrollRestoringRef.current) {
+      return
+    }
     setScrollTop(event.currentTarget.scrollTop)
   }
 }
@@ -177,7 +162,7 @@ function CompactRecipeGrid({ recipes, title }: CompactRecipeGridProps) {
   }
 
   return (
-    <div className={title ? 'shrink-0 pt-5' : undefined}>
+    <div>
       {title ? (
         <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{title}</h2>
       ) : null}

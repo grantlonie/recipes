@@ -10,6 +10,7 @@ import { Dialog } from './components/Dialog'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { getLocalTags } from './db'
+import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 
@@ -25,6 +26,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { revision, sync } = useRecipeSync()
+  const { addRecentRecipe } = useRecipeListState()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [activeTab, setActiveTab] = useState('info')
   const [baseMetadata, setBaseMetadata] = useState<Record<string, unknown>>({})
@@ -71,7 +73,11 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       await storeRecipe(recipe)
       await sync()
       queryClient.setQueryData(['recipe', recipe.slug], recipe)
-      navigate(`/recipes/${recipe.slug}`)
+      addRecentRecipe(recipe)
+      if (!isNew && slug !== recipe.slug) {
+        queryClient.removeQueries({ queryKey: ['recipe', slug] })
+      }
+      navigate(`/recipes/${recipe.slug}`, { replace: true })
     },
   })
   const importMutation = useMutation({
@@ -135,7 +141,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             <p className="text-sm font-semibold uppercase tracking-wide text-orange-700">
               {isNew ? 'New recipe' : 'Edit recipe'}
             </p>
-            <h1 className="mt-2 text-3xl font-bold">{title}</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             {!isNew ? (
