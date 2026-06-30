@@ -1,8 +1,8 @@
 import type { ChangeEvent } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
-import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/react/24/outline'
+import { BookmarkIcon as BookmarkIconOutline, UserCircleIcon } from '@heroicons/react/24/outline'
 import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 
 import { useAuth } from './AuthContext'
@@ -31,7 +31,9 @@ function AppShell() {
   const isHome = location.pathname === '/'
 
   return (
-    <div className="flex min-h-dvh flex-col bg-orange-50 text-stone-900">
+    <div
+      className={`flex flex-col bg-orange-50 text-stone-900 ${isHome ? 'h-dvh overflow-hidden' : 'min-h-dvh'}`}
+    >
       <header className="sticky top-0 z-50 shrink-0 border-b border-orange-200 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-3">
@@ -45,12 +47,12 @@ function AppShell() {
                   <button
                     aria-expanded={settingsOpen}
                     aria-haspopup="menu"
-                    aria-label="Settings"
-                    className="rounded-full px-3 py-1.5 text-stone-700 hover:bg-orange-100"
+                    aria-label="Account"
+                    className="inline-flex items-center justify-center rounded-full p-1.5 text-stone-700 hover:bg-orange-100"
                     onClick={() => setSettingsOpen(open => !open)}
                     type="button"
                   >
-                    Settings
+                    <UserCircleIcon aria-hidden="true" className="h-7 w-7" />
                   </button>
                 }
               >
@@ -81,7 +83,7 @@ function AppShell() {
       </header>
 
       <main
-        className={`mx-auto w-full max-w-6xl px-4 pb-0 ${isHome ? 'flex min-h-0 flex-1 flex-col pt-2' : 'pt-4'}`}
+        className={`mx-auto w-full max-w-6xl px-4 pb-0 ${isHome ? 'flex min-h-0 flex-1 flex-col overflow-hidden pt-2' : 'pt-4'}`}
       >
         <Routes>
           <Route element={<HomePage />} path="/" />
@@ -102,6 +104,15 @@ function AppShell() {
 
 function HomeSearchBar() {
   const { bookmarkedOnly, query, setBookmarkedOnly, setQuery } = useRecipeListState()
+  const [inputValue, setInputValue] = useState(query)
+
+  useEffect(() => {
+    if (inputValue === query) {
+      return
+    }
+    const timer = window.setTimeout(() => setQuery(inputValue), 200)
+    return () => window.clearTimeout(timer)
+  }, [inputValue, query, setQuery])
 
   return (
     <div className="mt-2 flex items-center gap-2">
@@ -113,7 +124,7 @@ function HomeSearchBar() {
           onFocus={event => event.target.select()}
           placeholder="Search recipes"
           type="search"
-          value={query}
+          value={inputValue}
         />
       </label>
       <button
@@ -132,6 +143,6 @@ function HomeSearchBar() {
   )
 
   function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
-    setQuery(event.target.value)
+    setInputValue(event.target.value)
   }
 }
