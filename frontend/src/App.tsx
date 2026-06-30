@@ -1,17 +1,23 @@
 import type { ChangeEvent } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
-import { BookmarkIcon as BookmarkIconOutline, UserCircleIcon } from '@heroicons/react/24/outline'
+import {
+  BookmarkIcon as BookmarkIconOutline,
+  TagIcon,
+  UserCircleIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
 import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 
 import { useAuth } from './AuthContext'
+import { getLocalTags } from './db'
 import { HomePage } from './HomePage'
 import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
 import { RecipeListProvider, useRecipeListState } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
-import { RecipeSyncProvider } from './RecipeSyncContext'
+import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
 import { Popover } from './components/Popover'
 
 export function App() {
@@ -83,7 +89,7 @@ function AppShell() {
       </header>
 
       <main
-        className={`mx-auto w-full max-w-6xl px-4 pb-0 ${isHome ? 'flex min-h-0 flex-1 flex-col overflow-hidden pt-2' : 'pt-4'}`}
+        className={`mx-auto w-full max-w-6xl px-4 pb-0 ${isHome ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'pt-4'}`}
       >
         <Routes>
           <Route element={<HomePage />} path="/" />
@@ -103,8 +109,17 @@ function AppShell() {
 }
 
 function HomeSearchBar() {
-  const { bookmarkedOnly, query, setBookmarkedOnly, setQuery } = useRecipeListState()
+  const { activeTags, bookmarkedOnly, query, setActiveTags, setBookmarkedOnly, setQuery } =
+    useRecipeListState()
+  const { revision } = useRecipeSync()
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState(query)
+  const [tagsOpen, setTagsOpen] = useState(false)
+  const selectedTags = useMemo(() => new Set(activeTags), [activeTags])
+  const unselectedTags = useMemo(
+    () => availableTags.filter(tag => !selectedTags.has(tag)),
+    [availableTags, selectedTags],
+  )
 
   useEffect(() => {
     if (inputValue === query) {
@@ -114,35 +129,120 @@ function HomeSearchBar() {
     return () => window.clearTimeout(timer)
   }, [inputValue, query, setQuery])
 
+  useEffect(() => {
+    let cancelled = false
+    getLocalTags().then(tags => {
+      if (!cancelled) {
+        setAvailableTags(tags)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [revision])
+
   return (
-    <div className="mt-2 flex items-center gap-2">
-      <label className="min-w-0 flex-1">
-        <span className="sr-only">Search recipes</span>
-        <input
-          className="w-full rounded-lg border border-orange-200 bg-orange-50/80 px-3 py-1.5 text-sm outline-none ring-orange-500 placeholder:text-stone-500 focus:ring-2"
-          onChange={handleQueryChange}
-          onFocus={event => event.target.select()}
-          placeholder="Search recipes"
-          type="search"
-          value={inputValue}
-        />
-      </label>
-      <button
-        aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
-        className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700"
-        onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
-        type="button"
-      >
-        {bookmarkedOnly ? (
-          <BookmarkIconSolid aria-hidden="true" className="h-5 w-5" />
-        ) : (
-          <BookmarkIconOutline aria-hidden="true" className="h-5 w-5" />
-        )}
-      </button>
+    <div className="mt-2">
+      <div className="flex items-center gap-2">
+        <label className="min-w-0 flex-1">
+          <span className="sr-only">Search recipes</span>
+          <input
+            className="w-full rounded-lg border border-orange-200 bg-orange-50/80 px-3 py-1.5 text-sm outline-none ring-orange-500 placeholder:text-stone-500 focus:ring-2"
+            onChange={handleQueryChange}
+            onFocus={event => event.target.select()}
+            placeholder="Search recipes"
+            type="search"
+            value={inputValue}
+          />
+        </label>
+        <Popover
+          align="right"
+          open={tagsOpen}
+          trigger={
+            <button
+              aria-expanded={tagsOpen}
+              aria-haspopup="listbox"
+              aria-label="Filter by tags"
+              className={`inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 transition hover:bg-orange-50 hover:text-orange-700 ${
+                activeTags.length ? 'text-orange-700' : 'text-orange-600'
+              }`}
+              onClick={() => setTagsOpen(open => !open)}
+              type="button"
+            >
+              <TagIcon aria-hidden="true" className="h-5 w-5" />
+            </button>
+          }
+        >
+          {unselectedTags.length ? (
+            <div
+              className="max-h-56 overflow-y-auto"
+              role="listbox"
+            >
+              {unselectedTags.map(tag => (
+                <button
+                  className="block w-full rounded-xl px-3 py-2 text-left text-sm text-stone-700 hover:bg-orange-50"
+                  key={tag}
+                  onClick={() => addTag(tag)}
+                  role="option"
+                  type="button"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-3 py-2 text-sm text-stone-500">No tags available</p>
+          )}
+        </Popover>
+        <button
+          aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
+          className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700"
+          onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
+          type="button"
+        >
+          {bookmarkedOnly ? (
+            <BookmarkIconSolid aria-hidden="true" className="h-5 w-5" />
+          ) : (
+            <BookmarkIconOutline aria-hidden="true" className="h-5 w-5" />
+          )}
+        </button>
+      </div>
+      {activeTags.length ? (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {activeTags.map(tag => (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-orange-100 py-0.5 pl-2.5 pr-1 text-sm text-orange-800"
+              key={tag}
+            >
+              {tag}
+              <button
+                aria-label={`Remove ${tag} tag filter`}
+                className="inline-flex rounded-full p-0.5 hover:bg-orange-200"
+                onClick={() => removeTag(tag)}
+                type="button"
+              >
+                <XMarkIcon aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 
+  function addTag(tag: string) {
+    setActiveTags(
+      [...activeTags, tag].sort((left, right) =>
+        left.localeCompare(right, undefined, { sensitivity: 'base' }),
+      ),
+    )
+  }
+
   function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
     setInputValue(event.target.value)
+  }
+
+  function removeTag(tag: string) {
+    setActiveTags(activeTags.filter(item => item !== tag))
   }
 }

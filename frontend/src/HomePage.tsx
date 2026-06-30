@@ -7,7 +7,6 @@ import { updateRecipeMetadata } from './api'
 import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
-import { TagMultiSelect } from './components/TagMultiSelect'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { searchRecipes } from './search'
@@ -23,7 +22,6 @@ export function HomePage() {
     query,
     recentRecipes,
     scrollTop,
-    setActiveTags,
     setScrollTop,
   } = useRecipeListState()
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -56,17 +54,6 @@ export function HomePage() {
   )
   const searchQuery = query.trim()
   const showSearchResults = searchQuery.length > 0
-  const availableTags = useMemo(() => {
-    const tags = new Set<string>()
-    for (const recipe of summaries) {
-      for (const tag of recipe.tags) {
-        tags.add(tag)
-      }
-    }
-    return [...tags].sort((left, right) =>
-      left.localeCompare(right, undefined, { sensitivity: 'base' }),
-    )
-  }, [summaries])
   const bookmarkedRecipes = useMemo(
     () => filterRecipes(summaries, true, activeTags),
     [activeTags, summaries],
@@ -133,17 +120,8 @@ export function HomePage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 pb-2">
-        <TagMultiSelect
-          availableTags={availableTags}
-          onChange={setActiveTags}
-          placeholder="Filter by tags"
-          value={activeTags}
-        />
-      </div>
-
       <div
-        className="home-scroll h-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1"
+        className="home-scroll h-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1 pt-2"
         onScroll={handleScroll}
         ref={scrollRef}
       >
