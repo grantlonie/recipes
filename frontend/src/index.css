@@ -27,5 +27,6 @@ textarea {
 
 .home-scroll {
   -webkit-overflow-scrolling: touch;
-  transform: translateZ(0);
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }

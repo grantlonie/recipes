@@ -5,6 +5,7 @@ interface BookmarkButtonProps {
   bookmarked: boolean
   className?: string
   disabled?: boolean
+  iconClassName?: string
   label?: string
   onToggle: () => void
 }
@@ -13,6 +14,7 @@ export function BookmarkButton({
   bookmarked,
   className = '',
   disabled,
+  iconClassName = 'h-6 w-6',
   label,
   onToggle,
 }: BookmarkButtonProps) {
@@ -30,7 +32,7 @@ export function BookmarkButton({
       }}
       type="button"
     >
-      <Icon aria-hidden="true" className="h-6 w-6" />
+      <Icon aria-hidden="true" className={iconClassName} />
     </button>
   )
 }
