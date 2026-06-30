@@ -24,3 +24,8 @@ select,
 textarea {
   font: inherit;
 }
+
+.home-scroll {
+  -webkit-overflow-scrolling: touch;
+  transform: translateZ(0);
+}
