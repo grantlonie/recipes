@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Fragment, useEffect, useRef, useState } from 'react'
 
+import { ArrowTopRightOnSquareIcon, ShareIcon } from '@heroicons/react/24/outline'
+
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
@@ -104,104 +106,109 @@ export function RecipePage() {
         {recipe.image ? (
           <img
             alt=""
-            className="max-h-[420px] w-full rounded-t-3xl object-cover"
+            className="h-[250px] w-full rounded-t-3xl object-cover sm:h-auto sm:max-h-[420px]"
             referrerPolicy="no-referrer"
             src={recipe.image}
           />
         ) : null}
         <div className="space-y-5 p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">{recipe.title}</h1>
-              <p className="mt-1 text-sm text-stone-600">
-                {recipe.cook_time ? `${recipe.cook_time} · ` : ''}
-                {recipe.servings} servings
-              </p>
-            </div>
-            <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
-              <div
-                aria-label="Scale servings"
-                className="flex items-stretch overflow-hidden rounded-full border border-orange-200 text-xs"
-                role="group"
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">{recipe.title}</h1>
+            <p className="mt-1 text-sm text-stone-600">
+              {recipe.cook_time ? `${recipe.cook_time} · ` : ''}
+              {recipe.servings} servings
+            </p>
+          </div>
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
+            <div
+              aria-label="Scale servings"
+              className="flex shrink-0 items-stretch overflow-hidden rounded-full border border-orange-200 text-xs"
+              role="group"
+            >
+              <button
+                aria-label="Decrease servings"
+                className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={servings <= 1}
+                id="servings-decrease"
+                onClick={() => setServings(current => Math.max(1, current - 1))}
+                type="button"
               >
-                <button
-                  aria-label="Decrease servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={servings <= 1}
-                  id="servings-decrease"
-                  onClick={() => setServings(current => Math.max(1, current - 1))}
-                  type="button"
-                >
-                  −
-                </button>
-                <output
-                  aria-live="polite"
-                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
-                  id="servings"
-                >
-                  {servings}
-                </output>
-                <button
-                  aria-label="Increase servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
-                  id="servings-increase"
-                  onClick={() => setServings(current => current + 1)}
-                  type="button"
-                >
-                  +
-                </button>
-              </div>
-              <Button onClick={handleShare}>
-                Share
-              </Button>
-              {recipe.original_url ? (
-                <a
-                  className="rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
-                  href={recipe.original_url}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Original recipe
-                </a>
-              ) : null}
-              {auth.authenticated ? (
-                <>
-                  <BookmarkButton
-                    bookmarked={recipe.bookmarked}
-                    disabled={bookmarkMutation.isPending}
-                    onToggle={handleToggleBookmark}
-                  />
-                  <Popover
-                    open={actionsOpen}
-                    trigger={
-                      <Button
-                        aria-label="Recipe actions"
-                        className="px-3 text-xl leading-none"
-                        onClick={() => setActionsOpen(open => !open)}
-                        variant="secondary"
-                      >
-                        ...
-                      </Button>
-                    }
-                  >
-                    <Link
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
-                      to={`/recipes/edit/${slug}`}
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
-                      disabled={deleteMutation.isPending}
-                      onClick={handleDelete}
-                      type="button"
-                    >
-                      {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-                    </button>
-                  </Popover>
-                </>
-              ) : null}
+                −
+              </button>
+              <output
+                aria-live="polite"
+                className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
+                id="servings"
+              >
+                {servings}
+              </output>
+              <button
+                aria-label="Increase servings"
+                className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
+                id="servings-increase"
+                onClick={() => setServings(current => current + 1)}
+                type="button"
+              >
+                +
+              </button>
             </div>
+            <button
+              aria-label="Share recipe"
+              className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700"
+              onClick={handleShare}
+              type="button"
+            >
+              <ShareIcon aria-hidden="true" className="h-5 w-5" />
+            </button>
+            {recipe.original_url ? (
+              <a
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-orange-100 hover:text-orange-800"
+                href={recipe.original_url}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <ArrowTopRightOnSquareIcon aria-hidden="true" className="h-4 w-4" />
+                Source
+              </a>
+            ) : null}
+            {auth.authenticated ? (
+              <>
+                <BookmarkButton
+                  bookmarked={recipe.bookmarked}
+                  className="shrink-0"
+                  disabled={bookmarkMutation.isPending}
+                  onToggle={handleToggleBookmark}
+                />
+                <Popover
+                  open={actionsOpen}
+                  trigger={
+                    <Button
+                      aria-label="Recipe actions"
+                      className="shrink-0 px-3 text-xl leading-none"
+                      onClick={() => setActionsOpen(open => !open)}
+                      variant="secondary"
+                    >
+                      ...
+                    </Button>
+                  }
+                >
+                  <Link
+                    className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
+                    to={`/recipes/edit/${slug}`}
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                    disabled={deleteMutation.isPending}
+                    onClick={handleDelete}
+                    type="button"
+                  >
+                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                  </button>
+                </Popover>
+              </>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
