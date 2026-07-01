@@ -62,6 +62,11 @@ export function HomePage() {
     const bySlug = new Map(summaries.map(summary => [summary.slug, summary]))
     return recentRecipes.map(recipe => bySlug.get(recipe.slug) ?? recipe)
   }, [recentRecipes, summaries])
+  const taggedRecipes = useMemo(
+    () => filterRecipes(summaries, false, activeTags),
+    [activeTags, summaries],
+  )
+  const hasTagFilter = activeTags.length > 0
   const recipes = useMemo(() => {
     if (!showSearchResults) {
       return []
@@ -121,7 +126,7 @@ export function HomePage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div
-        className="home-scroll h-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pr-1 pt-2"
+        className="home-scroll h-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-24 pr-1 pt-2"
         onScroll={handleScroll}
         ref={scrollRef}
       >
@@ -138,6 +143,18 @@ export function HomePage() {
               />
             ) : (
               <p className="text-sm text-stone-600">No bookmarked recipes yet.</p>
+            )
+          ) : hasTagFilter ? (
+            taggedRecipes.length ? (
+              <CompactRecipeGrid
+                bookmarkPendingSlug={
+                  bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
+                }
+                onBookmarkToggle={handleBookmarkToggle}
+                recipes={taggedRecipes}
+              />
+            ) : (
+              <p className="text-sm text-stone-600">No recipes match these tags.</p>
             )
           ) : (
             <CompactRecipeGrid
