@@ -180,6 +180,7 @@ export function RecipePage() {
                   onToggle={handleToggleBookmark}
                 />
                 <Popover
+                  onClose={() => setActionsOpen(false)}
                   open={actionsOpen}
                   trigger={
                     <Button

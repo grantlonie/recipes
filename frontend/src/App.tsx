@@ -48,6 +48,7 @@ function AppShell() {
             </Link>
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
               <Popover
+                onClose={() => setSettingsOpen(false)}
                 open={settingsOpen}
                 trigger={
                   <button
@@ -157,6 +158,7 @@ function HomeSearchBar() {
         </label>
         <Popover
           align="right"
+          onClose={() => setTagsOpen(false)}
           open={tagsOpen}
           trigger={
             <button
@@ -236,6 +238,7 @@ function HomeSearchBar() {
         left.localeCompare(right, undefined, { sensitivity: 'base' }),
       ),
     )
+    setTagsOpen(false)
   }
 
   function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
