@@ -1,4 +1,4 @@
-from app.cooklang import parse_cookware, parse_ingredients, split_amount
+from app.cooklang import parse_cookware, parse_ingredients, scale_steps, split_amount
 
 
 def test_parse_ingredients_keeps_braced_multi_word_names_together():
@@ -49,8 +49,18 @@ def test_parse_ingredients_scales_amounts_with_embedded_units():
 
     assert flour.quantity == "1"
     assert flour.unit == "cup"
-    assert flour.scaled_quantity == "0.5"
-    assert egg.scaled_quantity == "0.5"
+    assert flour.scaled_quantity == "½"
+    assert egg.scaled_quantity == "½"
     assert salt.quantity == "½"
     assert salt.unit == "teaspoon"
-    assert salt.scaled_quantity == "0.25"
+    assert salt.scaled_quantity == "¼"
+
+
+def test_scale_steps_updates_ingredient_amounts():
+    steps = scale_steps(
+        ["Mix @flour{1%cup} and @salt{½%teaspoon}."],
+        scale=2,
+        servings=4,
+    )
+
+    assert steps == ["Mix @flour{½%cup} and @salt{¼%teaspoon}."]

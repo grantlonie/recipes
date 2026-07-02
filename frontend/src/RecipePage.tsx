@@ -13,6 +13,7 @@ import { Popover } from './components/Popover'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
+import type { Ingredient } from './types'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
   'and',
@@ -185,11 +186,13 @@ export function RecipePage() {
                   trigger={
                     <Button
                       aria-label="Recipe actions"
-                      className="shrink-0 px-3 text-xl leading-none"
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center p-0 text-xs leading-none"
                       onClick={() => setActionsOpen(open => !open)}
                       variant="secondary"
                     >
-                      ...
+                      <span aria-hidden="true" className="translate-y-px tracking-[0.2em]">
+                        ...
+                      </span>
                     </Button>
                   }
                 >
@@ -298,7 +301,7 @@ export function RecipePage() {
                     </label>
                     {completed ? null : (
                       <p className="whitespace-pre-line text-stone-800">
-                        {renderCooklangStep(step)}
+                        {renderCooklangStep(step, recipe.ingredients)}
                       </p>
                     )}
                   </li>
@@ -398,17 +401,20 @@ function titleCaseIngredient(value: string) {
   })
 }
 
-function renderCooklangStep(step: string) {
+function renderCooklangStep(step: string, ingredients: Ingredient[]) {
+  const ingredientMap = new Map(ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient]))
   const markers: StepMarker[] = []
 
   AMOUNT_PREFIX_RE.lastIndex = 0
   for (const match of step.matchAll(AMOUNT_PREFIX_RE)) {
     const [marker, prefix, name, amount] = match
     const matchIndex = match.index ?? 0
-    const normalizedPrefix = prefix.replace(/\s+of\s+$/i, ' ')
-    const ingredient = normalizedPrefix
-      ? `${normalizedPrefix}${name.trim()}`
-      : formatIngredientPhrase(name.trim(), amount)
+    const lookup = ingredientMap.get(name.trim().toLowerCase())
+    const ingredient = lookup
+      ? formatIngredientFromRecord(lookup)
+      : prefix
+        ? `${prefix.replace(/\s+of\s+$/i, ' ')}${name.trim()}`
+        : formatIngredientPhrase(name.trim(), amount)
     markers.push({
       index: matchIndex,
       length: marker.length,
@@ -482,6 +488,17 @@ type StepMarker = {
   length: number
   text: string
   type: keyof typeof STEP_MARKER_CLASS
+}
+
+function formatIngredientFromRecord(ingredient: Ingredient) {
+  const quantity = ingredient.scaled_quantity ?? ingredient.quantity ?? ''
+  if (!quantity) {
+    return ingredient.name
+  }
+  if (!ingredient.unit) {
+    return `${quantity} ${ingredient.name}`
+  }
+  return `${quantity} ${ingredient.unit} ${ingredient.name}`
 }
 
 function formatIngredientPhrase(name: string, amount: string) {

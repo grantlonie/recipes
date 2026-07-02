@@ -227,8 +227,63 @@ def scale_quantity(quantity: str | None, factor: float | None, fixed: bool) -> s
     if number is None:
         return quantity
 
-    scaled = float(number * Fraction(factor).limit_denominator())
-    return format(scaled, ".3f").rstrip("0").rstrip(".")
+    return format_fraction(number * Fraction(factor).limit_denominator())
+
+
+def format_fraction(value: Fraction, max_denominator: int = 16) -> str:
+    limited = value.limit_denominator(max_denominator)
+    if limited.denominator == 1:
+        return str(limited.numerator)
+
+    whole = int(limited.numerator // limited.denominator)
+    remainder = limited - whole
+    if remainder == 0:
+        return str(whole)
+
+    fraction_text = UNICODE_FRACTION_CHARS.get(remainder) or f"{remainder.numerator}/{remainder.denominator}"
+    if whole == 0:
+        return fraction_text
+    return f"{whole} {fraction_text}"
+
+
+UNICODE_FRACTION_CHARS = {fraction: char for char, fraction in UNICODE_FRACTION_MAP.items()}
+
+
+def rebuild_amount(
+    quantity: str | None,
+    unit: str | None,
+    fixed: bool,
+    original: str,
+) -> str:
+    if not quantity and not unit:
+        return ""
+    prefix = "=" if fixed else ""
+    if unit:
+        separator = "%" if "%" in original else " "
+        return f"{prefix}{quantity}{separator}{unit}"
+    return f"{prefix}{quantity}"
+
+
+def scale_steps(steps: list[str], scale: float | None = None, servings: float = 1) -> list[str]:
+    if scale is None:
+        return steps
+    factor = scale / servings
+    return [scale_step_ingredients(step, factor) for step in steps]
+
+
+def scale_step_ingredients(step: str, factor: float) -> str:
+    def replacer(match: re.Match[str]) -> str:
+        name = match.group("name_braced")
+        if not name:
+            return match.group(0)
+        amount = match.group("amount") or ""
+        quantity, unit, fixed = split_amount(amount)
+        scaled_quantity = scale_quantity(quantity, factor, fixed)
+        if scaled_quantity == quantity:
+            return match.group(0)
+        return f"@{name.strip()}{{{rebuild_amount(scaled_quantity, unit, fixed, amount)}}}"
+
+    return INGREDIENT_RE.sub(replacer, step)
 
 
 def parse_quantity_to_fraction(quantity: str) -> Fraction | None:
