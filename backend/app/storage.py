@@ -91,7 +91,10 @@ class RecipeRepository:
             update={
                 "ingredients": cooklang.parse_ingredients(
                     body, scale=scaled_servings, servings=recipe.servings
-                )
+                ),
+                "steps": cooklang.scale_steps(
+                    recipe.steps, scale=scaled_servings, servings=recipe.servings
+                ),
             }
         )
 

@@ -141,10 +141,14 @@ Add @melted unsalted butter{¼ cup} and @vanilla extract{½ teaspoon}.
     recipe = repository.get_recipe("pancakes", scaled_servings=2)
 
     scaled = {ingredient.name: ingredient for ingredient in recipe.ingredients}
-    assert scaled["sourdough starter"].scaled_quantity == "0.5"
+    assert scaled["sourdough starter"].scaled_quantity == "½"
     assert scaled["sourdough starter"].unit == "cup"
-    assert scaled["buttermilk"].scaled_quantity == "0.5"
-    assert scaled["egg"].scaled_quantity == "0.5"
-    assert scaled["melted unsalted butter"].scaled_quantity == "0.125"
-    assert scaled["vanilla extract"].scaled_quantity == "0.25"
+    assert scaled["buttermilk"].scaled_quantity == "½"
+    assert scaled["egg"].scaled_quantity == "½"
+    assert scaled["melted unsalted butter"].scaled_quantity == "⅛"
+    assert scaled["vanilla extract"].scaled_quantity == "¼"
     assert scaled["vanilla extract"].unit == "teaspoon"
+    assert recipe.steps[0] == (
+        "Mix @sourdough starter{½ cup}, @buttermilk{½ cup}, and @egg{½}.\n"
+        "Add @melted unsalted butter{⅛ cup} and @vanilla extract{¼ teaspoon}."
+    )
