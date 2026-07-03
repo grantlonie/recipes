@@ -3,7 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Fragment, useEffect, useRef, useState } from 'react'
 
-import { ArrowTopRightOnSquareIcon, ShareIcon } from '@heroicons/react/24/outline'
+import {
+  ArrowTopRightOnSquareIcon,
+  EllipsisHorizontalCircleIcon,
+  ShareIcon,
+} from '@heroicons/react/24/outline'
 
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
@@ -187,13 +191,11 @@ export function RecipePage() {
                   trigger={
                     <Button
                       aria-label="Recipe actions"
-                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center p-0 text-xs leading-none"
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center p-0"
                       onClick={() => setActionsOpen(open => !open)}
                       variant="secondary"
                     >
-                      <span aria-hidden="true" className="translate-y-px tracking-[0.2em]">
-                        ...
-                      </span>
+                      <EllipsisHorizontalCircleIcon aria-hidden="true" className="h-5 w-5" />
                     </Button>
                   }
                 >
