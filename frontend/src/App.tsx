@@ -92,13 +92,20 @@ function AppShell() {
       <main
         className={`mx-auto w-full max-w-6xl px-4 pb-0 ${isHome ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'pt-4'}`}
       >
-        <Routes>
-          <Route element={<HomePage />} path="/" />
-          <Route element={<LoginPage />} path="/login" />
-          <Route element={<RecipeEditPage mode="new" />} path="/recipes/new" />
-          <Route element={<RecipeEditPage mode="edit" />} path="/recipes/edit/*" />
-          <Route element={<RecipePage />} path="/recipes/*" />
-        </Routes>
+        <div
+          aria-hidden={!isHome}
+          className={isHome ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'hidden'}
+        >
+          <HomePage />
+        </div>
+        {!isHome ? (
+          <Routes>
+            <Route element={<LoginPage />} path="/login" />
+            <Route element={<RecipeEditPage mode="new" />} path="/recipes/new" />
+            <Route element={<RecipeEditPage mode="edit" />} path="/recipes/edit/*" />
+            <Route element={<RecipePage />} path="/recipes/*" />
+          </Routes>
+        ) : null}
       </main>
     </div>
   )
