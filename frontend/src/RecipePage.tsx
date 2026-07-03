@@ -5,14 +5,13 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 
 import {
   ArrowTopRightOnSquareIcon,
-  EllipsisHorizontalCircleIcon,
+  EllipsisHorizontalIcon,
   ShareIcon,
 } from '@heroicons/react/24/outline'
 
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
-import { Button } from './components/Button'
 import { Popover } from './components/Popover'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
@@ -189,14 +188,14 @@ export function RecipePage() {
                   onClose={() => setActionsOpen(false)}
                   open={actionsOpen}
                   trigger={
-                    <Button
+                    <button
                       aria-label="Recipe actions"
-                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center p-0"
+                      className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700"
                       onClick={() => setActionsOpen(open => !open)}
-                      variant="secondary"
+                      type="button"
                     >
-                      <EllipsisHorizontalCircleIcon aria-hidden="true" className="h-5 w-5" />
-                    </Button>
+                      <EllipsisHorizontalIcon aria-hidden="true" className="h-5 w-5" />
+                    </button>
                   }
                 >
                   <Link
