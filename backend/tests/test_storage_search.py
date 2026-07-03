@@ -141,14 +141,34 @@ Add @melted unsalted butter{¼ cup} and @vanilla extract{½ teaspoon}.
     recipe = repository.get_recipe("pancakes", scaled_servings=2)
 
     scaled = {ingredient.name: ingredient for ingredient in recipe.ingredients}
-    assert scaled["sourdough starter"].scaled_quantity == "½"
+    assert scaled["sourdough starter"].scaled_quantity == "0.5"
     assert scaled["sourdough starter"].unit == "cup"
-    assert scaled["buttermilk"].scaled_quantity == "½"
-    assert scaled["egg"].scaled_quantity == "½"
-    assert scaled["melted unsalted butter"].scaled_quantity == "⅛"
-    assert scaled["vanilla extract"].scaled_quantity == "¼"
+    assert scaled["buttermilk"].scaled_quantity == "0.5"
+    assert scaled["egg"].scaled_quantity == "0.5"
+    assert scaled["melted unsalted butter"].scaled_quantity == "0.125"
+    assert scaled["vanilla extract"].scaled_quantity == "0.25"
     assert scaled["vanilla extract"].unit == "teaspoon"
     assert recipe.steps[0] == (
-        "Mix @sourdough starter{½ cup}, @buttermilk{½ cup}, and @egg{½}.\n"
-        "Add @melted unsalted butter{⅛ cup} and @vanilla extract{¼ teaspoon}."
+        "Mix @sourdough starter{0.5 cup}, @buttermilk{0.5 cup}, and @egg{0.5}.\n"
+        "Add @melted unsalted butter{0.125 cup} and @vanilla extract{0.25 teaspoon}."
     )
+
+
+def test_write_recipe_normalizes_fractions_to_decimals(tmp_path):
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=tmp_path / "recipes",
+    )
+    repository.write_recipe(
+        "normalized",
+        """---
+title: Normalized
+---
+
+Add @butter{1 ¼%cup} and @salt{1 1/4%tsp}.
+""",
+    )
+
+    content = repository.recipe_path("normalized").read_text()
+    assert "@butter{1.25%cup}" in content
+    assert "@salt{1.25%tsp}" in content

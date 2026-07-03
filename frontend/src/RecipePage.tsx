@@ -13,6 +13,7 @@ import { Popover } from './components/Popover'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
+import { formatQuantityDisplay } from './quantities'
 import type { Ingredient } from './types'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
@@ -236,7 +237,7 @@ export function RecipePage() {
               {recipe.ingredients.map((ingredient, index) => (
                 <Fragment key={`${ingredient.name}-${index}`}>
                   <span className="tabular-nums text-stone-600">
-                    {ingredient.scaled_quantity ?? ingredient.quantity ?? ''}
+                    {formatQuantityDisplay(ingredient.scaled_quantity ?? ingredient.quantity ?? '')}
                     {ingredient.unit ? ` ${ingredient.unit}` : ''}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
@@ -491,7 +492,7 @@ type StepMarker = {
 }
 
 function formatIngredientFromRecord(ingredient: Ingredient) {
-  const quantity = ingredient.scaled_quantity ?? ingredient.quantity ?? ''
+  const quantity = formatQuantityDisplay(ingredient.scaled_quantity ?? ingredient.quantity ?? '')
   if (!quantity) {
     return ingredient.name
   }
@@ -506,10 +507,11 @@ function formatIngredientPhrase(name: string, amount: string) {
   if (!quantity) {
     return name
   }
+  const formattedQuantity = formatQuantityDisplay(quantity)
   if (!unit) {
-    return `${quantity} ${name}`
+    return `${formattedQuantity} ${name}`
   }
-  return `${quantity} ${unit} ${name}`
+  return `${formattedQuantity} ${unit} ${name}`
 }
 
 function formatTimerPhrase(name: string, amount: string) {

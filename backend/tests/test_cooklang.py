@@ -1,4 +1,10 @@
-from app.cooklang import parse_cookware, parse_ingredients, scale_steps, split_amount
+from app.cooklang import (
+    normalize_document,
+    parse_cookware,
+    parse_ingredients,
+    scale_steps,
+    split_amount,
+)
 
 
 def test_parse_ingredients_keeps_braced_multi_word_names_together():
@@ -49,18 +55,32 @@ def test_parse_ingredients_scales_amounts_with_embedded_units():
 
     assert flour.quantity == "1"
     assert flour.unit == "cup"
-    assert flour.scaled_quantity == "½"
-    assert egg.scaled_quantity == "½"
+    assert flour.scaled_quantity == "0.5"
+    assert egg.scaled_quantity == "0.5"
     assert salt.quantity == "½"
     assert salt.unit == "teaspoon"
-    assert salt.scaled_quantity == "¼"
+    assert salt.scaled_quantity == "0.25"
+
+
+def test_normalize_document_converts_fractions_to_decimals():
+    content = """---
+title: Test
+---
+
+Mix @flour{1 1/4%cup} and @salt{½%teaspoon} and @sugar{1 ¼ cup}.
+"""
+    normalized = normalize_document(content)
+
+    assert "@flour{1.25%cup}" in normalized
+    assert "@salt{0.5%teaspoon}" in normalized
+    assert "@sugar{1.25 cup}" in normalized
 
 
 def test_scale_steps_updates_ingredient_amounts():
     steps = scale_steps(
-        ["Mix @flour{1%cup} and @salt{½%teaspoon}."],
+        ["Mix @flour{1%cup} and @salt{0.5%teaspoon}."],
         scale=2,
         servings=4,
     )
 
-    assert steps == ["Mix @flour{½%cup} and @salt{¼%teaspoon}."]
+    assert steps == ["Mix @flour{0.5%cup} and @salt{0.25%teaspoon}."]

@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app import cooklang
 from app.models import ImportPreview
 
 COOK_MD_BASE_URL = "https://cook.md"
@@ -49,6 +50,7 @@ def _import_with_client(recipe_url: str, client: httpx.Client) -> ImportPreview:
     if not content:
         raise ImportError("Recipe import returned empty content")
 
+    content = cooklang.normalize_document(content)
     return ImportPreview(content=content + "\n", suggested_slug=suggest_slug(recipe_url, content))
 
 

@@ -18,8 +18,9 @@ COOKWARE_RE = re.compile(
 )
 TIMER_RE = re.compile(r"~(?P<name>[A-Za-z0-9_./' -]*?)?\{(?P<amount>[^}]*)\}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
+UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"
 QUANTITY_PATTERN = (
-    r"(?:\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞])"
+    rf"(?:\d+\s+\d+/\d+|\d+\s+[{UNICODE_FRACTION_CHARS}]|\d+/\d+|\d+(?:\.\d+)?|[{UNICODE_FRACTION_CHARS}])"
 )
 AMOUNT_WITHOUT_SEPARATOR_RE = re.compile(
     rf"^(?P<quantity>{QUANTITY_PATTERN})(?:\s+(?P<unit>.+))?$"
@@ -227,26 +228,43 @@ def scale_quantity(quantity: str | None, factor: float | None, fixed: bool) -> s
     if number is None:
         return quantity
 
-    return format_fraction(number * Fraction(factor).limit_denominator())
+    return format_decimal(number * Fraction(factor).limit_denominator())
 
 
-def format_fraction(value: Fraction, max_denominator: int = 16) -> str:
-    limited = value.limit_denominator(max_denominator)
-    if limited.denominator == 1:
-        return str(limited.numerator)
-
-    whole = int(limited.numerator // limited.denominator)
-    remainder = limited - whole
-    if remainder == 0:
-        return str(whole)
-
-    fraction_text = UNICODE_FRACTION_CHARS.get(remainder) or f"{remainder.numerator}/{remainder.denominator}"
-    if whole == 0:
-        return fraction_text
-    return f"{whole} {fraction_text}"
+def format_decimal(value: Fraction) -> str:
+    scaled = float(value)
+    return format(scaled, ".3f").rstrip("0").rstrip(".")
 
 
-UNICODE_FRACTION_CHARS = {fraction: char for char, fraction in UNICODE_FRACTION_MAP.items()}
+def normalize_quantity(quantity: str | None) -> str | None:
+    if quantity is None:
+        return None
+
+    number = parse_quantity_to_fraction(quantity)
+    if number is None:
+        return quantity
+
+    return format_decimal(number)
+
+
+def normalize_document(content: str) -> str:
+    metadata, body = parse_document(content)
+    return render_document(metadata, normalize_body_amounts(body))
+
+
+def normalize_body_amounts(body: str) -> str:
+    def replacer(match: re.Match[str]) -> str:
+        name = match.group("name_braced")
+        if not name:
+            return match.group(0)
+        amount = match.group("amount") or ""
+        quantity, unit, fixed = split_amount(amount)
+        normalized_quantity = normalize_quantity(quantity)
+        if normalized_quantity == quantity:
+            return match.group(0)
+        return f"@{name.strip()}{{{rebuild_amount(normalized_quantity, unit, fixed, amount)}}}"
+
+    return INGREDIENT_RE.sub(replacer, body)
 
 
 def rebuild_amount(
