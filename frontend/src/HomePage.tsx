@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import type { UIEvent } from 'react'
+import type { ReactNode, UIEvent } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
@@ -7,6 +7,7 @@ import { updateRecipeMetadata } from './api'
 import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
+import { Button } from './components/Button'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { searchRecipes } from './search'
@@ -26,7 +27,8 @@ export function HomePage() {
   } = useRecipeListState()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const scrollRestoringRef = useRef(false)
-  const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}`
+  const [showAllRecipes, setShowAllRecipes] = useState(false)
+  const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
   const [summaries, setSummaries] = useState<RecipeSummary[]>([])
   const [details, setDetails] = useState<RecipeDetail[]>([])
   const [localReady, setLocalReady] = useState(false)
@@ -156,15 +158,28 @@ export function HomePage() {
             ) : (
               <p className="text-sm text-stone-600">No recipes match these tags.</p>
             )
-          ) : (
+          ) : summaries.length || displayRecentRecipes.length ? (
             <CompactRecipeGrid
               bookmarkPendingSlug={
                 bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
               }
+              headerAction={
+                summaries.length ? (
+                  <Button
+                    className="px-3 py-1"
+                    onClick={() => setShowAllRecipes(current => !current)}
+                    variant="ghost"
+                  >
+                    {showAllRecipes ? 'Recently viewed' : 'View all'}
+                  </Button>
+                ) : undefined
+              }
               onBookmarkToggle={handleBookmarkToggle}
-              recipes={displayRecentRecipes}
-              title="Recently Viewed"
+              recipes={showAllRecipes ? summaries : displayRecentRecipes}
+              title={showAllRecipes ? 'All Recipes' : 'Recently Viewed'}
             />
+          ) : (
+            <p className="text-sm text-stone-600">No recipes yet.</p>
           )
         ) : !localReady ? (
           <p className="text-stone-600">Loading recipes...</p>
@@ -203,20 +218,28 @@ export function HomePage() {
 
 function CompactRecipeGrid({
   bookmarkPendingSlug,
+  headerAction,
   onBookmarkToggle,
   recipes,
   title,
 }: CompactRecipeGridProps) {
-  if (!recipes.length) {
+  if (!recipes.length && !headerAction) {
     return null
   }
 
   return (
     <div>
-      {title ? (
-        <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{title}</h2>
+      {title || headerAction ? (
+        <div className="flex items-center justify-between gap-2">
+          {title ? (
+            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{title}</h2>
+          ) : (
+            <span />
+          )}
+          {headerAction}
+        </div>
       ) : null}
-      <div className={`grid grid-cols-3 gap-3 ${title ? 'mt-2' : ''}`}>
+      <div className={`grid grid-cols-3 gap-3 ${title || headerAction ? 'mt-2' : ''}`}>
         {recipes.map(recipe => (
           <CompactRecipeTile
             bookmarkPending={bookmarkPendingSlug === recipe.slug}
@@ -273,6 +296,7 @@ interface BookmarkInput {
 
 interface CompactRecipeGridProps {
   bookmarkPendingSlug?: string
+  headerAction?: ReactNode
   onBookmarkToggle: (recipe: RecipeSummary) => void
   recipes: RecipeSummary[]
   title?: string
