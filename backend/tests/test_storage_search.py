@@ -148,3 +148,27 @@ Add @melted unsalted butter{¼ cup} and @vanilla extract{½ teaspoon}.
     assert scaled["melted unsalted butter"].scaled_quantity == "0.125"
     assert scaled["vanilla extract"].scaled_quantity == "0.25"
     assert scaled["vanilla extract"].unit == "teaspoon"
+    assert recipe.steps[0] == (
+        "Mix @sourdough starter{0.5 cup}, @buttermilk{0.5 cup}, and @egg{0.5}.\n"
+        "Add @melted unsalted butter{0.125 cup} and @vanilla extract{0.25 teaspoon}."
+    )
+
+
+def test_write_recipe_normalizes_fractions_to_decimals(tmp_path):
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=tmp_path / "recipes",
+    )
+    repository.write_recipe(
+        "normalized",
+        """---
+title: Normalized
+---
+
+Add @butter{1 ¼%cup} and @salt{1 1/4%tsp}.
+""",
+    )
+
+    content = repository.recipe_path("normalized").read_text()
+    assert "@butter{1.25%cup}" in content
+    assert "@salt{1.25%tsp}" in content

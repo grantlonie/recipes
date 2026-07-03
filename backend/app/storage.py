@@ -91,13 +91,17 @@ class RecipeRepository:
             update={
                 "ingredients": cooklang.parse_ingredients(
                     body, scale=scaled_servings, servings=recipe.servings
-                )
+                ),
+                "steps": cooklang.scale_steps(
+                    recipe.steps, scale=scaled_servings, servings=recipe.servings
+                ),
             }
         )
 
     def write_recipe(self, slug: str, content: str) -> RecipeDetail:
         path = self.recipe_path(slug)
         path.parent.mkdir(parents=True, exist_ok=True)
+        content = cooklang.normalize_document(content)
         path.write_text(content, encoding="utf-8")
         mtime = path.stat().st_mtime
         self.recipes[slug] = self._read_recipe(path, slug)

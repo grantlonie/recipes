@@ -18,8 +18,9 @@ COOKWARE_RE = re.compile(
 )
 TIMER_RE = re.compile(r"~(?P<name>[A-Za-z0-9_./' -]*?)?\{(?P<amount>[^}]*)\}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
+UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"
 QUANTITY_PATTERN = (
-    r"(?:\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞])"
+    rf"(?:\d+\s+\d+/\d+|\d+\s+[{UNICODE_FRACTION_CHARS}]|\d+/\d+|\d+(?:\.\d+)?|[{UNICODE_FRACTION_CHARS}])"
 )
 AMOUNT_WITHOUT_SEPARATOR_RE = re.compile(
     rf"^(?P<quantity>{QUANTITY_PATTERN})(?:\s+(?P<unit>.+))?$"
@@ -227,8 +228,80 @@ def scale_quantity(quantity: str | None, factor: float | None, fixed: bool) -> s
     if number is None:
         return quantity
 
-    scaled = float(number * Fraction(factor).limit_denominator())
+    return format_decimal(number * Fraction(factor).limit_denominator())
+
+
+def format_decimal(value: Fraction) -> str:
+    scaled = float(value)
     return format(scaled, ".3f").rstrip("0").rstrip(".")
+
+
+def normalize_quantity(quantity: str | None) -> str | None:
+    if quantity is None:
+        return None
+
+    number = parse_quantity_to_fraction(quantity)
+    if number is None:
+        return quantity
+
+    return format_decimal(number)
+
+
+def normalize_document(content: str) -> str:
+    metadata, body = parse_document(content)
+    return render_document(metadata, normalize_body_amounts(body))
+
+
+def normalize_body_amounts(body: str) -> str:
+    def replacer(match: re.Match[str]) -> str:
+        name = match.group("name_braced")
+        if not name:
+            return match.group(0)
+        amount = match.group("amount") or ""
+        quantity, unit, fixed = split_amount(amount)
+        normalized_quantity = normalize_quantity(quantity)
+        if normalized_quantity == quantity:
+            return match.group(0)
+        return f"@{name.strip()}{{{rebuild_amount(normalized_quantity, unit, fixed, amount)}}}"
+
+    return INGREDIENT_RE.sub(replacer, body)
+
+
+def rebuild_amount(
+    quantity: str | None,
+    unit: str | None,
+    fixed: bool,
+    original: str,
+) -> str:
+    if not quantity and not unit:
+        return ""
+    prefix = "=" if fixed else ""
+    if unit:
+        separator = "%" if "%" in original else " "
+        return f"{prefix}{quantity}{separator}{unit}"
+    return f"{prefix}{quantity}"
+
+
+def scale_steps(steps: list[str], scale: float | None = None, servings: float = 1) -> list[str]:
+    if scale is None:
+        return steps
+    factor = scale / servings
+    return [scale_step_ingredients(step, factor) for step in steps]
+
+
+def scale_step_ingredients(step: str, factor: float) -> str:
+    def replacer(match: re.Match[str]) -> str:
+        name = match.group("name_braced")
+        if not name:
+            return match.group(0)
+        amount = match.group("amount") or ""
+        quantity, unit, fixed = split_amount(amount)
+        scaled_quantity = scale_quantity(quantity, factor, fixed)
+        if scaled_quantity == quantity:
+            return match.group(0)
+        return f"@{name.strip()}{{{rebuild_amount(scaled_quantity, unit, fixed, amount)}}}"
+
+    return INGREDIENT_RE.sub(replacer, step)
 
 
 def parse_quantity_to_fraction(quantity: str) -> Fraction | None:
