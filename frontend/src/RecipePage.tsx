@@ -5,14 +5,16 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 
 import {
   ArrowTopRightOnSquareIcon,
-  EllipsisHorizontalCircleIcon,
+  PencilSquareIcon,
   ShareIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
-import { Popover } from './components/Popover'
+import { Button } from './components/Button'
+import { Dialog } from './components/Dialog'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
@@ -35,6 +37,12 @@ const AMOUNT_PREFIX_RE =
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
+const ICON_BUTTON_CLASS =
+  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700'
+const ICON_CLASS = 'h-5 w-5'
+const DELETE_ICON_BUTTON_CLASS =
+  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-red-600 transition hover:bg-red-100 hover:text-red-700'
+
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
   const { auth } = useAuth()
@@ -52,7 +60,7 @@ export function RecipePage() {
   })
   const [servings, setServings] = useState(1)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
-  const [actionsOpen, setActionsOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const scaledQuery = useQuery({
     enabled: Boolean(slug) && servings !== recipeQuery.data?.servings,
     queryFn: () => getScaledRecipe(slug, servings),
@@ -119,118 +127,135 @@ export function RecipePage() {
         <div className="space-y-5 p-6">
           <div>
             <h1 className="text-xl font-bold tracking-tight">{recipe.title}</h1>
-            <p className="mt-1 text-sm text-stone-600">
-              {recipe.cook_time ? `${recipe.cook_time} · ` : ''}
-              {recipe.servings} servings
-            </p>
+            {recipe.cook_time ? (
+              <p className="mt-1 text-sm text-stone-600">{recipe.cook_time}</p>
+            ) : null}
           </div>
-          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
-            <div
-              aria-label="Scale servings"
-              className="flex shrink-0 items-stretch overflow-hidden rounded-full border border-orange-200 text-xs"
-              role="group"
-            >
-              <button
-                aria-label="Decrease servings"
-                className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={servings <= 1}
-                id="servings-decrease"
-                onClick={() => setServings(current => Math.max(1, current - 1))}
-                type="button"
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex shrink-0 items-center gap-2">
+              <div
+                aria-label="Scale servings"
+                className="flex shrink-0 items-stretch overflow-hidden rounded-full border border-orange-200 text-xs"
+                role="group"
               >
-                −
-              </button>
-              <output
-                aria-live="polite"
-                className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
-                id="servings"
-              >
-                {servings}
-              </output>
-              <button
-                aria-label="Increase servings"
-                className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
-                id="servings-increase"
-                onClick={() => setServings(current => current + 1)}
-                type="button"
-              >
-                +
-              </button>
+                <button
+                  aria-label="Decrease servings"
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={servings <= 1}
+                  id="servings-decrease"
+                  onClick={() => setServings(current => Math.max(1, current - 1))}
+                  type="button"
+                >
+                  −
+                </button>
+                <output
+                  aria-live="polite"
+                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
+                  id="servings"
+                >
+                  {servings}
+                </output>
+                <button
+                  aria-label="Increase servings"
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
+                  id="servings-increase"
+                  onClick={() => setServings(current => current + 1)}
+                  type="button"
+                >
+                  +
+                </button>
+              </div>
+              <span className="text-sm text-stone-600">serving</span>
             </div>
-            <button
-              aria-label="Share recipe"
-              className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700"
-              onClick={handleShare}
-              type="button"
-            >
-              <ShareIcon aria-hidden="true" className="h-5 w-5" />
-            </button>
+
+            {recipe.tags.length ? (
+              <div className="flex min-w-0 flex-wrap justify-end gap-2">
+                {recipe.tags.map(tag => (
+                  <span
+                    className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800"
+                    key={tag}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex items-center gap-2">
             {recipe.original_url ? (
               <a
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-orange-100 hover:text-orange-800"
+                aria-label="View source"
+                className={ICON_BUTTON_CLASS}
                 href={recipe.original_url}
                 rel="noreferrer"
                 target="_blank"
               >
-                <ArrowTopRightOnSquareIcon aria-hidden="true" className="h-4 w-4" />
-                Source
+                <ArrowTopRightOnSquareIcon aria-hidden="true" className={ICON_CLASS} />
               </a>
             ) : null}
+            <button
+              aria-label="Share recipe"
+              className={ICON_BUTTON_CLASS}
+              onClick={handleShare}
+              type="button"
+            >
+              <ShareIcon aria-hidden="true" className={ICON_CLASS} />
+            </button>
             {auth.authenticated ? (
-              <>
-                <BookmarkButton
-                  bookmarked={recipe.bookmarked}
-                  className="shrink-0"
-                  disabled={bookmarkMutation.isPending}
-                  onToggle={handleToggleBookmark}
-                />
-                <div className="ml-auto">
-                  <Popover
-                    onClose={() => setActionsOpen(false)}
-                    open={actionsOpen}
-                    trigger={
-                      <button
-                        aria-label="Recipe actions"
-                        className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700"
-                        onClick={() => setActionsOpen(open => !open)}
-                        type="button"
-                      >
-                        <EllipsisHorizontalCircleIcon aria-hidden="true" className="h-5 w-5" />
-                      </button>
-                    }
-                  >
-                  <Link
-                    className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
-                    to={`/recipes/edit/${slug}`}
-                  >
-                    Edit
-                  </Link>
-                  <button
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
-                    disabled={deleteMutation.isPending}
-                    onClick={handleDelete}
-                    type="button"
-                  >
-                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-                  </button>
-                </Popover>
-                </div>
-              </>
+              <BookmarkButton
+                bookmarked={recipe.bookmarked}
+                className={ICON_BUTTON_CLASS}
+                disabled={bookmarkMutation.isPending}
+                iconClassName={ICON_CLASS}
+                onToggle={handleToggleBookmark}
+              />
             ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {recipe.tags.map(tag => (
-              <span
-                className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800"
-                key={tag}
-              >
-                {tag}
-              </span>
-            ))}
+            {auth.authenticated ? (
+              <div className="ml-auto flex items-center gap-2">
+                <Link
+                  aria-label="Edit recipe"
+                  className={ICON_BUTTON_CLASS}
+                  to={`/recipes/edit/${slug}`}
+                >
+                  <PencilSquareIcon aria-hidden="true" className={ICON_CLASS} />
+                </Link>
+                <button
+                  aria-label="Delete recipe"
+                  className={DELETE_ICON_BUTTON_CLASS}
+                  disabled={deleteMutation.isPending}
+                  onClick={() => setDeleteDialogOpen(true)}
+                  type="button"
+                >
+                  <TrashIcon aria-hidden="true" className={ICON_CLASS} />
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
+
+      <Dialog labelledBy="delete-recipe-title" open={deleteDialogOpen}>
+        <h2 className="text-lg font-semibold text-stone-900" id="delete-recipe-title">
+          Delete recipe?
+        </h2>
+        <p className="mt-2 text-sm text-stone-600">
+          Delete &ldquo;{recipe.title}&rdquo;? This cannot be undone.
+        </p>
+        <div className="mt-6 flex justify-end gap-3">
+          <Button onClick={() => setDeleteDialogOpen(false)} variant="ghost">
+            Cancel
+          </Button>
+          <Button
+            disabled={deleteMutation.isPending}
+            onClick={handleDelete}
+            variant="danger"
+          >
+            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </div>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
@@ -353,10 +378,8 @@ export function RecipePage() {
     if (!recipe) {
       return
     }
-    if (!window.confirm(`Delete "${recipe.title}"? This cannot be undone.`)) {
-      return
-    }
     await deleteMutation.mutateAsync()
+    setDeleteDialogOpen(false)
   }
 }
 
