@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import type { ReactNode, UIEvent } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 
 import { updateRecipeMetadata } from './api'
@@ -99,7 +99,7 @@ export function HomePage() {
     }
   }, [revision])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = scrollRef.current
     if (!element) {
       return
@@ -253,7 +253,7 @@ function CompactRecipeGrid({
   )
 }
 
-function CompactRecipeTile({
+const CompactRecipeTile = memo(function CompactRecipeTile({
   bookmarkPending,
   onBookmarkToggle,
   recipe,
@@ -266,7 +266,7 @@ function CompactRecipeTile({
         <img
           alt=""
           className="aspect-square w-full rounded-xl object-cover"
-          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           src={recipe.image}
         />
@@ -287,7 +287,7 @@ function CompactRecipeTile({
       <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{recipe.title}</p>
     </Link>
   )
-}
+})
 
 interface BookmarkInput {
   bookmarked: boolean

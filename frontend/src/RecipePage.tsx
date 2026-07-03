@@ -5,7 +5,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 
 import {
   ArrowTopRightOnSquareIcon,
-  EllipsisHorizontalIcon,
+  EllipsisHorizontalCircleIcon,
   ShareIcon,
 } from '@heroicons/react/24/outline'
 
@@ -184,20 +184,21 @@ export function RecipePage() {
                   disabled={bookmarkMutation.isPending}
                   onToggle={handleToggleBookmark}
                 />
-                <Popover
-                  onClose={() => setActionsOpen(false)}
-                  open={actionsOpen}
-                  trigger={
-                    <button
-                      aria-label="Recipe actions"
-                      className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700"
-                      onClick={() => setActionsOpen(open => !open)}
-                      type="button"
-                    >
-                      <EllipsisHorizontalIcon aria-hidden="true" className="h-5 w-5" />
-                    </button>
-                  }
-                >
+                <div className="ml-auto">
+                  <Popover
+                    onClose={() => setActionsOpen(false)}
+                    open={actionsOpen}
+                    trigger={
+                      <button
+                        aria-label="Recipe actions"
+                        className="inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700"
+                        onClick={() => setActionsOpen(open => !open)}
+                        type="button"
+                      >
+                        <EllipsisHorizontalCircleIcon aria-hidden="true" className="h-5 w-5" />
+                      </button>
+                    }
+                  >
                   <Link
                     className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
                     to={`/recipes/edit/${slug}`}
@@ -213,6 +214,7 @@ export function RecipePage() {
                     {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
                   </button>
                 </Popover>
+                </div>
               </>
             ) : null}
           </div>
