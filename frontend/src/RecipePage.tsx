@@ -17,7 +17,7 @@ import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
-import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
+import { loadRecipeStaleFirst, purgeRecipeIfDeleted, revalidateRecipe, storeRecipe } from './sync'
 import { formatQuantityDisplay } from './quantities'
 import type { Ingredient } from './types'
 
@@ -48,7 +48,7 @@ export function RecipePage() {
   const { auth } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { addRecentRecipe } = useRecipeListState()
+  const { addRecentRecipe, removeRecentRecipe } = useRecipeListState()
   const { revision, sync } = useRecipeSync()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
@@ -57,6 +57,7 @@ export function RecipePage() {
         queryClient.setQueryData(['recipe', slug], updated),
       ),
     queryKey: ['recipe', slug],
+    retry: false,
   })
   const [servings, setServings] = useState(1)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
@@ -77,6 +78,7 @@ export function RecipePage() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteRecipe(slug),
     onSuccess: async () => {
+      removeRecentRecipe(slug)
       await sync()
       navigate('/')
     },
@@ -95,22 +97,57 @@ export function RecipePage() {
   }, [slug])
 
   useEffect(() => {
+    if (!slug || recipeQuery.isLoading) {
+      return
+    }
+    if (recipeQuery.isError || !recipeQuery.data) {
+      removeRecentRecipe(slug)
+      navigate('/', { replace: true })
+    }
+  }, [
+    navigate,
+    recipeQuery.data,
+    recipeQuery.isError,
+    recipeQuery.isLoading,
+    removeRecentRecipe,
+    slug,
+  ])
+
+  useEffect(() => {
     if (!slug || revision === 0) {
       return
     }
-    revalidateRecipe(slug).then(updated => {
+    let cancelled = false
+    void (async () => {
+      const deleted = await purgeRecipeIfDeleted(slug)
+      if (cancelled) {
+        return
+      }
+      if (deleted) {
+        queryClient.removeQueries({ queryKey: ['recipe', slug] })
+        removeRecentRecipe(slug)
+        navigate('/', { replace: true })
+        return
+      }
+      const updated = await revalidateRecipe(slug)
+      if (cancelled) {
+        return
+      }
       if (updated) {
         queryClient.setQueryData(['recipe', slug], updated)
       }
-    })
-  }, [queryClient, revision, slug])
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [navigate, queryClient, removeRecentRecipe, revision, slug])
 
   if (recipeQuery.isLoading && !recipeQuery.data) {
     return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
   }
 
   if (!recipe) {
-    return <p className="rounded-2xl bg-white p-6 text-stone-600">Recipe not found.</p>
+    return null
   }
 
   return (

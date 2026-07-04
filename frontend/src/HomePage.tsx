@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
-import type { ReactNode, UIEvent } from 'react'
+import type { ReactNode } from 'react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 
 import { updateRecipeMetadata } from './api'
@@ -25,7 +25,6 @@ export function HomePage() {
     scrollTop,
     setScrollTop,
   } = useRecipeListState()
-  const scrollRef = useRef<HTMLDivElement | null>(null)
   const scrollRestoringRef = useRef(false)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
   const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
@@ -62,8 +61,10 @@ export function HomePage() {
   )
   const displayRecentRecipes = useMemo(() => {
     const bySlug = new Map(summaries.map(summary => [summary.slug, summary]))
-    return recentRecipes.map(recipe => bySlug.get(recipe.slug) ?? recipe)
-  }, [recentRecipes, summaries])
+    return recentRecipes
+      .map(recipe => bySlug.get(recipe.slug) ?? recipe)
+      .filter(recipe => !localReady || bySlug.has(recipe.slug))
+  }, [localReady, recentRecipes, summaries])
   const taggedRecipes = useMemo(
     () => filterRecipes(summaries, false, activeTags),
     [activeTags, summaries],
@@ -100,12 +101,8 @@ export function HomePage() {
   }, [revision])
 
   useLayoutEffect(() => {
-    const element = scrollRef.current
-    if (!element) {
-      return
-    }
     scrollRestoringRef.current = true
-    element.scrollTop = scrollTop
+    window.scrollTo(0, scrollTop)
     requestAnimationFrame(() => {
       scrollRestoringRef.current = false
     })
@@ -114,25 +111,28 @@ export function HomePage() {
   }, [])
 
   useEffect(() => {
-    const element = scrollRef.current
-    if (!element) {
-      return
-    }
     scrollRestoringRef.current = true
-    element.scrollTop = 0
+    window.scrollTo(0, 0)
     requestAnimationFrame(() => {
       scrollRestoringRef.current = false
     })
   }, [filterKey])
 
+  useEffect(() => {
+    function handleScroll() {
+      if (scrollRestoringRef.current) {
+        return
+      }
+      setScrollTop(window.scrollY)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [setScrollTop])
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div
-        className="home-scroll h-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain pb-24 pr-1 pt-2"
-        onScroll={handleScroll}
-        ref={scrollRef}
-      >
-        {!showSearchResults ? (
+    <>
+      {!showSearchResults ? (
           bookmarkedOnly ? (
             bookmarkedRecipes.length ? (
               <CompactRecipeGrid
@@ -196,7 +196,6 @@ export function HomePage() {
         ) : (
           <p className="text-stone-600">No recipes found.</p>
         )}
-      </div>
 
       <Link
         className="fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-3xl font-light text-white shadow-lg hover:bg-orange-700"
@@ -205,15 +204,8 @@ export function HomePage() {
         <span className="sr-only">New recipe</span>
         +
       </Link>
-    </div>
+    </>
   )
-
-  function handleScroll(event: UIEvent<HTMLDivElement>) {
-    if (scrollRestoringRef.current) {
-      return
-    }
-    setScrollTop(event.currentTarget.scrollTop)
-  }
 }
 
 function CompactRecipeGrid({
