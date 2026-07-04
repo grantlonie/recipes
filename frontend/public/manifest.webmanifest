@@ -19,6 +19,16 @@
   ],
   "name": "G&E Recipes",
   "scope": "/",
+  "share_target": {
+    "action": "/import",
+    "enctype": "application/x-www-form-urlencoded",
+    "method": "GET",
+    "params": {
+      "text": "text",
+      "title": "title",
+      "url": "url"
+    }
+  },
   "short_name": "G&E Recipes",
   "start_url": "/",
   "theme_color": "#f97316"

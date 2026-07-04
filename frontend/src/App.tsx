@@ -13,6 +13,7 @@ import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 import { useAuth } from './AuthContext'
 import { getLocalTags } from './db'
 import { HomePage } from './HomePage'
+import { ImportPage } from './ImportPage'
 import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
 import { RecipeListProvider, useRecipeListState } from './RecipeListContext'
@@ -101,6 +102,7 @@ function AppShell() {
         {!isHome ? (
           <Routes>
             <Route element={<LoginPage />} path="/login" />
+            <Route element={<ImportPage />} path="/import" />
             <Route element={<RecipeEditPage mode="new" />} path="/recipes/new" />
             <Route element={<RecipeEditPage mode="edit" />} path="/recipes/edit/*" />
             <Route element={<RecipePage />} path="/recipes/*" />

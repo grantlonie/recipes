@@ -6,6 +6,7 @@ import type { AuthState } from './types'
 
 interface AuthContextValue {
   auth: AuthState
+  authLoading: boolean
   loginError: string | null
   loginPending: boolean
   logoutPending: boolean
@@ -34,6 +35,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     <AuthContext.Provider
       value={{
         auth: authQuery.data ?? { authenticated: false },
+        authLoading: authQuery.isLoading,
         loginError: loginMutation.error?.message ?? null,
         loginPending: loginMutation.isPending,
         logoutPending: logoutMutation.isPending,
