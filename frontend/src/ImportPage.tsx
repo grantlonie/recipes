@@ -11,9 +11,13 @@ import { useRecipeSync } from './RecipeSyncContext'
 import {
   buildImportPath,
   buildLoginUrl,
+  clearImportSession,
   ensureUniqueSlug,
   extractRecipeUrl,
   findRecipeBySourceUrl,
+  formatImportError,
+  getImportSession,
+  markImportDone,
 } from './shareImport'
 import { storeRecipe } from './sync'
 import type { RecipeDetail, RecipeSummary } from './types'
@@ -31,6 +35,7 @@ export function ImportPage() {
   const { addRecentRecipe } = useRecipeListState()
   const importStarted = useRef(false)
   const [manualUrl, setManualUrl] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
 
   const sharedUrl = extractRecipeUrl({
     text: searchParams.get('text'),
@@ -39,6 +44,7 @@ export function ImportPage() {
 
   useEffect(() => {
     importStarted.current = false
+    setImportError(null)
   }, [sharedUrl])
 
   const importMutation = useMutation({
@@ -55,7 +61,12 @@ export function ImportPage() {
       await sync()
       return { kind: 'created', recipe }
     },
+    onError: error => {
+      setImportError(formatImportError(error))
+    },
     onSuccess: result => {
+      setImportError(null)
+
       if (result.kind === 'existing') {
         addRecentRecipe(result.recipe)
         window.setTimeout(() => {
@@ -83,27 +94,63 @@ export function ImportPage() {
       return
     }
 
-    const storageKey = `share-import:${sharedUrl}`
-    const status = sessionStorage.getItem(storageKey)
-    if (status === 'done' || status === 'pending') {
+    const session = getImportSession(sharedUrl)
+    if (session?.status === 'done') {
       return
     }
 
     importStarted.current = true
-    sessionStorage.setItem(storageKey, 'pending')
 
     void importMutation
       .mutateAsync(sharedUrl)
       .then(() => {
-        sessionStorage.setItem(storageKey, 'done')
+        markImportDone(sharedUrl)
       })
-      .catch(() => {
-        sessionStorage.removeItem(storageKey)
+      .catch(error => {
+        clearImportSession(sharedUrl)
         importStarted.current = false
+        setImportError(formatImportError(error))
       })
   }, [auth.authenticated, authLoading, importMutation, sharedUrl])
 
-  if (authLoading || (!auth.authenticated && !importMutation.isError)) {
+  const showImportError = Boolean(importError || importMutation.isError)
+  const errorMessage =
+    importError ??
+    (importMutation.error ? formatImportError(importMutation.error) : "Couldn't import this recipe.")
+
+  function handleRetryImport() {
+    if (!sharedUrl) {
+      return
+    }
+
+    clearImportSession(sharedUrl)
+    importStarted.current = true
+    setImportError(null)
+    importMutation.reset()
+
+    void importMutation
+      .mutateAsync(sharedUrl)
+      .then(() => {
+        markImportDone(sharedUrl)
+      })
+      .catch(error => {
+        clearImportSession(sharedUrl)
+        importStarted.current = false
+        setImportError(formatImportError(error))
+      })
+  }
+
+  function handleManualImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const url = manualUrl.trim()
+    if (!url) {
+      return
+    }
+
+    navigate(buildImportPath(url), { replace: true })
+  }
+
+  if (authLoading || (!auth.authenticated && !showImportError)) {
     return <ImportStatus message="Checking sign-in..." />
   }
 
@@ -114,6 +161,7 @@ export function ImportPage() {
   if (sharedUrl && importMutation.isPending) {
     return (
       <ImportStatus
+        detail="This can take up to a minute for some sites."
         message="Importing recipe..."
         subtitle={sharedUrl}
         subtitleBreakAll
@@ -131,29 +179,20 @@ export function ImportPage() {
     )
   }
 
-  if (importMutation.isError) {
+  if (showImportError) {
     const editorPath = sharedUrl
       ? `/recipes/new?url=${encodeURIComponent(sharedUrl)}`
       : '/recipes/new'
 
     return (
       <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
-        <h1 className="text-2xl font-bold">Import failed</h1>
-        <p className="mt-2 text-sm text-red-700">{importMutation.error.message}</p>
+        <h1 className="text-2xl font-bold">Couldn't import recipe</h1>
+        <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
         {sharedUrl ? (
           <p className="mt-2 break-all text-sm text-stone-600">{sharedUrl}</p>
         ) : null}
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button
-            onClick={() => {
-              if (sharedUrl) {
-                sessionStorage.removeItem(`share-import:${sharedUrl}`)
-              }
-              importStarted.current = false
-              importMutation.reset()
-            }}
-            variant="secondary"
-          >
+          <Button onClick={handleRetryImport} variant="secondary">
             Try again
           </Button>
           <Link
@@ -161,6 +200,12 @@ export function ImportPage() {
             to={editorPath}
           >
             Open editor
+          </Link>
+          <Link
+            className="inline-flex rounded-full px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-100"
+            to="/"
+          >
+            Go home
           </Link>
         </div>
       </section>
@@ -195,16 +240,6 @@ export function ImportPage() {
       </form>
     </section>
   )
-
-  function handleManualImport(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const url = manualUrl.trim()
-    if (!url) {
-      return
-    }
-
-    navigate(buildImportPath(url), { replace: true })
-  }
 }
 
 function ImportStatus({
