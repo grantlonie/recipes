@@ -3,12 +3,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import auth
 from app.config import Settings, get_settings
 from app.importer import ImportError, import_from_url
+from app.manifest import build_web_manifest
 from app.models import (
     AuthState,
     ImportPreview,
@@ -184,6 +185,14 @@ dist_path = settings.frontend_dist
 assets_path = dist_path / "assets"
 if assets_path.exists():
     app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def web_manifest(settings: Settings = Depends(get_settings)) -> JSONResponse:
+    return JSONResponse(
+        build_web_manifest(settings),
+        media_type="application/manifest+json",
+    )
 
 
 @app.get("/{path:path}", include_in_schema=False)
