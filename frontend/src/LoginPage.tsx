@@ -1,23 +1,26 @@
 import type { FormEvent } from 'react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { Button } from './components/Button'
 import { useAuth } from './AuthContext'
+import { getSafeReturnTo } from './shareImport'
 
 export function LoginPage() {
   const { auth, loginError, loginPending, signIn } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('editor')
+  const returnTo = getSafeReturnTo(searchParams.get('returnTo')) ?? '/recipes/new'
 
   if (auth.authenticated) {
     return (
       <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
         <h1 className="text-2xl font-bold">Signed in</h1>
         <p className="mt-2 text-stone-600">You can create and edit recipes.</p>
-        <Button className="mt-6" onClick={() => navigate('/recipes/new')}>
-          New recipe
+        <Button className="mt-6" onClick={() => navigate(returnTo)}>
+          Continue
         </Button>
       </section>
     )
@@ -55,6 +58,6 @@ export function LoginPage() {
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     await signIn(username, password)
-    navigate('/recipes/new')
+    navigate(returnTo)
   }
 }
