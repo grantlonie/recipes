@@ -53,10 +53,25 @@ export async function getTags(): Promise<string[]> {
 }
 
 export async function importRecipe(url: string): Promise<ImportPreview> {
-  return request('/api/import', {
-    body: JSON.stringify({ url }),
-    method: 'POST',
-  })
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 100_000)
+
+  try {
+    return await request('/api/import', {
+      body: JSON.stringify({ url }),
+      method: 'POST',
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(
+        "Couldn't import this recipe. The URL may not be a supported recipe page, or the import timed out.",
+      )
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
 }
 
 export async function login(username: string, password: string): Promise<AuthState> {

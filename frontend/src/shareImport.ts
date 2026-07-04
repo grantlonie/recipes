@@ -53,6 +53,62 @@ export function getSafeReturnTo(value: string | null): string | null {
   }
 }
 
+export function formatImportError(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Import failed'
+
+  if (message.includes('Could not start recipe import')) {
+    return "Couldn't import this recipe. The URL doesn't look like a supported recipe page."
+  }
+
+  if (message.includes('timed out') || message.includes('timed out waiting')) {
+    return "Couldn't import this recipe. It took too long — the URL may not be supported."
+  }
+
+  if (message.includes('returned empty content')) {
+    return "Couldn't import this recipe. No recipe content was found at that URL."
+  }
+
+  if (message.startsWith("Couldn't import this recipe")) {
+    return message
+  }
+
+  return `Couldn't import this recipe. ${message}`
+}
+
+interface ImportSession {
+  at: number
+  status: 'done'
+}
+
+export function clearImportSession(url: string): void {
+  sessionStorage.removeItem(importSessionKey(url))
+}
+
+export function getImportSession(url: string): ImportSession | null {
+  const raw = sessionStorage.getItem(importSessionKey(url))
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw) as ImportSession
+  } catch {
+    clearImportSession(url)
+    return null
+  }
+}
+
+export function markImportDone(url: string): void {
+  sessionStorage.setItem(
+    importSessionKey(url),
+    JSON.stringify({ at: Date.now(), status: 'done' } satisfies ImportSession),
+  )
+}
+
+function importSessionKey(url: string): string {
+  return `share-import:${url}`
+}
+
 export async function ensureUniqueSlug(baseSlug: string): Promise<string> {
   const normalized = baseSlug.trim() || 'new-recipe'
   const recipes = await getRecipes('')
