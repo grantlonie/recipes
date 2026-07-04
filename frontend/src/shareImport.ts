@@ -1,4 +1,5 @@
 import { getRecipes } from './api'
+import type { RecipeSummary } from './types'
 
 const URL_PATTERN = /https?:\/\/[^\s<>"{}|\\^`[\]]+/i
 
@@ -67,6 +68,57 @@ export async function ensureUniqueSlug(baseSlug: string): Promise<string> {
   }
 
   return `${normalized}-${counter}`
+}
+
+export async function findRecipeBySourceUrl(url: string): Promise<RecipeSummary | null> {
+  const targetKey = sourceUrlKey(url)
+  const recipes = await getRecipes('')
+
+  return (
+    recipes.find(recipe => recipe.original_url && sourceUrlKey(recipe.original_url) === targetKey) ??
+    null
+  )
+}
+
+export function canonicalSourceUrl(url: string): string {
+  try {
+    const parsed = new URL(url.trim())
+    const hostname = parsed.hostname.toLowerCase()
+
+    if (hostname.endsWith('google.com') && parsed.pathname.startsWith('/amp/s/')) {
+      let path = parsed.pathname.slice('/amp/s/'.length)
+      if (path.endsWith('/amp')) {
+        path = path.slice(0, -'/amp'.length)
+      }
+      return `https://${path}`
+    }
+
+    parsed.hash = ''
+    parsed.hostname = hostname
+
+    if (parsed.pathname.length > 1 && parsed.pathname.endsWith('/')) {
+      parsed.pathname = parsed.pathname.slice(0, -1)
+    }
+
+    return parsed.toString()
+  } catch {
+    return url.trim()
+  }
+}
+
+export function sourceUrlKey(url: string): string {
+  try {
+    const parsed = new URL(canonicalSourceUrl(url))
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+    let path = parsed.pathname
+    if (path.length > 1 && path.endsWith('/')) {
+      path = path.slice(0, -1)
+    }
+
+    return `${host}${path}${parsed.search}`
+  } catch {
+    return canonicalSourceUrl(url).toLowerCase()
+  }
 }
 
 function isValidHttpUrl(value: string): boolean {

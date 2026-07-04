@@ -13,8 +13,14 @@ import {
   buildLoginUrl,
   ensureUniqueSlug,
   extractRecipeUrl,
+  findRecipeBySourceUrl,
 } from './shareImport'
 import { storeRecipe } from './sync'
+import type { RecipeDetail, RecipeSummary } from './types'
+
+type ImportResult =
+  | { kind: 'created'; recipe: RecipeDetail }
+  | { kind: 'existing'; recipe: RecipeSummary }
 
 export function ImportPage() {
   const { auth, authLoading } = useAuth()
@@ -36,18 +42,31 @@ export function ImportPage() {
   }, [sharedUrl])
 
   const importMutation = useMutation({
-    mutationFn: async (recipeUrl: string) => {
+    mutationFn: async (recipeUrl: string): Promise<ImportResult> => {
+      const existing = await findRecipeBySourceUrl(recipeUrl)
+      if (existing) {
+        return { kind: 'existing', recipe: existing }
+      }
+
       const preview = await importRecipe(recipeUrl)
       const slug = await ensureUniqueSlug(preview.suggested_slug)
       const recipe = await createRecipe(slug, preview.content)
       await storeRecipe(recipe)
       await sync()
-      return recipe
+      return { kind: 'created', recipe }
     },
-    onSuccess: recipe => {
-      queryClient.setQueryData(['recipe', recipe.slug], recipe)
-      addRecentRecipe(recipe)
-      navigate(`/recipes/${recipe.slug}`, { replace: true })
+    onSuccess: result => {
+      if (result.kind === 'existing') {
+        addRecentRecipe(result.recipe)
+        window.setTimeout(() => {
+          navigate(`/recipes/${result.recipe.slug}`, { replace: true })
+        }, 1500)
+        return
+      }
+
+      queryClient.setQueryData(['recipe', result.recipe.slug], result.recipe)
+      addRecentRecipe(result.recipe)
+      navigate(`/recipes/${result.recipe.slug}`, { replace: true })
     },
   })
 
@@ -93,7 +112,23 @@ export function ImportPage() {
   }
 
   if (sharedUrl && importMutation.isPending) {
-    return <ImportStatus message="Importing recipe..." subtitle={sharedUrl} />
+    return (
+      <ImportStatus
+        message="Importing recipe..."
+        subtitle={sharedUrl}
+        subtitleBreakAll
+      />
+    )
+  }
+
+  if (sharedUrl && importMutation.isSuccess && importMutation.data.kind === 'existing') {
+    return (
+      <ImportStatus
+        detail="Opening existing recipe..."
+        message="This recipe already exists"
+        subtitle={importMutation.data.recipe.title}
+      />
+    )
   }
 
   if (importMutation.isError) {
@@ -172,11 +207,28 @@ export function ImportPage() {
   }
 }
 
-function ImportStatus({ message, subtitle }: { message: string; subtitle?: string }) {
+function ImportStatus({
+  detail,
+  message,
+  subtitle,
+  subtitleBreakAll = false,
+}: {
+  detail?: string
+  message: string
+  subtitle?: string
+  subtitleBreakAll?: boolean
+}) {
   return (
     <section className="mx-auto max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-orange-100">
       <p className="text-lg font-semibold text-stone-800">{message}</p>
-      {subtitle ? <p className="mt-2 break-all text-sm text-stone-500">{subtitle}</p> : null}
+      {subtitle ? (
+        <p
+          className={`mt-2 text-sm text-stone-600 ${subtitleBreakAll ? 'break-all' : 'text-base text-stone-700'}`}
+        >
+          {subtitle}
+        </p>
+      ) : null}
+      {detail ? <p className="mt-2 text-sm text-stone-500">{detail}</p> : null}
     </section>
   )
 }
