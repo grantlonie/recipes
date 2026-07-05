@@ -5,12 +5,18 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b && vite build",
+    "cap:open:ios": "npx cap open ios",
+    "cap:sync:ios": "npm run build && npx cap sync ios",
     "dev": "vite",
     "format": "prettier --ignore-path ../.prettierignore --check .",
     "format:write": "prettier --ignore-path ../.prettierignore --write .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
     "@heroicons/react": "^2.2.0",
     "@tanstack/react-query": "^5.90.11",
     "react": "^19.2.0",

@@ -106,3 +106,9 @@ pytest
 cd frontend && npm run build && npm run format
 docker build .
 ```
+
+## iOS share from Safari
+
+Android installed PWAs can receive shared recipe URLs through the web manifest. iOS Safari does
+not support that API, so sharing from Safari on iPhone requires the native wrapper in
+`frontend/ios`. See `frontend/ios/README.md` for build instructions.
