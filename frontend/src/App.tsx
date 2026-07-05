@@ -18,6 +18,7 @@ import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
 import { RecipeListProvider, useRecipeListState } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
+import { NativeBridge } from './NativeBridge'
 import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
 import { Popover } from './components/Popover'
 
@@ -25,6 +26,7 @@ export function App() {
   return (
     <RecipeSyncProvider>
       <RecipeListProvider>
+        <NativeBridge />
         <AppShell />
       </RecipeListProvider>
     </RecipeSyncProvider>
@@ -42,7 +44,11 @@ function AppShell() {
       <header className="sticky top-0 z-50 shrink-0 border-b border-orange-200 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-3">
-            <Link aria-label="G&E Recipes home" className="inline-flex shrink-0 items-center" to="/">
+            <Link
+              aria-label="G&E Recipes home"
+              className="inline-flex shrink-0 items-center"
+              to="/"
+            >
               <img alt="G&E Recipes" className="h-8 w-auto sm:h-10" src="/logo.png" />
             </Link>
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
@@ -88,9 +94,7 @@ function AppShell() {
         </div>
       </header>
 
-      <main
-        className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : 'pb-8 pt-4'}`}
-      >
+      <main className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : 'pb-8 pt-4'}`}>
         <div aria-hidden={!isHome} className={isHome ? undefined : 'hidden'}>
           <HomePage />
         </div>
@@ -123,7 +127,7 @@ function HomeSearchBar() {
   const selectedTags = useMemo(() => new Set(activeTags), [activeTags])
   const unselectedTags = useMemo(
     () => availableTags.filter(tag => !selectedTags.has(tag)),
-    [availableTags, selectedTags],
+    [availableTags, selectedTags]
   )
 
   useEffect(() => {
@@ -180,10 +184,7 @@ function HomeSearchBar() {
           }
         >
           {unselectedTags.length ? (
-            <div
-              className="max-h-56 overflow-y-auto"
-              role="listbox"
-            >
+            <div className="max-h-56 overflow-y-auto" role="listbox">
               {unselectedTags.map(tag => (
                 <button
                   className="block w-full rounded-xl px-3 py-2 text-left text-sm text-stone-700 hover:bg-orange-50"
@@ -239,8 +240,8 @@ function HomeSearchBar() {
   function addTag(tag: string) {
     setActiveTags(
       [...activeTags, tag].sort((left, right) =>
-        left.localeCompare(right, undefined, { sensitivity: 'base' }),
-      ),
+        left.localeCompare(right, undefined, { sensitivity: 'base' })
+      )
     )
     setTagsOpen(false)
   }

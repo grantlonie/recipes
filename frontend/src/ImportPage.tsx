@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Capacitor } from '@capacitor/core'
 import type { FormEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -114,9 +115,12 @@ export function ImportPage() {
   }, [auth.authenticated, authLoading, importMutation, sharedUrl])
 
   const showImportError = Boolean(importError || importMutation.isError)
+  const showIosShareHint = isIosShareHintVisible()
   const errorMessage =
     importError ??
-    (importMutation.error ? formatImportError(importMutation.error) : "Couldn't import this recipe.")
+    (importMutation.error
+      ? formatImportError(importMutation.error)
+      : "Couldn't import this recipe.")
 
   function handleRetryImport() {
     if (!sharedUrl) {
@@ -188,9 +192,7 @@ export function ImportPage() {
       <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
         <h1 className="text-2xl font-bold">Couldn't import recipe</h1>
         <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
-        {sharedUrl ? (
-          <p className="mt-2 break-all text-sm text-stone-600">{sharedUrl}</p>
-        ) : null}
+        {sharedUrl ? <p className="mt-2 break-all text-sm text-stone-600">{sharedUrl}</p> : null}
         <div className="mt-6 flex flex-wrap gap-2">
           <Button onClick={handleRetryImport} variant="secondary">
             Try again
@@ -223,6 +225,13 @@ export function ImportPage() {
         Paste a recipe URL to import it automatically, or share a link to this app from your
         browser.
       </p>
+      {showIosShareHint ? (
+        <p className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm text-stone-700">
+          Safari on iPhone does not support sharing into home-screen web apps. Install the native
+          iOS app from the project&apos;s <code className="text-xs">frontend/ios</code> folder to
+          share recipe links from Safari.
+        </p>
+      ) : null}
       <form className="mt-6 space-y-4" onSubmit={handleManualImport}>
         <label className="block">
           <span className="text-sm font-semibold text-stone-700">Recipe URL</span>
@@ -240,6 +249,19 @@ export function ImportPage() {
       </form>
     </section>
   )
+}
+
+function isIosShareHintVisible(): boolean {
+  if (Capacitor.isNativePlatform()) {
+    return false
+  }
+
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  if (!isIos) {
+    return false
+  }
+
+  return true
 }
 
 function ImportStatus({
