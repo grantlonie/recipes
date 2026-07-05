@@ -81,6 +81,16 @@ export async function revalidateRecipe(slug: string): Promise<RecipeDetail | nul
   }
 }
 
+export async function purgeRecipeIfDeleted(slug: string): Promise<boolean> {
+  const manifest = await getSyncManifest()
+  if (manifest.recipes.some(recipe => recipe.slug === slug)) {
+    return false
+  }
+
+  await deleteRecipes([slug])
+  return true
+}
+
 export async function loadRecipeStaleFirst(
   slug: string,
   onUpdated?: (recipe: RecipeDetail) => void,
