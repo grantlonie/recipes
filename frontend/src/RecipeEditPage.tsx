@@ -1,23 +1,73 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ChangeEvent, FormEvent, ReactNode } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import type { FormEvent, ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { createRecipe, importRecipe, updateRecipe } from './api'
+import {
+  createRecipe,
+  getIngredientCatalog,
+  importRecipe,
+  updateRecipe,
+  upsertIngredient,
+} from './api'
 import { useAuth } from './AuthContext'
+import { Autocomplete } from './components/Autocomplete'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
+import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/RecipeBodyEditor'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
-import { getLocalTags } from './db'
+import {
+  extractTokens,
+  INGREDIENT_TOKEN_RE,
+  serializeIngredient,
+  type IngredientAttrs,
+  type IngredientToken,
+} from './cooklangTokens'
+import { getLocalTags, putIngredientCatalog } from './db'
+import { useIngredientCatalog } from './IngredientCatalogContext'
+import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
+import type { CatalogIngredient, UnitSystem } from './types'
+import {
+  defaultEditorUnit,
+  densityForName,
+  editorUnitItems,
+  findCatalogIngredient,
+  formatGramsValue,
+  formatIngredientAmount,
+  isMassUnit,
+  isVolumeUnit,
+  matchCatalogIngredient,
+  normalizeUnit,
+  toGrams,
+} from './units'
+import { useUnitSystem } from './UnitSystemContext'
 
-const emptyBody = 'Add @ingredient{1%cup}.\n'
+const emptyBody = 'Add @ingredient{100%g}.\n'
 
 interface RecipeEditPageProps {
   mode: 'edit' | 'new'
+}
+
+interface MappingRow {
+  catalogName: string
+  createDensity: string
+  fixed: boolean
+  note: string
+  originalName: string
+  quantity: string
+  unit: string
+}
+
+interface PendingImport {
+  body: string
+  metadata: Record<string, unknown>
+  preserveBookmarked?: boolean
+  preserveTags?: boolean
+  suggestedSlug?: string
 }
 
 export function RecipeEditPage({ mode }: RecipeEditPageProps) {
@@ -27,7 +77,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const queryClient = useQueryClient()
   const { revision, sync } = useRecipeSync()
   const { addRecentRecipe } = useRecipeListState()
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const { unitSystem } = useUnitSystem()
+  const { ingredients: catalog, refresh: refreshCatalog } = useIngredientCatalog()
+  const bodyEditorRef = useRef<RecipeBodyEditorHandle | null>(null)
   const [activeTab, setActiveTab] = useState('info')
   const [baseMetadata, setBaseMetadata] = useState<Record<string, unknown>>({})
   const [bookmarked, setBookmarked] = useState(false)
@@ -36,10 +88,15 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [image, setImage] = useState('')
   const [importUrl, setImportUrl] = useState('')
   const [ingredientDialogOpen, setIngredientDialogOpen] = useState(false)
+  const [editingPos, setEditingPos] = useState<number | null>(null)
   const [ingredientName, setIngredientName] = useState('')
+  const [ingredientNote, setIngredientNote] = useState('')
   const [ingredientQuantity, setIngredientQuantity] = useState('')
   const [ingredientUnit, setIngredientUnit] = useState('')
-  const [lastCursor, setLastCursor] = useState(0)
+  const [ingredientFixed, setIngredientFixed] = useState(false)
+  const [mappingOpen, setMappingOpen] = useState(false)
+  const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const [recipeSlug, setRecipeSlug] = useState(mode === 'new' ? 'new-recipe' : slug)
   const [servings, setServings] = useState(4)
   const [source, setSource] = useState('')
@@ -51,11 +108,24 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const recipeQuery = useQuery({
     enabled: auth.authenticated && !isNew && Boolean(slug),
     queryFn: () =>
-      loadRecipeStaleFirst(slug, updated =>
-        queryClient.setQueryData(['recipe', slug], updated),
-      ),
+      loadRecipeStaleFirst(slug, updated => queryClient.setQueryData(['recipe', slug], updated)),
     queryKey: ['recipe', slug],
   })
+
+  const selectedDensity = densityForName(ingredientName, catalog)
+  const unitOptions = useMemo(() => editorUnitItems(unitSystem), [unitSystem])
+  const ingredientOptions = useMemo(
+    () =>
+      catalog.map(item => ({
+        label: item.density_kg_m3 == null ? `${item.name} (weight)` : item.name,
+        value: item.name,
+      })),
+    [catalog],
+  )
+  const mappingCanApply = useMemo(
+    () => mappingRows.every(row => isMappingRowValid(row, catalog)),
+    [mappingRows, catalog],
+  )
 
   useEffect(() => {
     if (!auth.authenticated) {
@@ -84,8 +154,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     mutationFn: (url: string) => importRecipe(url),
     onSuccess: preview => {
       const parsed = parseImportedDocument(preview.content)
-      setRecipeSlug(preview.suggested_slug)
-      applyDocumentState(parsed.metadata, parsed.body, { skipTags: true })
+      openMapping(parsed.metadata, parsed.body, { suggestedSlug: preview.suggested_slug })
       setImportUrl('')
     },
   })
@@ -93,11 +162,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     mutationFn: (url: string) => importRecipe(url),
     onSuccess: preview => {
       const parsed = parseImportedDocument(preview.content)
-      const currentBookmarked = bookmarked
-      const currentTags = tags
-      applyDocumentState(parsed.metadata, parsed.body, { skipTags: true })
-      setBookmarked(currentBookmarked)
-      setTags(currentTags)
+      openMapping(parsed.metadata, parsed.body, {
+        preserveBookmarked: true,
+        preserveTags: true,
+      })
     },
   })
 
@@ -109,6 +177,24 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       setRecipeSlug(recipeQuery.data.slug)
     }
   }, [recipeQuery.data])
+
+  const handleEditIngredient = useCallback(
+    (pos: number, attrs: IngredientAttrs) => {
+      const density = densityForName(attrs.name, catalog)
+      const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
+        densityKgM3: density,
+        unitSystem,
+      })
+      setEditingPos(pos)
+      setIngredientName(attrs.name)
+      setIngredientNote(attrs.note)
+      setIngredientQuantity(display.quantity || attrs.quantity)
+      setIngredientUnit(normalizeUnit(display.unit) ?? '')
+      setIngredientFixed(attrs.fixed)
+      setIngredientDialogOpen(true)
+    },
+    [catalog, unitSystem]
+  )
 
   if (!auth.authenticated) {
     return (
@@ -178,7 +264,11 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           <TabPanel active={activeTab} id="info">
             <div className="grid gap-4 lg:grid-cols-2">
               <Field label="Title">
-                <input className={inputClassName} onChange={event => setTitle(event.target.value)} value={title} />
+                <input
+                  className={inputClassName}
+                  onChange={event => setTitle(event.target.value)}
+                  value={title}
+                />
               </Field>
               <Field label="Slug">
                 <input
@@ -198,10 +288,18 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 />
               </Field>
               <Field label="Time">
-                <input className={inputClassName} onChange={event => setTime(event.target.value)} value={time} />
+                <input
+                  className={inputClassName}
+                  onChange={event => setTime(event.target.value)}
+                  value={time}
+                />
               </Field>
               <Field label="Image URL">
-                <input className={inputClassName} onChange={event => setImage(event.target.value)} value={image} />
+                <input
+                  className={inputClassName}
+                  onChange={event => setImage(event.target.value)}
+                  value={image}
+                />
               </Field>
               <Field className="lg:col-span-2" label="Source URL">
                 <input
@@ -230,27 +328,23 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 />
               </Field>
               <Field className="lg:col-span-2" label="Tags">
-                <TagMultiSelect
-                  availableTags={availableTags}
-                  onChange={setTags}
-                  value={tags}
-                />
+                <TagMultiSelect availableTags={availableTags} onChange={setTags} value={tags} />
               </Field>
             </div>
           </TabPanel>
 
           <TabPanel active={activeTab} id="recipe">
-            <div className="mb-3 flex justify-end">
-              <Button onClick={() => setIngredientDialogOpen(true)} variant="secondary">
+            <div className="mb-3 flex flex-wrap justify-end gap-2">
+              <Button onClick={openAddIngredient} variant="secondary">
                 Add ingredient
               </Button>
             </div>
-            <textarea
-              className="min-h-128 w-full rounded-xl border border-orange-200 bg-orange-50 p-3 font-mono text-sm outline-none ring-orange-500 focus:ring-2"
-              onChange={handleBodyChange}
-              onClick={rememberCursor}
-              onKeyUp={rememberCursor}
-              ref={textareaRef}
+            <RecipeBodyEditor
+              catalog={catalog}
+              onChange={setBody}
+              onEditIngredient={handleEditIngredient}
+              ref={bodyEditorRef}
+              unitSystem={unitSystem}
               value={body}
             />
           </TabPanel>
@@ -262,7 +356,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
       <Dialog labelledBy="ingredient-dialog-title" open={ingredientDialogOpen}>
         <h2 className="text-xl font-bold" id="ingredient-dialog-title">
-          Add ingredient
+          {editingPos !== null ? 'Edit ingredient' : 'Add ingredient'}
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <Field label="Quantity">
@@ -274,28 +368,145 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             />
           </Field>
           <Field label="Unit">
-            <input
-              className={inputClassName}
-              onChange={event => setIngredientUnit(event.target.value)}
-              placeholder="cup"
+            <Autocomplete
+              allowCustom={false}
+              allowEmpty
+              onChange={setIngredientUnit}
+              options={unitOptions}
+              placeholder="optional"
               value={ingredientUnit}
             />
           </Field>
           <Field label="Ingredient">
-            <input
-              className={inputClassName}
-              onChange={event => setIngredientName(event.target.value)}
+            <Autocomplete
+              onChange={setIngredientName}
+              options={ingredientOptions}
               placeholder="flour"
               value={ingredientName}
             />
           </Field>
         </div>
+        <Field className="mt-4" label="Details">
+          <input
+            className={inputClassName}
+            onChange={event => setIngredientNote(event.target.value)}
+            placeholder="large, bittersweet, unsalted…"
+            value={ingredientNote}
+          />
+        </Field>
+        <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-stone-700">
+          <input
+            checked={ingredientFixed}
+            className="h-4 w-4 accent-orange-600"
+            onChange={event => setIngredientFixed(event.target.checked)}
+            type="checkbox"
+          />
+          Fixed amount (does not scale)
+        </label>
+        <p className="mt-2 text-xs text-stone-500">
+          Amounts are entered in {unitSystemEntryLabel(unitSystem)} and stored as grams when
+          convertible.
+          {unitSystem === 'us' && selectedDensity == null
+            ? ' No density on this ingredient — volume units are stored as-is (not grams).'
+            : null}
+        </p>
         <div className="mt-6 flex justify-end gap-2">
           <Button onClick={() => setIngredientDialogOpen(false)} variant="ghost">
             Cancel
           </Button>
-          <Button disabled={!ingredientName.trim()} onClick={insertIngredient}>
-            Add ingredient
+          <Button disabled={!ingredientName.trim()} onClick={saveIngredientToken}>
+            {editingPos !== null ? 'Update ingredient' : 'Add ingredient'}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog labelledBy="import-mapping-title" open={mappingOpen}>
+        <h2 className="text-xl font-bold" id="import-mapping-title">
+          Map imported ingredients
+        </h2>
+        <p className="mt-2 text-sm text-stone-600">
+          Ingredients not in your catalog are highlighted and will be created on apply. Match others
+          to existing entries; extra wording is saved as details.
+        </p>
+        <div className="mt-4 max-h-96 space-y-4 overflow-y-auto">
+          {mappingRows.map((row, index) => {
+            const needsCreate = mappingRowNeedsCreate(row, catalog)
+            const densityRequired = mappingRowNeedsDensity(row, catalog)
+            const densityInvalid = densityRequired && !mappingRowDensityValid(row)
+            return (
+              <div
+                className={`rounded-2xl p-3 ${
+                  needsCreate
+                    ? 'bg-amber-100 ring-1 ring-amber-300'
+                    : 'bg-orange-50 ring-1 ring-orange-100'
+                }`}
+                key={`${row.originalName}-${index}`}
+              >
+                <p className="text-sm font-semibold text-stone-800">
+                  {row.quantity}
+                  {row.unit ? ` ${row.unit}` : ''} {row.originalName}
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="font-semibold text-stone-700">Ingredient</span>
+                    <div className="mt-1">
+                      <Autocomplete
+                        onChange={catalogName => updateMappingRow(index, { catalogName })}
+                        options={ingredientOptions}
+                        placeholder="Search or enter name"
+                        value={row.catalogName}
+                      />
+                    </div>
+                  </label>
+                  <label className="block text-sm">
+                    <span className="font-semibold text-stone-700">Details</span>
+                    <input
+                      className={`${inputClassName} mt-1`}
+                      onChange={event => updateMappingRow(index, { note: event.target.value })}
+                      placeholder="large, bittersweet, unsalted…"
+                      value={row.note}
+                    />
+                  </label>
+                </div>
+                {needsCreate ? (
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Create new ingredient</p>
+                      <p className="mt-1 text-xs text-stone-600">
+                        Provide density for volume conversions between US and metric.
+                      </p>
+                    </div>
+                    <label className="block text-sm">
+                      <span className="font-semibold text-stone-700">
+                        Density (kg/m³){densityRequired ? ' *' : ''}
+                      </span>
+                      <input
+                        className={`${inputClassName} mt-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
+                        onChange={event =>
+                          updateMappingRow(index, { createDensity: event.target.value })
+                        }
+                        placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
+                        value={row.createDensity}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+        {!mappingCanApply ? (
+          <p className="mt-3 text-sm text-red-700">
+            Enter an ingredient name for each row. New ingredients with cup/Tbsp/tsp measures need a
+            density.
+          </p>
+        ) : null}
+        <div className="mt-6 flex justify-end gap-2">
+          <Button onClick={() => setMappingOpen(false)} variant="ghost">
+            Cancel
+          </Button>
+          <Button disabled={!mappingCanApply} onClick={() => void applyMapping()}>
+            Apply mapping
           </Button>
         </div>
       </Dialog>
@@ -359,11 +570,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     return renderDocument(metadata, body)
   }
 
-  function handleBodyChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    setBody(event.target.value)
-    setLastCursor(event.target.selectionStart)
-  }
-
   function handleCancel() {
     navigate(isNew ? '/' : `/recipes/${slug}`)
   }
@@ -393,26 +599,172 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     await reimportMutation.mutateAsync(url)
   }
 
-  function insertIngredient() {
-    const name = ingredientName.trim()
-    const quantity = ingredientQuantity.trim()
-    const unit = ingredientUnit.trim()
-    const amount = unit ? `${quantity}%${unit}` : quantity
-    const marker = `@${name}{${amount}}`
-    const nextBody = `${body.slice(0, lastCursor)}${marker}${body.slice(lastCursor)}`
-    setBody(nextBody)
-    setIngredientName('')
-    setIngredientQuantity('')
-    setIngredientUnit('')
-    setIngredientDialogOpen(false)
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus()
-      textareaRef.current?.setSelectionRange(lastCursor + marker.length, lastCursor + marker.length)
+  function openMapping(
+    metadata: Record<string, unknown>,
+    nextBody: string,
+    options: Omit<PendingImport, 'body' | 'metadata'> = {}
+  ) {
+    const tokens = extractTokens(nextBody)
+    const unique = new Map<string, IngredientToken>()
+    for (const token of tokens) {
+      const key = `${token.name.toLowerCase()}|${token.unit.toLowerCase()}`
+      if (!unique.has(key)) {
+        unique.set(key, token)
+      }
+    }
+    const rows: MappingRow[] = [...unique.values()].map(token => {
+      const match = matchCatalogIngredient(token.name, catalog)
+      return {
+        catalogName: match.catalog?.name ?? token.name,
+        createDensity: '',
+        fixed: token.fixed,
+        note: mergeImportNotes(match.note, token.note),
+        originalName: token.name,
+        quantity: token.quantity,
+        unit: token.unit,
+      }
     })
+    setPendingImport({ body: nextBody, metadata, ...options })
+    setMappingRows(rows)
+    setMappingOpen(true)
   }
 
-  function rememberCursor() {
-    setLastCursor(textareaRef.current?.selectionStart ?? 0)
+  function updateMappingRow(index: number, patch: Partial<MappingRow>) {
+    setMappingRows(current =>
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row))
+    )
+  }
+
+  async function applyMapping() {
+    if (!pendingImport || !mappingCanApply) {
+      return
+    }
+
+    const created: CatalogIngredient[] = []
+    for (const row of mappingRows) {
+      if (!mappingRowNeedsCreate(row, catalog) || !row.catalogName.trim()) {
+        continue
+      }
+      const densityValue = row.createDensity.trim()
+      const density = densityValue ? Number(densityValue) : null
+      if (densityValue && Number.isNaN(density)) {
+        continue
+      }
+      const ingredient = await upsertIngredient({
+        aliases:
+          row.originalName.toLowerCase() === row.catalogName.trim().toLowerCase()
+            ? []
+            : [row.originalName],
+        density_kg_m3: density,
+        name: row.catalogName.trim(),
+      })
+      created.push(ingredient)
+    }
+
+    let workingCatalog = catalog
+    if (created.length) {
+      const nextCatalog = await getIngredientCatalog()
+      await putIngredientCatalog(nextCatalog)
+      queryClient.setQueryData(['ingredients'], nextCatalog)
+      await refreshCatalog()
+      workingCatalog = nextCatalog.ingredients
+    }
+
+    const lookup = new Map<string, MappingRow>()
+    for (const row of mappingRows) {
+      lookup.set(row.originalName.toLowerCase(), row)
+    }
+
+    const nextBody = pendingImport.body.replace(
+      INGREDIENT_TOKEN_RE,
+      (full, bracedName, _amount, bareName) => {
+        const name = (bracedName || bareName || '').trim()
+        if (!name) {
+          return full
+        }
+        const row = lookup.get(name.toLowerCase())
+        if (!row) {
+          return full
+        }
+        return buildMappedIngredientMarker(row, workingCatalog)
+      },
+    )
+
+    const currentBookmarked = bookmarked
+    const currentTags = tags
+    applyDocumentState(pendingImport.metadata, nextBody, { skipTags: true })
+    if (pendingImport.preserveBookmarked) {
+      setBookmarked(currentBookmarked)
+    }
+    if (pendingImport.preserveTags) {
+      setTags(currentTags)
+    } else {
+      setTags(getTagsFromMetadata(pendingImport.metadata.tags))
+    }
+    if (pendingImport.suggestedSlug) {
+      setRecipeSlug(pendingImport.suggestedSlug)
+    }
+    setMappingOpen(false)
+    setPendingImport(null)
+    setActiveTab('recipe')
+  }
+
+  function openAddIngredient() {
+    setEditingPos(null)
+    setIngredientName('')
+    setIngredientNote('')
+    setIngredientQuantity('1')
+    setIngredientUnit(defaultEditorUnit(unitSystem))
+    setIngredientFixed(false)
+    setIngredientDialogOpen(true)
+  }
+
+  function saveIngredientToken() {
+    const name = ingredientName.trim()
+    if (!name) {
+      return
+    }
+
+    const quantityText = ingredientQuantity.trim()
+    const unit = ingredientUnit.trim()
+    const note = ingredientNote.trim()
+    let attrs: IngredientAttrs
+
+    if (!quantityText) {
+      attrs = { fixed: ingredientFixed, name, note, quantity: '', unit: '' }
+    } else if (!unit) {
+      attrs = { fixed: ingredientFixed, name, note, quantity: quantityText, unit: '' }
+    } else {
+      const quantity = parseQuantity(quantityText)
+      const density = densityForName(name, catalog)
+      const grams = quantity === null ? null : toGrams(quantity, unit, density)
+      if (grams == null) {
+        attrs = {
+          fixed: ingredientFixed,
+          name,
+          note,
+          quantity: quantityText,
+          unit: normalizeUnit(unit) ?? unit,
+        }
+      } else {
+        attrs = {
+          fixed: ingredientFixed,
+          name,
+          note,
+          quantity: formatGramsValue(grams),
+          unit: 'g',
+        }
+      }
+    }
+
+    if (editingPos !== null) {
+      bodyEditorRef.current?.updateIngredient(editingPos, attrs)
+    } else {
+      bodyEditorRef.current?.insertIngredient(attrs)
+    }
+
+    setIngredientDialogOpen(false)
+    setEditingPos(null)
   }
 }
 
@@ -477,7 +829,9 @@ function parseSimpleMetadata(frontMatter: string) {
 
 function renderDocument(metadata: Record<string, unknown>, body: string) {
   const lines = Object.entries(metadata)
-    .filter(([, value]) => value !== undefined && value !== null && value !== '' && !isEmptyArray(value))
+    .filter(
+      ([, value]) => value !== undefined && value !== null && value !== '' && !isEmptyArray(value)
+    )
     .flatMap(([key, value]) => renderMetadataValue(key, value))
   return `---\n${lines.join('\n')}\n---\n\n${body.replace(/^\n+/, '')}`
 }
@@ -496,7 +850,32 @@ function renderMetadataValue(key: string, value: unknown): string[] {
 }
 
 function escapeScalar(value: string) {
-  return value.includes(':') || value.includes('#') ? JSON.stringify(value) : value
+  if (yamlScalarNeedsQuotes(value)) {
+    return JSON.stringify(value)
+  }
+  return value
+}
+
+function yamlScalarNeedsQuotes(value: string): boolean {
+  if (!value) {
+    return true
+  }
+  if (/[:#"'[\]{}>&*!|@%`]/.test(value)) {
+    return true
+  }
+  if (/^\s|\s$/.test(value)) {
+    return true
+  }
+  if (/[\n\r\t]/.test(value)) {
+    return true
+  }
+  if (/^(true|false|null|yes|no|on|off|~)$/i.test(value)) {
+    return true
+  }
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) {
+    return true
+  }
+  return false
 }
 
 function parseScalar(value: string) {
@@ -506,8 +885,18 @@ function parseScalar(value: string) {
   if (value === 'false') {
     return false
   }
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    try {
+      return JSON.parse(value) as string
+    } catch {
+      return value.slice(1, -1)
+    }
+  }
   const numeric = Number(value)
-  return Number.isNaN(numeric) ? value.replace(/^['"]|['"]$/g, '') : numeric
+  return Number.isNaN(numeric) ? value : numeric
 }
 
 function getString(value: unknown) {
@@ -537,11 +926,93 @@ function getTagsFromMetadata(value: unknown) {
     return value.map(String).filter(Boolean)
   }
   if (typeof value === 'string') {
-    return value.split(',').map(tag => tag.trim()).filter(Boolean)
+    return value
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean)
   }
   return []
 }
 
 function isEmptyArray(value: unknown) {
   return Array.isArray(value) && value.length === 0
+}
+
+function mappingRowNeedsCreate(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
+  const name = row.catalogName.trim()
+  if (!name) {
+    return true
+  }
+  return !findCatalogIngredient(name, ingredients)
+}
+
+function mappingRowNeedsDensity(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
+  return mappingRowNeedsCreate(row, ingredients) && isVolumeUnit(row.unit)
+}
+
+function mappingRowDensityValid(row: MappingRow): boolean {
+  const density = Number(row.createDensity.trim())
+  return row.createDensity.trim() !== '' && !Number.isNaN(density) && density > 0
+}
+
+function isMappingRowValid(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
+  if (!row.catalogName.trim()) {
+    return false
+  }
+  if (mappingRowNeedsDensity(row, ingredients) && !mappingRowDensityValid(row)) {
+    return false
+  }
+  return true
+}
+
+function mergeImportNotes(...parts: Array<string | null | undefined>): string {
+  return parts
+    .map(part => part?.trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
+function buildMappedIngredientMarker(
+  row: MappingRow,
+  catalog: CatalogIngredient[],
+): string {
+  const targetName = row.catalogName.trim() || row.originalName
+  const catalogItem = findCatalogIngredient(targetName, catalog)
+  const density = catalogItem?.density_kg_m3
+  let quantity = row.quantity
+  let unit = row.unit
+
+  const parsed = parseQuantity(row.quantity)
+  if (parsed !== null && row.unit) {
+    let grams: number | null = null
+    if (isMassUnit(row.unit)) {
+      grams = toGrams(parsed, row.unit)
+    } else if (isVolumeUnit(row.unit)) {
+      grams = toGrams(parsed, row.unit, density)
+    }
+    if (grams !== null) {
+      quantity = formatGramsValue(grams)
+      unit = 'g'
+    } else {
+      unit = normalizeUnit(row.unit) ?? row.unit
+    }
+  }
+
+  return serializeIngredient({
+    fixed: row.fixed,
+    name: targetName,
+    note: row.note,
+    quantity,
+    unit,
+  })
+}
+
+function unitSystemEntryLabel(unitSystem: UnitSystem): string {
+  if (unitSystem === 'us') {
+    return 'cup measures'
+  }
+  if (unitSystem === 'us_weight') {
+    return 'lb/oz'
+  }
+  return 'metric units (g/kg)'
 }

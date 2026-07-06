@@ -10,7 +10,8 @@ FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 TOKEN_CHARS = r"A-Za-z0-9_./' -"
 INGREDIENT_RE = re.compile(
     rf"@(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{(?P<amount>[^}}]*)\}}|"
-    rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|$))"
+    rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|\(|$))"
+    rf"(?:\((?P<preparation>[^)]*)\))?"
 )
 COOKWARE_RE = re.compile(
     rf"#(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{\}}|"
@@ -58,6 +59,19 @@ def render_document(metadata: dict[str, Any], body: str) -> str:
     return f"---\n{front_matter}\n---\n\n{body.lstrip()}"
 
 
+def format_ingredient_markup(name: str, amount: str, note: str | None = None) -> str:
+    markup = f"@{name.strip()}"
+    if amount:
+        markup += f"{{{amount}}}"
+    if note:
+        markup += f"({note})"
+    return markup
+
+
+def ingredient_note_from_match(match: re.Match[str]) -> str | None:
+    return (match.group("preparation") or "").strip() or None
+
+
 def parse_ingredients(body: str, scale: float | None = None, servings: float = 1) -> list[Ingredient]:
     ingredients: list[Ingredient] = []
     factor = None if scale is None else scale / servings
@@ -66,10 +80,12 @@ def parse_ingredients(body: str, scale: float | None = None, servings: float = 1
         if not name:
             continue
         quantity, unit, fixed = split_amount(match.group("amount"))
+        note = ingredient_note_from_match(match)
         ingredients.append(
             Ingredient(
                 fixed=fixed,
                 name=name,
+                note=note,
                 quantity=quantity,
                 scaled_quantity=scale_quantity(quantity, factor, fixed),
                 unit=unit,
@@ -259,10 +275,15 @@ def normalize_body_amounts(body: str) -> str:
             return match.group(0)
         amount = match.group("amount") or ""
         quantity, unit, fixed = split_amount(amount)
+        note = ingredient_note_from_match(match)
         normalized_quantity = normalize_quantity(quantity)
         if normalized_quantity == quantity:
             return match.group(0)
-        return f"@{name.strip()}{{{rebuild_amount(normalized_quantity, unit, fixed, amount)}}}"
+        return format_ingredient_markup(
+            name,
+            rebuild_amount(normalized_quantity, unit, fixed, amount),
+            note,
+        )
 
     return INGREDIENT_RE.sub(replacer, body)
 
@@ -296,10 +317,15 @@ def scale_step_ingredients(step: str, factor: float) -> str:
             return match.group(0)
         amount = match.group("amount") or ""
         quantity, unit, fixed = split_amount(amount)
+        note = ingredient_note_from_match(match)
         scaled_quantity = scale_quantity(quantity, factor, fixed)
         if scaled_quantity == quantity:
             return match.group(0)
-        return f"@{name.strip()}{{{rebuild_amount(scaled_quantity, unit, fixed, amount)}}}"
+        return format_ingredient_markup(
+            name,
+            rebuild_amount(scaled_quantity, unit, fixed, amount),
+            note,
+        )
 
     return INGREDIENT_RE.sub(replacer, step)
 

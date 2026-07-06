@@ -5,6 +5,8 @@ import { BrowserRouter } from 'react-router-dom'
 
 import { App } from './App'
 import { AuthProvider } from './AuthContext'
+import { IngredientCatalogProvider } from './IngredientCatalogContext'
+import { UnitSystemProvider } from './UnitSystemContext'
 import './index.css'
 import { registerServiceWorker } from './registerServiceWorker'
 
@@ -14,9 +16,13 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <UnitSystemProvider>
+          <IngredientCatalogProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </IngredientCatalogProvider>
+        </UnitSystemProvider>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>

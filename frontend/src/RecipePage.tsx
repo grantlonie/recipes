@@ -15,11 +15,18 @@ import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
+import { formatIngredientLabel, extractTokens } from './cooklangTokens'
+import { useIngredientCatalog } from './IngredientCatalogContext'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, revalidateRecipe, storeRecipe } from './sync'
-import { formatQuantityDisplay } from './quantities'
-import type { Ingredient } from './types'
+import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
+import { useUnitSystem } from './UnitSystemContext'
+import {
+  densityForName,
+  formatDisplayAmount,
+  formatIngredientAmount,
+} from './units'
 
 const LOWERCASE_INGREDIENT_WORDS = new Set([
   'and',
@@ -32,10 +39,9 @@ const LOWERCASE_INGREDIENT_WORDS = new Set([
   'to',
   'with',
 ])
-const AMOUNT_PREFIX_RE =
-  /((?:\b(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:bags?|bottles?|boxes?|bunch(?:es)?|cans?|cloves?|cups?|dashes?|gallons?|grams?|kg|lbs?|ml|ounces?|oz|packages?|packets?|pieces?|pinches?|pints?|pounds?|quarts?|slices?|shots?|sprigs?|sticks?|tablespoons?|tbsp|teaspoons?|tsp)(?:\s+of)?\s+)?)@([^{}@]+)\{([^}]*)\}/gi
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
+const SECTION_LINE_RE = /^=+\s*(.+?)\s*=+\s*$/
 
 const ICON_BUTTON_CLASS =
   'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700'
@@ -50,6 +56,8 @@ export function RecipePage() {
   const queryClient = useQueryClient()
   const { addRecentRecipe } = useRecipeListState()
   const { revision, sync } = useRecipeSync()
+  const { unitSystem } = useUnitSystem()
+  const { ingredients: catalog } = useIngredientCatalog()
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () =>
@@ -265,11 +273,10 @@ export function RecipePage() {
               {recipe.ingredients.map((ingredient, index) => (
                 <Fragment key={`${ingredient.name}-${index}`}>
                   <span className="tabular-nums text-stone-600">
-                    {formatQuantityDisplay(ingredient.scaled_quantity ?? ingredient.quantity ?? '')}
-                    {ingredient.unit ? ` ${ingredient.unit}` : ''}
+                    {formatIngredientListAmount(ingredient, unitSystem, catalog)}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
-                  <span>{titleCaseIngredient(ingredient.name)}</span>
+                  <span>{titleCaseIngredient(formatIngredientLabel(ingredient.name, ingredient.note))}</span>
                 </Fragment>
               ))}
             </ul>
@@ -330,7 +337,7 @@ export function RecipePage() {
                     </label>
                     {completed ? null : (
                       <p className="whitespace-pre-line text-stone-800">
-                        {renderCooklangStep(step, recipe.ingredients)}
+                        {renderCooklangStep(step, recipe.ingredients, unitSystem, catalog)}
                       </p>
                     )}
                   </li>
@@ -428,30 +435,55 @@ function titleCaseIngredient(value: string) {
   })
 }
 
-function renderCooklangStep(step: string, ingredients: Ingredient[]) {
+function renderCooklangStep(
+  step: string,
+  ingredients: Ingredient[],
+  unitSystem: UnitSystem,
+  catalog: CatalogIngredient[],
+) {
+  const lines = step.split('\n')
+  if (lines.length === 1) {
+    return renderCooklangLine(step, ingredients, unitSystem, catalog)
+  }
+  return lines.map((line, index) => (
+    <Fragment key={`${index}-${line}`}>
+      {index > 0 ? '\n' : null}
+      {renderCooklangLine(line, ingredients, unitSystem, catalog)}
+    </Fragment>
+  ))
+}
+
+function renderCooklangLine(
+  line: string,
+  ingredients: Ingredient[],
+  unitSystem: UnitSystem,
+  catalog: CatalogIngredient[],
+) {
+  const sectionMatch = line.match(SECTION_LINE_RE)
+  if (sectionMatch) {
+    return (
+      <span className="font-bold uppercase tracking-wide text-orange-800">{sectionMatch[1].trim()}</span>
+    )
+  }
+
   const ingredientMap = new Map(ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient]))
   const markers: StepMarker[] = []
 
-  AMOUNT_PREFIX_RE.lastIndex = 0
-  for (const match of step.matchAll(AMOUNT_PREFIX_RE)) {
-    const [marker, prefix, name, amount] = match
-    const matchIndex = match.index ?? 0
-    const lookup = ingredientMap.get(name.trim().toLowerCase())
-    const ingredient = lookup
-      ? formatIngredientFromRecord(lookup)
-      : prefix
-        ? `${prefix.replace(/\s+of\s+$/i, ' ')}${name.trim()}`
-        : formatIngredientPhrase(name.trim(), amount)
+  for (const token of extractTokens(line)) {
+    const lookup = ingredientMap.get(token.name.toLowerCase())
+    const text = lookup
+      ? formatIngredientFromRecord(lookup, unitSystem, catalog)
+      : formatIngredientFromToken(token, unitSystem, catalog)
     markers.push({
-      index: matchIndex,
-      length: marker.length,
-      text: ingredient,
+      index: token.start,
+      length: token.end - token.start,
+      text,
       type: 'ingredient',
     })
   }
 
   COOKWARE_RE.lastIndex = 0
-  for (const match of step.matchAll(COOKWARE_RE)) {
+  for (const match of line.matchAll(COOKWARE_RE)) {
     const [marker, name] = match
     markers.push({
       index: match.index ?? 0,
@@ -462,7 +494,7 @@ function renderCooklangStep(step: string, ingredients: Ingredient[]) {
   }
 
   TIMER_RE.lastIndex = 0
-  for (const match of step.matchAll(TIMER_RE)) {
+  for (const match of line.matchAll(TIMER_RE)) {
     const [marker, name, amount] = match
     markers.push({
       index: match.index ?? 0,
@@ -483,7 +515,7 @@ function renderCooklangStep(step: string, ingredients: Ingredient[]) {
       continue
     }
     if (marker.index > cursor) {
-      rendered.push(step.slice(cursor, marker.index))
+      rendered.push(line.slice(cursor, marker.index))
     }
     rendered.push(
       <span className={STEP_MARKER_CLASS[marker.type]} key={`${marker.index}-${markerIndex}`}>
@@ -494,11 +526,11 @@ function renderCooklangStep(step: string, ingredients: Ingredient[]) {
     markerIndex += 1
   }
 
-  if (cursor < step.length) {
-    rendered.push(step.slice(cursor))
+  if (cursor < line.length) {
+    rendered.push(line.slice(cursor))
   }
 
-  return rendered.length ? rendered : step
+  return rendered.length ? rendered : line
 }
 
 const STEP_MARKER_CLASS = {
@@ -517,27 +549,60 @@ type StepMarker = {
   type: keyof typeof STEP_MARKER_CLASS
 }
 
-function formatIngredientFromRecord(ingredient: Ingredient) {
-  const quantity = formatQuantityDisplay(ingredient.scaled_quantity ?? ingredient.quantity ?? '')
-  if (!quantity) {
-    return ingredient.name
-  }
-  if (!ingredient.unit) {
-    return `${quantity} ${ingredient.name}`
-  }
-  return `${quantity} ${ingredient.unit} ${ingredient.name}`
+function formatIngredientListAmount(
+  ingredient: Ingredient,
+  unitSystem: UnitSystem,
+  catalog: CatalogIngredient[],
+) {
+  const amount = formatIngredientAmount(
+    ingredient.scaled_quantity ?? ingredient.quantity,
+    ingredient.unit,
+    {
+      densityKgM3: densityForName(ingredient.name, catalog),
+      unitSystem,
+    },
+  )
+  return formatDisplayAmount(amount)
 }
 
-function formatIngredientPhrase(name: string, amount: string) {
-  const { quantity, unit } = splitAmount(amount)
-  if (!quantity) {
-    return name
+function formatIngredientFromRecord(
+  ingredient: Ingredient,
+  unitSystem: UnitSystem,
+  catalog: CatalogIngredient[],
+) {
+  const amount = formatIngredientAmount(
+    ingredient.scaled_quantity ?? ingredient.quantity,
+    ingredient.unit,
+    {
+      densityKgM3: densityForName(ingredient.name, catalog),
+      unitSystem,
+    },
+  )
+  const formatted = formatDisplayAmount(amount)
+  const label = formatIngredientLabel(ingredient.name, ingredient.note)
+  if (!formatted) {
+    return label
   }
-  const formattedQuantity = formatQuantityDisplay(quantity)
-  if (!unit) {
-    return `${formattedQuantity} ${name}`
+  return `${formatted} ${label}`
+}
+
+function formatIngredientFromToken(
+  token: ReturnType<typeof extractTokens>[number],
+  unitSystem: UnitSystem,
+  catalog: CatalogIngredient[],
+) {
+  if (!token.quantity) {
+    return formatIngredientLabel(token.name, token.note)
   }
-  return `${formattedQuantity} ${unit} ${name}`
+  const display = formatIngredientAmount(token.quantity, token.unit, {
+    densityKgM3: densityForName(token.name, catalog),
+    unitSystem,
+  })
+  const formatted = formatDisplayAmount(display)
+  if (!formatted) {
+    return formatIngredientLabel(token.name, token.note)
+  }
+  return `${formatted} ${formatIngredientLabel(token.name, token.note)}`
 }
 
 function formatTimerPhrase(name: string, amount: string) {

@@ -40,6 +40,22 @@ def test_split_amount_parses_quantity_and_unit_without_separator():
     assert split_amount("¼ cup") == ("¼", "cup", False)
     assert split_amount("½ teaspoon") == ("½", "teaspoon", False)
     assert split_amount("1") == ("1", None, False)
+    assert split_amount("=1%packet") == ("1", "packet", True)
+
+
+def test_parse_ingredients_reads_parenthesis_preparation():
+    ingredients = parse_ingredients(
+        "Add @egg yolks{3}(large) and @chocolate{100%g}(bittersweet)."
+    )
+
+    yolks = next(ingredient for ingredient in ingredients if ingredient.name == "egg yolks")
+    chocolate = next(ingredient for ingredient in ingredients if ingredient.name == "chocolate")
+
+    assert yolks.quantity == "3"
+    assert yolks.note == "large"
+    assert chocolate.quantity == "100"
+    assert chocolate.unit == "g"
+    assert chocolate.note == "bittersweet"
 
 
 def test_parse_ingredients_scales_amounts_with_embedded_units():
@@ -84,3 +100,13 @@ def test_scale_steps_updates_ingredient_amounts():
     )
 
     assert steps == ["Mix @flour{0.5%cup} and @salt{0.25%teaspoon}."]
+
+
+def test_scale_steps_preserves_preparation_notes():
+    steps = scale_steps(
+        ["Mix @flour{1%cup}(sifted) and @salt{0.5%teaspoon}."],
+        scale=2,
+        servings=4,
+    )
+
+    assert steps == ["Mix @flour{0.5%cup}(sifted) and @salt{0.25%teaspoon}."]

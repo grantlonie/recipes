@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     def recipe_root(self) -> Path:
         return self.data_root / "recipes"
 
+    @property
+    def ingredients_path(self) -> Path:
+        return self.data_root / "ingredients.json"
+
 
 @lru_cache
 def get_settings() -> Settings:

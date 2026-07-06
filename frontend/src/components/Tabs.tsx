@@ -31,10 +31,7 @@ export function Tabs({ active, items, onChange }: TabsProps) {
 }
 
 export function TabPanel({ active, children, id }: TabPanelProps) {
-  if (active !== id) {
-    return null
-  }
-  return <div>{children}</div>
+  return <div className={active === id ? undefined : 'hidden'}>{children}</div>
 }
 
 interface TabPanelProps {

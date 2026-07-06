@@ -13,12 +13,14 @@ import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 import { useAuth } from './AuthContext'
 import { getLocalTags } from './db'
 import { HomePage } from './HomePage'
+import { IngredientsPage } from './IngredientsPage'
 import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
 import { RecipeListProvider, useRecipeListState } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
 import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
 import { Popover } from './components/Popover'
+import { UnitSystemToggle } from './components/UnitSystemToggle'
 
 export function App() {
   return (
@@ -47,6 +49,7 @@ function AppShell() {
               <img alt="G&E Recipes" className="h-8 w-auto sm:h-10" src="/logo.png" />
             </Link>
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
+              {!isHome ? <UnitSystemToggle /> : null}
               <Popover
                 onClose={() => setSettingsOpen(false)}
                 open={settingsOpen}
@@ -64,14 +67,23 @@ function AppShell() {
                 }
               >
                 {auth.authenticated ? (
-                  <button
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
-                    disabled={logoutPending}
-                    onClick={handleSignOut}
-                    type="button"
-                  >
-                    {logoutPending ? 'Signing out...' : 'Sign out'}
-                  </button>
+                  <>
+                    <Link
+                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
+                      onClick={() => setSettingsOpen(false)}
+                      to="/ingredients"
+                    >
+                      Ingredients
+                    </Link>
+                    <button
+                      className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                      disabled={logoutPending}
+                      onClick={handleSignOut}
+                      type="button"
+                    >
+                      {logoutPending ? 'Signing out...' : 'Sign out'}
+                    </button>
+                  </>
                 ) : (
                   <Link
                     className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50"
@@ -101,6 +113,7 @@ function AppShell() {
         {!isHome ? (
           <Routes>
             <Route element={<LoginPage />} path="/login" />
+            <Route element={<IngredientsPage />} path="/ingredients" />
             <Route element={<RecipeEditPage mode="new" />} path="/recipes/new" />
             <Route element={<RecipeEditPage mode="edit" />} path="/recipes/edit/*" />
             <Route element={<RecipePage />} path="/recipes/*" />
