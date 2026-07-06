@@ -1,10 +1,59 @@
 from app.cooklang import (
     normalize_document,
+    parse_blocks,
     parse_cookware,
     parse_ingredients,
+    prepare_imported_content,
     scale_steps,
     split_amount,
 )
+
+
+def test_split_amount_parses_ml_and_liter_units():
+    assert split_amount("250%ml") == ("250", "ml", False)
+    assert split_amount("250 ml") == ("250", "ml", False)
+    assert split_amount("250ml") == ("250", "ml", False)
+    assert split_amount("1.5%liters") == ("1.5", "l", False)
+    assert split_amount("2 l") == ("2", "l", False)
+
+
+def test_prepare_imported_content_normalizes_volume_units():
+    content = """---
+title: Test
+---
+
+Add @water{250ml} and @milk{1.5%liters}.
+"""
+    normalized = prepare_imported_content(content)
+
+    assert "@water{250%ml}" in normalized
+    assert "@milk{1.5%l}" in normalized
+
+
+def test_parse_blocks_splits_sections_from_steps():
+    blocks = parse_blocks(
+        """==Dough==
+
+Mix @flour{200%g} and @water{100%ml}.
+
+==Filling==
+
+Combine @cheese{100%g} and @spinach{50%g}."""
+    )
+
+    assert [block.kind for block in blocks] == ["section", "step", "section", "step"]
+    assert blocks[0].title == "Dough"
+    assert blocks[1].text == "Mix @flour{200%g} and @water{100%ml}."
+    assert blocks[2].title == "Filling"
+    assert blocks[3].text == "Combine @cheese{100%g} and @spinach{50%g}."
+
+
+def test_parse_blocks_section_and_step_in_same_paragraph():
+    blocks = parse_blocks("==Sauce==\nSimmer @tomatoes{2%cup}.")
+
+    assert [block.kind for block in blocks] == ["section", "step"]
+    assert blocks[0].title == "Sauce"
+    assert blocks[1].text == "Simmer @tomatoes{2%cup}."
 
 
 def test_parse_ingredients_keeps_braced_multi_word_names_together():
@@ -40,6 +89,22 @@ def test_split_amount_parses_quantity_and_unit_without_separator():
     assert split_amount("¼ cup") == ("¼", "cup", False)
     assert split_amount("½ teaspoon") == ("½", "teaspoon", False)
     assert split_amount("1") == ("1", None, False)
+    assert split_amount("=1%packet") == ("1", "packet", True)
+
+
+def test_parse_ingredients_reads_parenthesis_preparation():
+    ingredients = parse_ingredients(
+        "Add @egg yolks{3}(large) and @chocolate{100%g}(bittersweet)."
+    )
+
+    yolks = next(ingredient for ingredient in ingredients if ingredient.name == "egg yolks")
+    chocolate = next(ingredient for ingredient in ingredients if ingredient.name == "chocolate")
+
+    assert yolks.quantity == "3"
+    assert yolks.note == "large"
+    assert chocolate.quantity == "100"
+    assert chocolate.unit == "g"
+    assert chocolate.note == "bittersweet"
 
 
 def test_parse_ingredients_scales_amounts_with_embedded_units():
@@ -84,3 +149,13 @@ def test_scale_steps_updates_ingredient_amounts():
     )
 
     assert steps == ["Mix @flour{0.5%cup} and @salt{0.25%teaspoon}."]
+
+
+def test_scale_steps_preserves_preparation_notes():
+    steps = scale_steps(
+        ["Mix @flour{1%cup}(sifted) and @salt{0.5%teaspoon}."],
+        scale=2,
+        servings=4,
+    )
+
+    assert steps == ["Mix @flour{0.5%cup}(sifted) and @salt{0.25%teaspoon}."]

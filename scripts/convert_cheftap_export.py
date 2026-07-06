@@ -99,6 +99,15 @@ UNIT_ALIASES = {
     "lb": "lb",
     "lbs": "lb",
     "ml": "ml",
+    "milliliter": "ml",
+    "milliliters": "ml",
+    "millilitre": "ml",
+    "millilitres": "ml",
+    "l": "l",
+    "liter": "l",
+    "liters": "l",
+    "litre": "l",
+    "litres": "l",
     "ounce": "oz",
     "ounces": "oz",
     "oz": "oz",
@@ -682,7 +691,11 @@ def split_ingredient(line: str) -> tuple[str | None, str | None, str]:
     remainder = re.sub(r"^\([^)]*\)\s+", "", remainder)
     unit = None
     first, _, rest = remainder.partition(" ")
-    if re.fullmatch(r"\d+(?:\.\d+)?-?(?:oz|ounce|ounces|g|gram|grams|ml|lb|pound|pounds)", first, re.IGNORECASE):
+    if re.fullmatch(
+        r"\d+(?:\.\d+)?-?(?:oz|ounce|ounces|g|gram|grams|ml|milliliters?|millilitres?|l|liters?|litres?|lb|pound|pounds)",
+        first,
+        re.IGNORECASE,
+    ):
         first, _, rest = rest.partition(" ")
     unit_key = clean_unit_token(first)
     if unit_key in UNIT_ALIASES and rest.strip():

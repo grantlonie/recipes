@@ -1,9 +1,11 @@
-import { getRecipe, getSyncManifest, getSyncRecipes } from './api'
+import { getIngredientCatalog, getRecipe, getSyncManifest, getSyncRecipes } from './api'
 import {
   deleteRecipes,
+  getLocalIngredientCatalog,
   getLocalManifest,
   getLocalRecipe,
   getStoredUpdatedAt,
+  putIngredientCatalog,
   putRecipe,
   putRecipes,
   putRecipesDelta,
@@ -12,6 +14,8 @@ import {
 import type { RecipeDetail } from './types'
 
 export async function runSync(): Promise<void> {
+  await syncIngredients()
+
   const manifest = await getSyncManifest()
   const localManifest = await getLocalManifest()
 
@@ -126,4 +130,33 @@ export async function storeRecipe(recipe: RecipeDetail, updatedAt?: string): Pro
   const timestamp = updatedAt ?? entry?.updated_at ?? new Date().toISOString()
   await putRecipe(recipe, timestamp)
   await setManifest(manifest)
+}
+
+export async function syncIngredients(): Promise<void> {
+  const remote = await getIngredientCatalog()
+  const local = await getLocalIngredientCatalog()
+  if (!local || local.version !== remote.version) {
+    await putIngredientCatalog(remote)
+  }
+}
+
+export async function loadIngredientCatalogStaleFirst(
+  onUpdated?: (catalog: import('./types').IngredientCatalog) => void,
+): Promise<import('./types').IngredientCatalog> {
+  const local = await getLocalIngredientCatalog()
+  if (local) {
+    void getIngredientCatalog()
+      .then(async remote => {
+        if (remote.version !== local.version) {
+          await putIngredientCatalog(remote)
+          onUpdated?.(remote)
+        }
+      })
+      .catch(() => undefined)
+    return local
+  }
+
+  const remote = await getIngredientCatalog()
+  await putIngredientCatalog(remote)
+  return remote
 }

@@ -148,7 +148,8 @@ Add @melted unsalted butter{¼ cup} and @vanilla extract{½ teaspoon}.
     assert scaled["melted unsalted butter"].scaled_quantity == "0.125"
     assert scaled["vanilla extract"].scaled_quantity == "0.25"
     assert scaled["vanilla extract"].unit == "teaspoon"
-    assert recipe.steps[0] == (
+    step_blocks = [block for block in recipe.blocks if block.kind == "step"]
+    assert step_blocks[0].text == (
         "Mix @sourdough starter{0.5 cup}, @buttermilk{0.5 cup}, and @egg{0.5}.\n"
         "Add @melted unsalted butter{0.125 cup} and @vanilla extract{0.25 teaspoon}."
     )

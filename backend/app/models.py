@@ -6,9 +6,31 @@ from pydantic import BaseModel, Field, HttpUrl
 class Ingredient(BaseModel):
     fixed: bool = False
     name: str
+    note: str | None = None
     quantity: str | None = None
     scaled_quantity: str | None = None
     unit: str | None = None
+
+
+class CatalogIngredient(BaseModel):
+    name: str
+    density_kg_m3: float | None = None
+    aliases: list[str] = Field(default_factory=list)
+
+
+class IngredientCatalog(BaseModel):
+    version: int = 1
+    ingredients: list[CatalogIngredient] = Field(default_factory=list)
+
+
+class RecipeSection(BaseModel):
+    kind: str = "section"
+    title: str
+
+
+class RecipeStep(BaseModel):
+    kind: str = "step"
+    text: str
 
 
 class RecipeSummary(BaseModel):
@@ -29,7 +51,7 @@ class RecipeDetail(RecipeSummary):
     ingredients: list[Ingredient] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     public_url: str
-    steps: list[str] = Field(default_factory=list)
+    blocks: list[RecipeSection | RecipeStep] = Field(default_factory=list)
     timers: list[str] = Field(default_factory=list)
 
 

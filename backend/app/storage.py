@@ -92,8 +92,8 @@ class RecipeRepository:
                 "ingredients": cooklang.parse_ingredients(
                     body, scale=scaled_servings, servings=recipe.servings
                 ),
-                "steps": cooklang.scale_steps(
-                    recipe.steps, scale=scaled_servings, servings=recipe.servings
+                "blocks": cooklang.scale_blocks(
+                    recipe.blocks, scale=scaled_servings, servings=recipe.servings
                 ),
             }
         )
@@ -155,7 +155,7 @@ class RecipeRepository:
             public_url=f"{self.app_base_url.rstrip('/')}/recipes/{quote(slug)}",
             servings=servings,
             slug=slug,
-            steps=cooklang.parse_steps(body),
+            blocks=cooklang.parse_blocks(body),
             tags=cooklang.metadata_tags(metadata),
             timers=cooklang.parse_timers(body),
             title=title,

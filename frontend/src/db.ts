@@ -1,10 +1,11 @@
-import type { RecipeDetail, RecipeSummary, SyncManifest } from './types'
+import type { IngredientCatalog, RecipeDetail, RecipeSummary, SyncManifest } from './types'
 
 const DB_NAME = 'recipes-app'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const RECIPES_STORE = 'recipes'
 const META_STORE = 'meta'
 const MANIFEST_KEY = 'manifest'
+const INGREDIENTS_KEY = 'ingredients'
 
 export interface StoredRecipe {
   slug: string
@@ -170,6 +171,22 @@ export async function setManifest(manifest: SyncManifest): Promise<void> {
   const db = await openDb()
   const transaction = db.transaction(META_STORE, 'readwrite')
   transaction.objectStore(META_STORE).put(manifest, MANIFEST_KEY)
+  await transactionDone(transaction)
+  db.close()
+}
+
+export async function getLocalIngredientCatalog(): Promise<IngredientCatalog | null> {
+  const db = await openDb()
+  const transaction = db.transaction(META_STORE, 'readonly')
+  const catalog = await requestToPromise(transaction.objectStore(META_STORE).get(INGREDIENTS_KEY))
+  db.close()
+  return (catalog as IngredientCatalog | undefined) ?? null
+}
+
+export async function putIngredientCatalog(catalog: IngredientCatalog): Promise<void> {
+  const db = await openDb()
+  const transaction = db.transaction(META_STORE, 'readwrite')
+  transaction.objectStore(META_STORE).put(catalog, INGREDIENTS_KEY)
   await transactionDone(transaction)
   db.close()
 }

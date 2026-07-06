@@ -4,13 +4,15 @@ from typing import Any
 
 import yaml
 
-from app.models import Ingredient
+from app.models import Ingredient, RecipeSection, RecipeStep
+from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 TOKEN_CHARS = r"A-Za-z0-9_./' -"
 INGREDIENT_RE = re.compile(
     rf"@(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{(?P<amount>[^}}]*)\}}|"
-    rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|$))"
+    rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|\(|$))"
+    rf"(?:\((?P<preparation>[^)]*)\))?"
 )
 COOKWARE_RE = re.compile(
     rf"#(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{\}}|"
@@ -18,6 +20,7 @@ COOKWARE_RE = re.compile(
 )
 TIMER_RE = re.compile(r"~(?P<name>[A-Za-z0-9_./' -]*?)?\{(?P<amount>[^}]*)\}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
+SECTION_LINE_RE = re.compile(r"^=+\s*(.+?)\s*=+\s*$")
 UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"
 QUANTITY_PATTERN = (
     rf"(?:\d+\s+\d+/\d+|\d+\s+[{UNICODE_FRACTION_CHARS}]|\d+/\d+|\d+(?:\.\d+)?|[{UNICODE_FRACTION_CHARS}])"
@@ -58,6 +61,19 @@ def render_document(metadata: dict[str, Any], body: str) -> str:
     return f"---\n{front_matter}\n---\n\n{body.lstrip()}"
 
 
+def format_ingredient_markup(name: str, amount: str, note: str | None = None) -> str:
+    markup = f"@{name.strip()}"
+    if amount:
+        markup += f"{{{amount}}}"
+    if note:
+        markup += f"({note})"
+    return markup
+
+
+def ingredient_note_from_match(match: re.Match[str]) -> str | None:
+    return (match.group("preparation") or "").strip() or None
+
+
 def parse_ingredients(body: str, scale: float | None = None, servings: float = 1) -> list[Ingredient]:
     ingredients: list[Ingredient] = []
     factor = None if scale is None else scale / servings
@@ -66,10 +82,12 @@ def parse_ingredients(body: str, scale: float | None = None, servings: float = 1
         if not name:
             continue
         quantity, unit, fixed = split_amount(match.group("amount"))
+        note = ingredient_note_from_match(match)
         ingredients.append(
             Ingredient(
                 fixed=fixed,
                 name=name,
+                note=note,
                 quantity=quantity,
                 scaled_quantity=scale_quantity(quantity, factor, fixed),
                 unit=unit,
@@ -104,13 +122,38 @@ def parse_notes(metadata: dict[str, Any], body: str) -> list[str]:
     return notes
 
 
-def parse_steps(body: str) -> list[str]:
-    steps: list[str] = []
+def parse_blocks(body: str) -> list[RecipeSection | RecipeStep]:
+    blocks: list[RecipeSection | RecipeStep] = []
     for block in re.split(r"\n\s*\n", body.strip()):
-        step = "\n".join(line for line in block.splitlines() if not line.lstrip().startswith(">")).strip()
-        if step:
-            steps.append(step)
-    return steps
+        lines = [line for line in block.splitlines() if not line.lstrip().startswith(">")]
+        index = 0
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if not stripped:
+                index += 1
+                continue
+            section_match = SECTION_LINE_RE.match(stripped)
+            if section_match:
+                blocks.append(RecipeSection(title=section_match.group(1).strip()))
+                index += 1
+                continue
+            step_lines: list[str] = []
+            while index < len(lines):
+                line = lines[index].strip()
+                if not line:
+                    index += 1
+                    continue
+                if SECTION_LINE_RE.match(line):
+                    break
+                step_lines.append(lines[index])
+                index += 1
+            if step_lines:
+                blocks.append(RecipeStep(text="\n".join(step_lines).strip()))
+    return blocks
+
+
+def parse_steps(body: str) -> list[str]:
+    return [block.text for block in parse_blocks(body) if isinstance(block, RecipeStep)]
 
 
 def metadata_tags(metadata: dict[str, Any]) -> list[str]:
@@ -211,12 +254,17 @@ def split_amount(amount: str | None) -> tuple[str | None, str | None, bool]:
     value = amount[1:] if fixed else amount
     if "%" in value:
         quantity, unit = value.split("%", 1)
-        return quantity.strip() or None, unit.strip() or None, fixed
+        unit = normalize_unit(unit.strip()) if unit.strip() else None
+        return quantity.strip() or None, unit, fixed
     match = AMOUNT_WITHOUT_SEPARATOR_RE.match(value.strip())
     if match:
         quantity = match.group("quantity").strip() or None
         unit = match.group("unit")
-        return quantity, unit.strip() or None if unit else None, fixed
+        unit = normalize_unit(unit.strip()) if unit else None
+        return quantity, unit, fixed
+    quantity, unit = split_glued_amount(value.strip(), parse_quantity=parse_quantity_to_fraction)
+    if quantity:
+        return quantity, unit, fixed
     return value.strip() or None, None, fixed
 
 
@@ -255,7 +303,37 @@ def normalize_document(content: str) -> str:
 def prepare_imported_content(content: str) -> str:
     metadata, body = parse_document(content)
     metadata.pop("tags", None)
+    body = normalize_ingredient_amounts(body)
     return normalize_document(render_document(metadata, body))
+
+
+def normalize_ingredient_amounts(body: str) -> str:
+    def replacer(match: re.Match[str]) -> str:
+        name = match.group("name_braced")
+        if not name:
+            return match.group(0)
+        amount = match.group("amount") or ""
+        quantity, unit, fixed = split_amount(amount)
+        note = ingredient_note_from_match(match)
+        if quantity is None and unit is None:
+            return match.group(0)
+        inner = format_canonical_amount(quantity, unit, fixed)
+        return format_ingredient_markup(name, inner, note)
+
+    return INGREDIENT_RE.sub(replacer, body)
+
+
+def format_canonical_amount(
+    quantity: str | None,
+    unit: str | None,
+    fixed: bool,
+) -> str:
+    prefix = "=" if fixed else ""
+    if unit:
+        return f"{prefix}{quantity}%{unit}"
+    if quantity:
+        return f"{prefix}{quantity}"
+    return ""
 
 
 def normalize_body_amounts(body: str) -> str:
@@ -265,10 +343,15 @@ def normalize_body_amounts(body: str) -> str:
             return match.group(0)
         amount = match.group("amount") or ""
         quantity, unit, fixed = split_amount(amount)
+        note = ingredient_note_from_match(match)
         normalized_quantity = normalize_quantity(quantity)
         if normalized_quantity == quantity:
             return match.group(0)
-        return f"@{name.strip()}{{{rebuild_amount(normalized_quantity, unit, fixed, amount)}}}"
+        return format_ingredient_markup(
+            name,
+            rebuild_amount(normalized_quantity, unit, fixed, amount),
+            note,
+        )
 
     return INGREDIENT_RE.sub(replacer, body)
 
@@ -288,6 +371,23 @@ def rebuild_amount(
     return f"{prefix}{quantity}"
 
 
+def scale_blocks(
+    blocks: list[RecipeSection | RecipeStep],
+    scale: float | None = None,
+    servings: float = 1,
+) -> list[RecipeSection | RecipeStep]:
+    if scale is None:
+        return blocks
+    factor = scale / servings
+    scaled: list[RecipeSection | RecipeStep] = []
+    for block in blocks:
+        if isinstance(block, RecipeSection):
+            scaled.append(block)
+        else:
+            scaled.append(RecipeStep(text=scale_step_ingredients(block.text, factor)))
+    return scaled
+
+
 def scale_steps(steps: list[str], scale: float | None = None, servings: float = 1) -> list[str]:
     if scale is None:
         return steps
@@ -302,10 +402,15 @@ def scale_step_ingredients(step: str, factor: float) -> str:
             return match.group(0)
         amount = match.group("amount") or ""
         quantity, unit, fixed = split_amount(amount)
+        note = ingredient_note_from_match(match)
         scaled_quantity = scale_quantity(quantity, factor, fixed)
         if scaled_quantity == quantity:
             return match.group(0)
-        return f"@{name.strip()}{{{rebuild_amount(scaled_quantity, unit, fixed, amount)}}}"
+        return format_ingredient_markup(
+            name,
+            rebuild_amount(scaled_quantity, unit, fixed, amount),
+            note,
+        )
 
     return INGREDIENT_RE.sub(replacer, step)
 

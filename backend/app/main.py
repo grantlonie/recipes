@@ -9,11 +9,14 @@ from fastapi.staticfiles import StaticFiles
 from app import auth
 from app.config import Settings, get_settings
 from app.importer import ImportError, import_from_url
+from app.ingredients import IngredientRepository, IngredientStorageError
 from app.manifest import build_web_manifest
 from app.models import (
     AuthState,
+    CatalogIngredient,
     ImportPreview,
     ImportRequest,
+    IngredientCatalog,
     LoginRequest,
     MetadataUpdate,
     RecipeDetail,
@@ -34,6 +37,7 @@ async def lifespan(app: FastAPI) -> Iterator[None]:
         app_base_url=settings.app_base_url,
         recipe_root=settings.recipe_root,
     )
+    app.state.ingredients = IngredientRepository(catalog_path=settings.ingredients_path)
     yield
 
 
@@ -42,6 +46,10 @@ app = FastAPI(title="Recipes", lifespan=lifespan)
 
 def get_repository(request: Request) -> RecipeRepository:
     return request.app.state.repository
+
+
+def get_ingredients(request: Request) -> IngredientRepository:
+    return request.app.state.ingredients
 
 
 @app.get("/health")
@@ -102,6 +110,40 @@ def list_recipes(
 def list_tags(repository: RecipeRepository = Depends(get_repository)) -> list[str]:
     tags = {tag for recipe in repository.list_recipes() for tag in recipe.tags}
     return sorted(tags, key=str.casefold)
+
+
+@app.get("/api/ingredients")
+def get_ingredient_catalog(
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> IngredientCatalog:
+    return ingredients.get_catalog()
+
+
+@app.put("/api/ingredients", dependencies=[Depends(auth.require_editor)])
+def upsert_ingredient(
+    payload: CatalogIngredient,
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> CatalogIngredient:
+    try:
+        return ingredients.upsert(payload)
+    except IngredientStorageError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@app.delete(
+    "/api/ingredients/{name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(auth.require_editor)],
+)
+def delete_ingredient(
+    name: str,
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> Response:
+    try:
+        ingredients.delete(name)
+    except IngredientStorageError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @app.post("/api/import", dependencies=[Depends(auth.require_editor)])

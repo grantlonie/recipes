@@ -3,12 +3,26 @@ export interface AuthState {
   username?: string | null
 }
 
+export type UnitSystem = 'metric' | 'us' | 'us_weight'
+
 export interface Ingredient {
   fixed: boolean
   name: string
+  note?: string | null
   quantity?: string | null
   scaled_quantity?: string | null
   unit?: string | null
+}
+
+export interface CatalogIngredient {
+  name: string
+  density_kg_m3?: number | null
+  aliases: string[]
+}
+
+export interface IngredientCatalog {
+  version: number
+  ingredients: CatalogIngredient[]
 }
 
 export interface RecipeSummary {
@@ -23,13 +37,17 @@ export interface RecipeSummary {
   title: string
 }
 
+export type RecipeBlock =
+  | { kind: 'section'; title: string }
+  | { kind: 'step'; text: string }
+
 export interface RecipeDetail extends RecipeSummary {
   content: string
   cookware: string[]
   ingredients: Ingredient[]
   metadata: Record<string, unknown>
   public_url: string
-  steps: string[]
+  blocks?: RecipeBlock[]
   timers: string[]
 }
 

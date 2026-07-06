@@ -1,6 +1,8 @@
 import type {
   AuthState,
+  CatalogIngredient,
   ImportPreview,
+  IngredientCatalog,
   RecipeDetail,
   RecipeMetadataInput,
   RecipeSummary,
@@ -50,6 +52,21 @@ export async function getScaledRecipe(slug: string, servings: number): Promise<R
 
 export async function getTags(): Promise<string[]> {
   return request('/api/tags')
+}
+
+export async function getIngredientCatalog(): Promise<IngredientCatalog> {
+  return request('/api/ingredients')
+}
+
+export async function upsertIngredient(ingredient: CatalogIngredient): Promise<CatalogIngredient> {
+  return request('/api/ingredients', {
+    body: JSON.stringify(ingredient),
+    method: 'PUT',
+  })
+}
+
+export async function deleteIngredient(name: string): Promise<void> {
+  return request(`/api/ingredients/${encodeURIComponent(name)}`, { method: 'DELETE' })
 }
 
 export async function importRecipe(url: string): Promise<ImportPreview> {
