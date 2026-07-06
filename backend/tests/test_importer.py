@@ -24,6 +24,9 @@ DONE_PAGE = """
   <code id="cook-code" class="language-cooklang">---
 title: Chicken &amp; bacon pasta
 source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta
+tags:
+  - dinner
+  - pasta
 ---
 
 Add @chicken{} and @bacon{}.</code>
@@ -63,6 +66,7 @@ def test_import_from_url_polls_until_recipe_is_ready():
 
     assert preview.suggested_slug == "chicken-bacon-pasta"
     assert "Add @chicken{} and @bacon{}." in preview.content
+    assert "tags:" not in preview.content
     assert calls["count"] == 2
 
 

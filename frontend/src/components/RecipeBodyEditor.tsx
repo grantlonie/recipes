@@ -76,9 +76,12 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
         },
         handlePaste(_view, event) {
           const text = event.clipboardData?.getData('text/plain')
+          if (!text) {
+            return false
+          }
           if (
-            !text?.includes('@') &&
-            !text?.includes('>') &&
+            !text.includes('@') &&
+            !text.includes('>') &&
             !/^=+\s*.+\s*=+\s*$/m.test(text)
           ) {
             return false

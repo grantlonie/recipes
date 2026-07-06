@@ -268,6 +268,12 @@ def normalize_document(content: str) -> str:
     return render_document(metadata, normalize_body_amounts(body))
 
 
+def prepare_imported_content(content: str) -> str:
+    metadata, body = parse_document(content)
+    metadata.pop("tags", None)
+    return normalize_document(render_document(metadata, body))
+
+
 def normalize_body_amounts(body: str) -> str:
     def replacer(match: re.Match[str]) -> str:
         name = match.group("name_braced")

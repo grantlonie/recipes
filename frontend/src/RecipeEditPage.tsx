@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { FormEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import {
   createRecipe,
@@ -29,6 +29,7 @@ import { useIngredientCatalog } from './IngredientCatalogContext'
 import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
+import { buildLoginUrl } from './shareImport'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import type { CatalogIngredient, UnitSystem } from './types'
 import {
@@ -73,6 +74,8 @@ interface PendingImport {
 export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const { '*': slug = '' } = useParams()
   const { auth } = useAuth()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { revision, sync } = useRecipeSync()
@@ -86,7 +89,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [body, setBody] = useState(emptyBody)
   const [description, setDescription] = useState('')
   const [image, setImage] = useState('')
-  const [importUrl, setImportUrl] = useState('')
+  const [importUrl, setImportUrl] = useState(searchParams.get('url') ?? '')
   const [ingredientDialogOpen, setIngredientDialogOpen] = useState(false)
   const [editingPos, setEditingPos] = useState<number | null>(null)
   const [ingredientName, setIngredientName] = useState('')
@@ -203,7 +206,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         <p className="mt-2 text-stone-600">Editor access is required to change recipe files.</p>
         <Link
           className="mt-6 inline-flex rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-          to="/login"
+          to={buildLoginUrl(`${location.pathname}${location.search}`)}
         >
           Sign in
         </Link>

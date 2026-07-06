@@ -24,9 +24,3 @@ select,
 textarea {
   font: inherit;
 }
-
-.home-scroll {
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-  overscroll-behavior-y: contain;
-}

@@ -50,7 +50,7 @@ def _import_with_client(recipe_url: str, client: httpx.Client) -> ImportPreview:
     if not content:
         raise ImportError("Recipe import returned empty content")
 
-    content = cooklang.normalize_document(content)
+    content = cooklang.prepare_imported_content(content)
     return ImportPreview(content=content + "\n", suggested_slug=suggest_slug(recipe_url, content))
 
 
