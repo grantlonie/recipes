@@ -121,6 +121,13 @@ export function isVolumeUnit(unit: string | null | undefined): boolean {
   return canonical !== null && canonical in VOLUME_TO_ML
 }
 
+const US_COOKING_VOLUME_UNITS = new Set(['cup', 'Tbsp', 'tsp'])
+
+export function isUsCookingVolumeUnit(unit: string | null | undefined): boolean {
+  const canonical = normalizeUnit(unit)
+  return canonical !== null && US_COOKING_VOLUME_UNITS.has(canonical)
+}
+
 export function toGrams(
   quantity: number,
   unit: string | null | undefined,

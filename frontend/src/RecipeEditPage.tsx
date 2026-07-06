@@ -19,6 +19,7 @@ import { ImportingDialog } from './components/ImportingDialog'
 import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/RecipeBodyEditor'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
+import { VolumeQuantitySelect } from './components/VolumeQuantitySelect'
 import {
   extractTokens,
   INGREDIENT_TOKEN_RE,
@@ -42,6 +43,7 @@ import {
   formatGramsValue,
   formatIngredientAmount,
   isMassUnit,
+  isUsCookingVolumeUnit,
   isVolumeUnit,
   matchCatalogIngredient,
   normalizeUnit,
@@ -380,12 +382,19 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <Field label="Quantity">
-            <input
-              className={inputClassName}
-              onChange={event => setIngredientQuantity(event.target.value)}
-              placeholder="1"
-              value={ingredientQuantity}
-            />
+            {isUsCookingVolumeUnit(ingredientUnit) ? (
+              <VolumeQuantitySelect
+                onChange={setIngredientQuantity}
+                value={ingredientQuantity}
+              />
+            ) : (
+              <input
+                className={inputClassName}
+                onChange={event => setIngredientQuantity(event.target.value)}
+                placeholder="1"
+                value={ingredientQuantity}
+              />
+            )}
           </Field>
           <Field label="Unit">
             <Autocomplete

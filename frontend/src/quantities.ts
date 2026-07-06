@@ -20,6 +20,51 @@ const EIGHTH_UNICODE: Record<number, string> = {
   7: '⅞',
 }
 
+export const EIGHTH_FRACTION_OPTIONS: Array<{ eighths: number; label: string }> = [
+  { eighths: 0, label: '—' },
+  { eighths: 1, label: '⅛' },
+  { eighths: 2, label: '¼' },
+  { eighths: 3, label: '⅜' },
+  { eighths: 4, label: '½' },
+  { eighths: 5, label: '⅝' },
+  { eighths: 6, label: '¾' },
+  { eighths: 7, label: '⅞' },
+]
+
+export interface QuantityEighthParts {
+  whole: number
+  remainderEighths: number
+}
+
+export function quantityToEighthParts(value: string): QuantityEighthParts {
+  const parsed = parseQuantity(value)
+  if (parsed === null) {
+    return { whole: 0, remainderEighths: 0 }
+  }
+
+  const eighths = Math.round(parsed * 8)
+  return {
+    whole: Math.floor(eighths / 8),
+    remainderEighths: ((eighths % 8) + 8) % 8,
+  }
+}
+
+export function eighthPartsToQuantity(whole: number, remainderEighths: number): string {
+  if (whole === 0 && remainderEighths === 0) {
+    return ''
+  }
+
+  if (remainderEighths === 0) {
+    return String(whole)
+  }
+
+  const fraction = EIGHTH_UNICODE[remainderEighths] ?? `${remainderEighths}/8`
+  if (whole === 0) {
+    return fraction
+  }
+  return `${whole} ${fraction}`
+}
+
 export function parseQuantity(value: string): number | null {
   const trimmed = value.trim()
   if (!trimmed) {
