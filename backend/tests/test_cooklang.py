@@ -1,10 +1,37 @@
 from app.cooklang import (
     normalize_document,
+    parse_blocks,
     parse_cookware,
     parse_ingredients,
     scale_steps,
     split_amount,
 )
+
+
+def test_parse_blocks_splits_sections_from_steps():
+    blocks = parse_blocks(
+        """==Dough==
+
+Mix @flour{200%g} and @water{100%ml}.
+
+==Filling==
+
+Combine @cheese{100%g} and @spinach{50%g}."""
+    )
+
+    assert [block.kind for block in blocks] == ["section", "step", "section", "step"]
+    assert blocks[0].title == "Dough"
+    assert blocks[1].text == "Mix @flour{200%g} and @water{100%ml}."
+    assert blocks[2].title == "Filling"
+    assert blocks[3].text == "Combine @cheese{100%g} and @spinach{50%g}."
+
+
+def test_parse_blocks_section_and_step_in_same_paragraph():
+    blocks = parse_blocks("==Sauce==\nSimmer @tomatoes{2%cup}.")
+
+    assert [block.kind for block in blocks] == ["section", "step"]
+    assert blocks[0].title == "Sauce"
+    assert blocks[1].text == "Simmer @tomatoes{2%cup}."
 
 
 def test_parse_ingredients_keeps_braced_multi_word_names_together():

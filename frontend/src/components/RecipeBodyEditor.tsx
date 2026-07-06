@@ -14,25 +14,29 @@ import type { CatalogIngredient, UnitSystem } from '../types'
 import { CookNoteExtension } from './cookNoteExtension'
 import { IngredientExtension } from './ingredientExtension'
 import { setIngredientDisplayState } from './ingredientDisplayStore'
+import { setSectionDisplayState } from './sectionDisplayStore'
 import { SectionExtension } from './sectionExtension'
 
 export interface RecipeBodyEditorHandle {
   focus: () => void
   insertIngredient: (attrs: IngredientAttrs) => void
+  insertSection: (title: string) => void
   updateIngredient: (pos: number, attrs: IngredientAttrs) => void
+  updateSection: (pos: number, title: string) => void
 }
 
 interface RecipeBodyEditorProps {
   catalog: CatalogIngredient[]
   onChange: (body: string) => void
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
+  onEditSection: (pos: number, title: string) => void
   unitSystem: UnitSystem
   value: string
 }
 
 export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEditorProps>(
   function RecipeBodyEditor(
-    { catalog, onChange, onEditIngredient, unitSystem, value },
+    { catalog, onChange, onEditIngredient, onEditSection, unitSystem, value },
     ref,
   ) {
     const onChangeRef = useRef(onChange)
@@ -108,6 +112,10 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
     }, [catalog, onEditIngredient, unitSystem])
 
     useEffect(() => {
+      setSectionDisplayState({ onEditSection })
+    }, [onEditSection])
+
+    useEffect(() => {
       if (!editor || editor.isDestroyed) {
         return
       }
@@ -136,6 +144,16 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
             ])
             .run()
         },
+        insertSection(title) {
+          if (!editor) {
+            return
+          }
+          editor
+            .chain()
+            .focus()
+            .insertContent({ type: 'section', attrs: { title } })
+            .run()
+        },
         updateIngredient(pos, attrs) {
           if (!editor) {
             return
@@ -149,6 +167,23 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
             .focus()
             .command(({ tr }) => {
               tr.setNodeMarkup(pos, undefined, attrs)
+              return true
+            })
+            .run()
+        },
+        updateSection(pos, title) {
+          if (!editor) {
+            return
+          }
+          const node = editor.state.doc.nodeAt(pos)
+          if (!node || node.type.name !== 'section') {
+            return
+          }
+          editor
+            .chain()
+            .focus()
+            .command(({ tr }) => {
+              tr.setNodeMarkup(pos, undefined, { title })
               return true
             })
             .run()

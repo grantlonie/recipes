@@ -16,6 +16,7 @@ import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
 import { formatIngredientLabel, extractTokens } from './cooklangTokens'
+import { getRecipeBlocks } from './cooklangEditor'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
@@ -41,7 +42,6 @@ const LOWERCASE_INGREDIENT_WORDS = new Set([
 ])
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
-const SECTION_LINE_RE = /^=+\s*(.+?)\s*=+\s*$/
 
 const ICON_BUTTON_CLASS =
   'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700'
@@ -157,6 +157,8 @@ export function RecipePage() {
   if (!recipe) {
     return null
   }
+
+  const blocks = getRecipeBlocks(recipe)
 
   return (
     <article className="space-y-8 pb-8">
@@ -345,17 +347,31 @@ export function RecipePage() {
 
           <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
             <h2 className="text-lg font-semibold">Steps</h2>
-            <ol className="mt-4 space-y-4">
-              {recipe.steps.map((step, index) => {
-                const completed = completedSteps.has(index)
-                const checkboxId = `step-${index + 1}-complete`
+            <div className="mt-4 space-y-4">
+              {blocks.map((block, index) => {
+                if (block.kind === 'section') {
+                  return (
+                    <h3
+                      className="pt-1 text-sm font-bold uppercase tracking-wide text-orange-800"
+                      key={`section-${index}`}
+                    >
+                      {block.title}
+                    </h3>
+                  )
+                }
+
+                const stepIndex = blocks
+                  .slice(0, index)
+                  .filter(item => item.kind === 'step').length
+                const completed = completedSteps.has(stepIndex)
+                const checkboxId = `step-${stepIndex + 1}-complete`
 
                 return (
-                  <li
+                  <div
                     className={`rounded-xl bg-orange-50 p-4 transition-all ${
                       completed ? 'py-2' : ''
                     }`}
-                    key={`${step}-${index}`}
+                    key={`step-${index}`}
                   >
                     <label
                       className={`flex cursor-pointer items-center gap-3 text-sm font-semibold text-orange-700 ${
@@ -367,20 +383,20 @@ export function RecipePage() {
                         checked={completed}
                         className="h-4 w-4 rounded border-orange-300 text-orange-600 accent-orange-600"
                         id={checkboxId}
-                        onChange={() => toggleStepCompletion(index)}
+                        onChange={() => toggleStepCompletion(stepIndex)}
                         type="checkbox"
                       />
-                      <span>Step {index + 1}</span>
+                      <span>Step {stepIndex + 1}</span>
                     </label>
                     {completed ? null : (
                       <p className="whitespace-pre-line text-stone-800">
-                        {renderCooklangStep(step, recipe.ingredients, unitSystem, catalog)}
+                        {renderCooklangStep(block.text, recipe.ingredients, unitSystem, catalog)}
                       </p>
                     )}
-                  </li>
+                  </div>
                 )
               })}
-            </ol>
+            </div>
           </section>
         </div>
       </div>
@@ -496,13 +512,6 @@ function renderCooklangLine(
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
 ) {
-  const sectionMatch = line.match(SECTION_LINE_RE)
-  if (sectionMatch) {
-    return (
-      <span className="font-bold uppercase tracking-wide text-orange-800">{sectionMatch[1].trim()}</span>
-    )
-  }
-
   const ingredientMap = new Map(ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient]))
   const markers: StepMarker[] = []
 

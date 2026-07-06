@@ -97,6 +97,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [ingredientQuantity, setIngredientQuantity] = useState('')
   const [ingredientUnit, setIngredientUnit] = useState('')
   const [ingredientFixed, setIngredientFixed] = useState(false)
+  const [sectionDialogOpen, setSectionDialogOpen] = useState(false)
+  const [editingSectionPos, setEditingSectionPos] = useState<number | null>(null)
+  const [sectionTitle, setSectionTitle] = useState('')
   const [mappingOpen, setMappingOpen] = useState(false)
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -196,8 +199,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       setIngredientFixed(attrs.fixed)
       setIngredientDialogOpen(true)
     },
-    [catalog, unitSystem]
+    [catalog, unitSystem],
   )
+
+  const handleEditSection = useCallback((pos: number, title: string) => {
+    setEditingSectionPos(pos)
+    setSectionTitle(title)
+    setSectionDialogOpen(true)
+  }, [])
 
   if (!auth.authenticated) {
     return (
@@ -338,6 +347,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
           <TabPanel active={activeTab} id="recipe">
             <div className="mb-3 flex flex-wrap justify-end gap-2">
+              <Button onClick={openAddSection} variant="secondary">
+                Add section
+              </Button>
               <Button onClick={openAddIngredient} variant="secondary">
                 Add ingredient
               </Button>
@@ -346,6 +358,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               catalog={catalog}
               onChange={setBody}
               onEditIngredient={handleEditIngredient}
+              onEditSection={handleEditSection}
               ref={bodyEditorRef}
               unitSystem={unitSystem}
               value={body}
@@ -419,6 +432,29 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </Button>
           <Button disabled={!ingredientName.trim()} onClick={saveIngredientToken}>
             {editingPos !== null ? 'Update ingredient' : 'Add ingredient'}
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog labelledBy="section-dialog-title" open={sectionDialogOpen}>
+        <h2 className="text-xl font-bold" id="section-dialog-title">
+          {editingSectionPos !== null ? 'Edit section' : 'Add section'}
+        </h2>
+        <Field className="mt-4" label="Section name">
+          <input
+            autoFocus
+            className={inputClassName}
+            onChange={event => setSectionTitle(event.target.value)}
+            placeholder="Dough, Filling, Sauce…"
+            value={sectionTitle}
+          />
+        </Field>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button onClick={() => setSectionDialogOpen(false)} variant="ghost">
+            Cancel
+          </Button>
+          <Button disabled={!sectionTitle.trim()} onClick={saveSection}>
+            {editingSectionPos !== null ? 'Update section' : 'Add section'}
           </Button>
         </div>
       </Dialog>
@@ -712,6 +748,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setActiveTab('recipe')
   }
 
+  function openAddSection() {
+    setEditingSectionPos(null)
+    setSectionTitle('')
+    setSectionDialogOpen(true)
+  }
+
   function openAddIngredient() {
     setEditingPos(null)
     setIngredientName('')
@@ -768,6 +810,22 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
     setIngredientDialogOpen(false)
     setEditingPos(null)
+  }
+
+  function saveSection() {
+    const title = sectionTitle.trim()
+    if (!title) {
+      return
+    }
+
+    if (editingSectionPos !== null) {
+      bodyEditorRef.current?.updateSection(editingSectionPos, title)
+    } else {
+      bodyEditorRef.current?.insertSection(title)
+    }
+
+    setSectionDialogOpen(false)
+    setEditingSectionPos(null)
   }
 }
 

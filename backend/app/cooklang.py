@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from app.models import Ingredient
+from app.models import Ingredient, RecipeSection, RecipeStep
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 TOKEN_CHARS = r"A-Za-z0-9_./' -"
@@ -19,6 +19,7 @@ COOKWARE_RE = re.compile(
 )
 TIMER_RE = re.compile(r"~(?P<name>[A-Za-z0-9_./' -]*?)?\{(?P<amount>[^}]*)\}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
+SECTION_LINE_RE = re.compile(r"^=+\s*(.+?)\s*=+\s*$")
 UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"
 QUANTITY_PATTERN = (
     rf"(?:\d+\s+\d+/\d+|\d+\s+[{UNICODE_FRACTION_CHARS}]|\d+/\d+|\d+(?:\.\d+)?|[{UNICODE_FRACTION_CHARS}])"
@@ -120,13 +121,38 @@ def parse_notes(metadata: dict[str, Any], body: str) -> list[str]:
     return notes
 
 
-def parse_steps(body: str) -> list[str]:
-    steps: list[str] = []
+def parse_blocks(body: str) -> list[RecipeSection | RecipeStep]:
+    blocks: list[RecipeSection | RecipeStep] = []
     for block in re.split(r"\n\s*\n", body.strip()):
-        step = "\n".join(line for line in block.splitlines() if not line.lstrip().startswith(">")).strip()
-        if step:
-            steps.append(step)
-    return steps
+        lines = [line for line in block.splitlines() if not line.lstrip().startswith(">")]
+        index = 0
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if not stripped:
+                index += 1
+                continue
+            section_match = SECTION_LINE_RE.match(stripped)
+            if section_match:
+                blocks.append(RecipeSection(title=section_match.group(1).strip()))
+                index += 1
+                continue
+            step_lines: list[str] = []
+            while index < len(lines):
+                line = lines[index].strip()
+                if not line:
+                    index += 1
+                    continue
+                if SECTION_LINE_RE.match(line):
+                    break
+                step_lines.append(lines[index])
+                index += 1
+            if step_lines:
+                blocks.append(RecipeStep(text="\n".join(step_lines).strip()))
+    return blocks
+
+
+def parse_steps(body: str) -> list[str]:
+    return [block.text for block in parse_blocks(body) if isinstance(block, RecipeStep)]
 
 
 def metadata_tags(metadata: dict[str, Any]) -> list[str]:
@@ -307,6 +333,23 @@ def rebuild_amount(
         separator = "%" if "%" in original else " "
         return f"{prefix}{quantity}{separator}{unit}"
     return f"{prefix}{quantity}"
+
+
+def scale_blocks(
+    blocks: list[RecipeSection | RecipeStep],
+    scale: float | None = None,
+    servings: float = 1,
+) -> list[RecipeSection | RecipeStep]:
+    if scale is None:
+        return blocks
+    factor = scale / servings
+    scaled: list[RecipeSection | RecipeStep] = []
+    for block in blocks:
+        if isinstance(block, RecipeSection):
+            scaled.append(block)
+        else:
+            scaled.append(RecipeStep(text=scale_step_ingredients(block.text, factor)))
+    return scaled
 
 
 def scale_steps(steps: list[str], scale: float | None = None, servings: float = 1) -> list[str]:
