@@ -109,6 +109,20 @@ def normalize_unit(unit: str | None) -> str | None:
     return UNIT_ALIASES.get(key, unit.strip())
 
 
+def split_glued_amount(value: str, *, parse_quantity) -> tuple[str | None, str | None]:
+    stripped = value.strip()
+    if not stripped:
+        return None, None
+    for alias in sorted(UNIT_ALIASES, key=len, reverse=True):
+        if len(stripped) <= len(alias):
+            continue
+        if stripped.casefold().endswith(alias.casefold()):
+            quantity_text = stripped[: -len(alias)].strip()
+            if parse_quantity(quantity_text) is not None:
+                return quantity_text, normalize_unit(alias)
+    return None, None
+
+
 def is_mass_unit(unit: str | None) -> bool:
     return normalize_unit(unit) in MASS_TO_GRAMS
 

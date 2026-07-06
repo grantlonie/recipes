@@ -24,3 +24,45 @@ select,
 textarea {
   font: inherit;
 }
+
+.import-whisk-scene {
+  position: relative;
+  width: 7rem;
+  height: 7rem;
+}
+
+.import-whisk-bowl {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 5.5rem;
+  height: 2.75rem;
+  border: 3px solid #fdba74;
+  border-top: none;
+  border-radius: 0 0 9999px 9999px;
+  background: linear-gradient(to bottom, #fff7ed, #ffedd5);
+  transform: translateX(-50%);
+}
+
+.import-whisk {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 4rem;
+  height: 6rem;
+  margin-left: -2rem;
+  transform-origin: 50% 12%;
+  animation: whisk-stir 0.85s ease-in-out infinite;
+}
+
+@keyframes whisk-stir {
+  0% {
+    transform: rotate(-28deg);
+  }
+  50% {
+    transform: rotate(28deg);
+  }
+  100% {
+    transform: rotate(-28deg);
+  }
+}

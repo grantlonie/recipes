@@ -4,6 +4,8 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import re
+
 from app.models import CatalogIngredient, IngredientCatalog
 
 SEED_PATH = Path(__file__).with_name("ingredients_seed.json")
@@ -11,6 +13,10 @@ SEED_PATH = Path(__file__).with_name("ingredients_seed.json")
 
 class IngredientStorageError(ValueError):
     pass
+
+
+def normalize_ingredient_key(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().casefold().replace("-", " "))
 
 
 @dataclass
@@ -42,11 +48,11 @@ class IngredientRepository:
         return sorted(self.get_catalog().ingredients, key=lambda item: item.name.casefold())
 
     def find_by_name(self, name: str) -> CatalogIngredient | None:
-        key = name.casefold().strip()
+        key = normalize_ingredient_key(name)
         for ingredient in self.get_catalog().ingredients:
-            if ingredient.name.casefold() == key:
+            if normalize_ingredient_key(ingredient.name) == key:
                 return ingredient
-            if any(alias.casefold() == key for alias in ingredient.aliases):
+            if any(normalize_ingredient_key(alias) == key for alias in ingredient.aliases):
                 return ingredient
         return None
 

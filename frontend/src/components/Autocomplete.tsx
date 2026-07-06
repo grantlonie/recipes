@@ -2,6 +2,8 @@ import type { KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
+import { normalizeIngredientKey } from '../units'
+
 export interface AutocompleteOption {
   label: string
   value: string
@@ -114,7 +116,16 @@ export function Autocomplete({
             onChange(next)
           }
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={event => {
+          setOpen(true)
+          event.currentTarget.select()
+        }}
+        onMouseDown={event => {
+          if (document.activeElement === event.currentTarget) {
+            event.preventDefault()
+            event.currentTarget.select()
+          }
+        }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         ref={inputRef}
@@ -221,8 +232,8 @@ export function Autocomplete({
     }
     const exact = selectableOptions(options).find(
       option =>
-        option.value.toLowerCase() === trimmed.toLowerCase() ||
-        option.label.toLowerCase() === trimmed.toLowerCase(),
+        normalizeIngredientKey(option.value) === normalizeIngredientKey(trimmed) ||
+        normalizeIngredientKey(option.label) === normalizeIngredientKey(trimmed),
     )
     if (exact) {
       onChange(exact.value)
@@ -247,7 +258,7 @@ function selectableOptions(items: AutocompleteItem[]): AutocompleteOption[] {
 }
 
 function filterItems(items: AutocompleteItem[], query: string): AutocompleteItem[] {
-  const needle = query.trim().toLowerCase()
+  const needle = normalizeIngredientKey(query)
   if (!needle) {
     return items
   }
@@ -263,8 +274,8 @@ function filterItems(items: AutocompleteItem[], query: string): AutocompleteItem
       while (index < items.length && !isHeader(items[index])) {
         const option = items[index] as AutocompleteOption
         if (
-          option.label.toLowerCase().includes(needle) ||
-          option.value.toLowerCase().includes(needle)
+          matchesIngredientQuery(option.label, needle) ||
+          matchesIngredientQuery(option.value, needle)
         ) {
           groupOptions.push(option)
         }
@@ -279,8 +290,8 @@ function filterItems(items: AutocompleteItem[], query: string): AutocompleteItem
 
     const option = item
     if (
-      option.label.toLowerCase().includes(needle) ||
-      option.value.toLowerCase().includes(needle)
+      matchesIngredientQuery(option.label, needle) ||
+      matchesIngredientQuery(option.value, needle)
     ) {
       result.push(option)
     }
@@ -311,4 +322,8 @@ function nextSelectableIndex(
 
 function displayLabel(value: string, options: AutocompleteItem[]) {
   return selectableOptions(options).find(option => option.value === value)?.label ?? value
+}
+
+function matchesIngredientQuery(target: string, query: string): boolean {
+  return normalizeIngredientKey(target).includes(normalizeIngredientKey(query))
 }

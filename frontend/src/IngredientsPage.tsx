@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { deleteIngredient, getIngredientCatalog, upsertIngredient } from './api'
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
+import { DensitySearchLink } from './components/DensitySearchLink'
 import { Dialog } from './components/Dialog'
 import { putIngredientCatalog } from './db'
 import { useIngredientCatalog } from './IngredientCatalogContext'
@@ -156,13 +157,16 @@ export function IngredientsPage() {
           </label>
           <label className="block">
             <span className="text-sm font-semibold text-stone-700">Density (kg/m³)</span>
-            <input
-              className={`${inputClassName} mt-1`}
-              inputMode="decimal"
-              onChange={event => setDensity(event.target.value)}
-              placeholder="Leave blank to show weight (lb/oz)"
-              value={density}
-            />
+            <div className="mt-1 flex items-center gap-1">
+              <input
+                className={`${inputClassName} min-w-0 flex-1`}
+                inputMode="decimal"
+                onChange={event => setDensity(event.target.value)}
+                placeholder="Leave blank to show weight (lb/oz)"
+                value={density}
+              />
+              <DensitySearchLink ingredientName={name} />
+            </div>
             <span className="mt-1 block text-xs text-stone-500">
               Leave blank to show weight (lb/oz) in US mode. Water is 1000.
             </span>

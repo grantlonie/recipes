@@ -1,3 +1,5 @@
+import { normalizeUnit, splitGluedAmount } from './units'
+
 export const INGREDIENT_TOKEN_RE =
   /@(?:([A-Za-z0-9_./' -]+?)\{([^}]*)\}|([A-Za-z0-9_./' -]+?)(?=\s|[.,;:!?)]|\(|$))(?:\(([^)]*)\))?/g
 
@@ -59,11 +61,21 @@ export function splitAmount(amount: string) {
   const value = fixed ? amount.slice(1) : amount
   if (value.includes('%')) {
     const [quantity, unit] = value.split('%', 2)
-    return { fixed, quantity: quantity.trim(), unit: unit.trim() }
+    const normalizedUnit = normalizeUnit(unit.trim())
+    return {
+      fixed,
+      quantity: quantity.trim(),
+      unit: normalizedUnit ?? unit.trim(),
+    }
   }
   const match = value.trim().match(/^(\d+(?:\.\d+)?|\d+\s+\d+\/\d+|\d+\/\d+)\s+(.+)$/)
   if (match) {
-    return { fixed, quantity: match[1], unit: match[2] }
+    const normalizedUnit = normalizeUnit(match[2].trim())
+    return { fixed, quantity: match[1], unit: normalizedUnit ?? match[2].trim() }
+  }
+  const glued = splitGluedAmount(value)
+  if (glued) {
+    return { fixed, quantity: glued.quantity, unit: glued.unit }
   }
   return { fixed, quantity: value.trim(), unit: '' }
 }

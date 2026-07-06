@@ -3,9 +3,31 @@ from app.cooklang import (
     parse_blocks,
     parse_cookware,
     parse_ingredients,
+    prepare_imported_content,
     scale_steps,
     split_amount,
 )
+
+
+def test_split_amount_parses_ml_and_liter_units():
+    assert split_amount("250%ml") == ("250", "ml", False)
+    assert split_amount("250 ml") == ("250", "ml", False)
+    assert split_amount("250ml") == ("250", "ml", False)
+    assert split_amount("1.5%liters") == ("1.5", "l", False)
+    assert split_amount("2 l") == ("2", "l", False)
+
+
+def test_prepare_imported_content_normalizes_volume_units():
+    content = """---
+title: Test
+---
+
+Add @water{250ml} and @milk{1.5%liters}.
+"""
+    normalized = prepare_imported_content(content)
+
+    assert "@water{250%ml}" in normalized
+    assert "@milk{1.5%l}" in normalized
 
 
 def test_parse_blocks_splits_sections_from_steps():

@@ -19,10 +19,21 @@ def test_normalize_unit_aliases():
 def test_to_grams_mass_and_volume():
     assert to_grams(1, "kg") == 1000
     assert to_grams(1, "lb") == 453.59237
+    assert to_grams(250, "ml", density_kg_m3=1000) == 250
+    assert to_grams(1.5, "l", density_kg_m3=1000) == 1500
     # 1 cup water at 1000 kg/m3 ~= 236.588 g
     grams = to_grams(1, "cup", density_kg_m3=1000)
     assert grams is not None
     assert abs(grams - 236.588) < 0.01
+
+
+def test_split_glued_amount_parses_ml_and_liters():
+    from app.units import split_glued_amount
+    from app.cooklang import parse_quantity_to_fraction
+
+    assert split_glued_amount("250ml", parse_quantity=parse_quantity_to_fraction) == ("250", "ml")
+    assert split_glued_amount("1.5l", parse_quantity=parse_quantity_to_fraction) == ("1.5", "l")
+    assert split_glued_amount("2 liters", parse_quantity=parse_quantity_to_fraction) == (None, None)
 
 
 def test_format_metric_and_us():

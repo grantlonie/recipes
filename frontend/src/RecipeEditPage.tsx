@@ -14,6 +14,8 @@ import { useAuth } from './AuthContext'
 import { Autocomplete } from './components/Autocomplete'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
+import { DensitySearchLink } from './components/DensitySearchLink'
+import { ImportingDialog } from './components/ImportingDialog'
 import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/RecipeBodyEditor'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
@@ -247,7 +249,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 onClick={handleReimportFromSource}
                 variant="secondary"
               >
-                {reimportMutation.isPending ? 'Importing...' : 'Re Import'}
+                Re Import
               </Button>
             ) : null}
             <Button onClick={handleCancel} variant="ghost">
@@ -369,6 +371,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           <p className="mt-2 text-sm text-red-700">{saveMutation.error.message}</p>
         ) : null}
       </div>
+
+      <ImportingDialog open={importMutation.isPending || reimportMutation.isPending} />
 
       <Dialog labelledBy="ingredient-dialog-title" open={ingredientDialogOpen}>
         <h2 className="text-xl font-bold" id="ingredient-dialog-title">
@@ -519,14 +523,17 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                       <span className="font-semibold text-stone-700">
                         Density (kg/m³){densityRequired ? ' *' : ''}
                       </span>
-                      <input
-                        className={`${inputClassName} mt-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
-                        onChange={event =>
-                          updateMappingRow(index, { createDensity: event.target.value })
-                        }
-                        placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
-                        value={row.createDensity}
-                      />
+                      <div className="mt-1 flex items-center gap-1">
+                        <input
+                          className={`${inputClassName} min-w-0 flex-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
+                          onChange={event =>
+                            updateMappingRow(index, { createDensity: event.target.value })
+                          }
+                          placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
+                          value={row.createDensity}
+                        />
+                        <DensitySearchLink ingredientName={row.catalogName} />
+                      </div>
                     </label>
                   </div>
                 ) : null}
@@ -536,7 +543,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         </div>
         {!mappingCanApply ? (
           <p className="mt-3 text-sm text-red-700">
-            Enter an ingredient name for each row. New ingredients with cup/Tbsp/tsp measures need a
+            Enter an ingredient name for each row. New ingredients with volume measures (cups, ml, L, etc.) need a
             density.
           </p>
         ) : null}
@@ -565,7 +572,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             value={importUrl}
           />
           <Button disabled={!importUrl || importMutation.isPending} type="submit">
-            {importMutation.isPending ? 'Importing...' : 'Import'}
+            Import
           </Button>
         </div>
         {importMutation.error ? (
@@ -660,7 +667,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         note: mergeImportNotes(match.note, token.note),
         originalName: token.name,
         quantity: token.quantity,
-        unit: token.unit,
+        unit: normalizeUnit(token.unit) ?? token.unit,
       }
     })
     setPendingImport({ body: nextBody, metadata, ...options })

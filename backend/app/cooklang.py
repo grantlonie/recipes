@@ -5,6 +5,7 @@ from typing import Any
 import yaml
 
 from app.models import Ingredient, RecipeSection, RecipeStep
+from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 TOKEN_CHARS = r"A-Za-z0-9_./' -"
@@ -253,12 +254,17 @@ def split_amount(amount: str | None) -> tuple[str | None, str | None, bool]:
     value = amount[1:] if fixed else amount
     if "%" in value:
         quantity, unit = value.split("%", 1)
-        return quantity.strip() or None, unit.strip() or None, fixed
+        unit = normalize_unit(unit.strip()) if unit.strip() else None
+        return quantity.strip() or None, unit, fixed
     match = AMOUNT_WITHOUT_SEPARATOR_RE.match(value.strip())
     if match:
         quantity = match.group("quantity").strip() or None
         unit = match.group("unit")
-        return quantity, unit.strip() or None if unit else None, fixed
+        unit = normalize_unit(unit.strip()) if unit else None
+        return quantity, unit, fixed
+    quantity, unit = split_glued_amount(value.strip(), parse_quantity=parse_quantity_to_fraction)
+    if quantity:
+        return quantity, unit, fixed
     return value.strip() or None, None, fixed
 
 
@@ -297,7 +303,37 @@ def normalize_document(content: str) -> str:
 def prepare_imported_content(content: str) -> str:
     metadata, body = parse_document(content)
     metadata.pop("tags", None)
+    body = normalize_ingredient_amounts(body)
     return normalize_document(render_document(metadata, body))
+
+
+def normalize_ingredient_amounts(body: str) -> str:
+    def replacer(match: re.Match[str]) -> str:
+        name = match.group("name_braced")
+        if not name:
+            return match.group(0)
+        amount = match.group("amount") or ""
+        quantity, unit, fixed = split_amount(amount)
+        note = ingredient_note_from_match(match)
+        if quantity is None and unit is None:
+            return match.group(0)
+        inner = format_canonical_amount(quantity, unit, fixed)
+        return format_ingredient_markup(name, inner, note)
+
+    return INGREDIENT_RE.sub(replacer, body)
+
+
+def format_canonical_amount(
+    quantity: str | None,
+    unit: str | None,
+    fixed: bool,
+) -> str:
+    prefix = "=" if fixed else ""
+    if unit:
+        return f"{prefix}{quantity}%{unit}"
+    if quantity:
+        return f"{prefix}{quantity}"
+    return ""
 
 
 def normalize_body_amounts(body: str) -> str:

@@ -89,6 +89,28 @@ export function normalizeUnit(unit: string | null | undefined): string | null {
   return UNIT_ALIASES[key] ?? unit.trim()
 }
 
+export function splitGluedAmount(value: string): { quantity: string; unit: string } | null {
+  const stripped = value.trim()
+  if (!stripped) {
+    return null
+  }
+  for (const alias of Object.keys(UNIT_ALIASES).sort((left, right) => right.length - left.length)) {
+    if (stripped.length <= alias.length) {
+      continue
+    }
+    if (stripped.toLowerCase().endsWith(alias.toLowerCase())) {
+      const quantity = stripped.slice(0, -alias.length).trim()
+      if (parseQuantity(quantity) !== null) {
+        const unit = normalizeUnit(alias)
+        if (unit) {
+          return { quantity, unit }
+        }
+      }
+    }
+  }
+  return null
+}
+
 export function isMassUnit(unit: string | null | undefined): boolean {
   const canonical = normalizeUnit(unit)
   return canonical !== null && canonical in MASS_TO_GRAMS
@@ -241,15 +263,23 @@ export function formatIngredientAmount(
   return formatAmount(quantity, unit, options)
 }
 
+export function normalizeIngredientKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
 export function findCatalogIngredient(
   name: string,
   catalog: CatalogIngredient[],
 ): CatalogIngredient | undefined {
-  const key = name.trim().toLowerCase()
+  const key = normalizeIngredientKey(name)
   return catalog.find(
     item =>
-      item.name.toLowerCase() === key ||
-      item.aliases.some(alias => alias.toLowerCase() === key),
+      normalizeIngredientKey(item.name) === key ||
+      item.aliases.some(alias => normalizeIngredientKey(alias) === key),
   )
 }
 
@@ -296,20 +326,27 @@ export function matchCatalogIngredient(
 }
 
 function containsPhrase(haystack: string, phrase: string): boolean {
-  const escaped = escapeRegExp(phrase.trim())
-  return new RegExp(`(^|\\s)${escaped}(\\s|$)`, 'i').test(haystack.trim())
+  return flexiblePhrasePattern(phrase).test(haystack.trim())
 }
 
 function extractUnmatchedNote(importedName: string, matchedLabel: string): string {
   const imported = importedName.trim()
-  const pattern = new RegExp(`(^|\\s)${escapeRegExp(matchedLabel.trim())}(\\s|$)`, 'i')
-  const match = pattern.exec(imported)
+  const match = flexiblePhrasePattern(matchedLabel).exec(imported)
   if (!match) {
     return imported
   }
   const before = imported.slice(0, match.index).trim()
   const after = imported.slice(match.index + match[0].length).trim()
   return [before, after].filter(Boolean).join(' ')
+}
+
+function flexiblePhrasePattern(phrase: string): RegExp {
+  const parts = normalizeIngredientKey(phrase)
+    .split(' ')
+    .filter(Boolean)
+    .map(escapeRegExp)
+  const body = parts.join('[\\s-]+')
+  return new RegExp(`(^|[\\s(,])${body}(?=[\\s,.)]|$)`, 'i')
 }
 
 function escapeRegExp(value: string): string {

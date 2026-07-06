@@ -1,5 +1,23 @@
 from fastapi.testclient import TestClient
 
+from app.ingredients import IngredientRepository, normalize_ingredient_key
+from app.models import CatalogIngredient
+
+
+def test_normalize_ingredient_key_treats_hyphens_as_spaces():
+    assert normalize_ingredient_key("Half-and-Half") == "half and half"
+    assert normalize_ingredient_key("half and half") == "half and half"
+
+
+def test_find_by_name_matches_hyphen_and_space_variants(tmp_path):
+    repository = IngredientRepository(catalog_path=tmp_path / "ingredients.json")
+    repository.upsert(
+        CatalogIngredient(name="half-and-half", density_kg_m3=1020, aliases=["half and half"])
+    )
+
+    assert repository.find_by_name("half and half") is not None
+    assert repository.find_by_name("half-and-half") is not None
+
 
 def test_ingredient_catalog_seed_and_crud(tmp_path, monkeypatch):
     monkeypatch.setenv("APP_BASE_URL", "http://testserver")
