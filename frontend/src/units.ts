@@ -122,19 +122,35 @@ export function toGrams(
 }
 
 export function formatGramsValue(grams: number): string {
-  return String(Math.round(grams))
+  return formatStoredGrams(grams)
+}
+
+function formatStoredGrams(grams: number): string {
+  const sign = grams < 0 ? '-' : ''
+  const value = Math.abs(grams)
+  if (value <= 20) {
+    const rounded = Math.round(value * 10) / 10
+    return sign + trimNumber(rounded, 1)
+  }
+  return sign + String(Math.round(value))
 }
 
 function formatMetricMass(grams: number): DisplayAmount {
-  const wholeGrams = Math.round(grams)
-  if (wholeGrams >= 2000) {
+  const sign = grams < 0 ? '-' : ''
+  const value = Math.abs(grams)
+  if (value >= 2000) {
+    const wholeGrams = Math.round(value)
     const kg = wholeGrams / 1000
     if (Math.abs(kg - Math.round(kg)) < 0.05) {
-      return { quantity: String(Math.round(kg)), unit: 'kg' }
+      return { quantity: sign + String(Math.round(kg)), unit: 'kg' }
     }
-    return { quantity: trimNumber(kg, 1), unit: 'kg' }
+    return { quantity: sign + trimNumber(kg, 1), unit: 'kg' }
   }
-  return { quantity: String(wholeGrams), unit: 'g' }
+  if (value <= 20) {
+    const rounded = Math.round(value * 10) / 10
+    return { quantity: sign + trimNumber(rounded, 1), unit: 'g' }
+  }
+  return { quantity: sign + String(Math.round(value)), unit: 'g' }
 }
 
 function formatUsMass(grams: number): DisplayAmount {

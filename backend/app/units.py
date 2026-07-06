@@ -162,15 +162,31 @@ def round_grams(grams: float) -> int:
     return int(math.ceil(grams - 0.5))
 
 
+def format_stored_grams(grams: float) -> str:
+    sign = "-" if grams < 0 else ""
+    value = abs(grams)
+    if value <= 20:
+        rounded = round(value, 1)
+        text = f"{rounded:.1f}".rstrip("0").rstrip(".")
+        return f"{sign}{text}"
+    return f"{sign}{round_grams(value)}"
+
+
 def format_metric_mass(grams: float) -> DisplayAmount:
-    whole_grams = round_grams(grams)
-    if whole_grams >= 2000:
+    sign = "-" if grams < 0 else ""
+    value = abs(grams)
+    if value >= 2000:
+        whole_grams = round_grams(value)
         kg = whole_grams / 1000.0
         if abs(kg - round(kg)) < 0.05:
-            return DisplayAmount(str(int(round(kg))), "kg")
+            return DisplayAmount(f"{sign}{int(round(kg))}", "kg")
         text = f"{kg:.1f}".rstrip("0").rstrip(".")
-        return DisplayAmount(text, "kg")
-    return DisplayAmount(str(whole_grams), "g")
+        return DisplayAmount(f"{sign}{text}", "kg")
+    if value <= 20:
+        rounded = round(value, 1)
+        text = f"{rounded:.1f}".rstrip("0").rstrip(".")
+        return DisplayAmount(f"{sign}{text}", "g")
+    return DisplayAmount(f"{sign}{round_grams(value)}", "g")
 
 
 def format_us_mass(grams: float) -> DisplayAmount:
@@ -222,4 +238,4 @@ def format_amount(
 
 
 def format_grams_value(grams: float) -> str:
-    return str(round_grams(grams))
+    return format_stored_grams(grams)

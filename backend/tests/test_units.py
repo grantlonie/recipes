@@ -53,5 +53,13 @@ def test_format_fraction_single_unit():
 
 def test_format_grams_value():
     assert format_grams_value(250.0) == "250"
-    assert format_grams_value(12.5) == "13"
+    assert format_grams_value(12.5) == "12.5"
+    assert format_grams_value(12.54) == "12.5"
+    assert format_grams_value(20.0) == "20"
+    assert format_grams_value(20.5) == "21"
     assert format_grams_value(236.588) == "237"
+
+
+def test_format_metric_small_grams_keep_decimal():
+    assert format_amount(12.5, "g", unit_system="metric").format() == "12.5 g"
+    assert format_amount(21, "g", unit_system="metric").format() == "21 g"
