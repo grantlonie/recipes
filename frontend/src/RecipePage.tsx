@@ -23,23 +23,12 @@ import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, purgeRecipeIfDeleted, revalidateRecipe, storeRecipe } from './sync'
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
 import { useUnitSystem } from './UnitSystemContext'
+import { titleCaseIngredient } from './ingredientDisplay'
 import {
   densityForName,
   formatDisplayAmount,
   formatIngredientAmount,
 } from './units'
-
-const LOWERCASE_INGREDIENT_WORDS = new Set([
-  'and',
-  'as',
-  'for',
-  'in',
-  'of',
-  'or',
-  'the',
-  'to',
-  'with',
-])
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
@@ -474,19 +463,6 @@ function ExpandableNote({ text }: { text: string }) {
   )
 }
 
-function titleCaseIngredient(value: string) {
-  let wordIndex = 0
-
-  return value.replace(/[A-Za-z][A-Za-z']*/g, word => {
-    const lower = word.toLowerCase()
-    const formatted =
-      wordIndex > 0 && LOWERCASE_INGREDIENT_WORDS.has(lower)
-        ? lower
-        : `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`
-    wordIndex += 1
-    return formatted
-  })
-}
 
 function renderCooklangStep(
   step: string,

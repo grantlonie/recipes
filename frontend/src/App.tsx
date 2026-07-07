@@ -38,6 +38,7 @@ function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const location = useLocation()
   const isHome = location.pathname === '/'
+  const isIngredients = location.pathname === '/ingredients'
 
   return (
     <div className="flex min-h-dvh flex-col bg-orange-50 text-stone-900">
@@ -101,7 +102,7 @@ function AppShell() {
       </header>
 
       <main
-        className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : 'pb-8 pt-4'}`}
+        className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : 'pb-8 pt-4'} ${isIngredients ? 'flex min-h-0 flex-1 flex-col' : ''}`}
       >
         <div aria-hidden={!isHome} className={isHome ? undefined : 'hidden'}>
           <HomePage />

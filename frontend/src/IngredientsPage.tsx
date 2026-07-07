@@ -1,3 +1,4 @@
+import { InformationCircleIcon } from '@heroicons/react/24/outline'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
@@ -9,17 +10,25 @@ import { Button } from './components/Button'
 import { DensitySearchLink } from './components/DensitySearchLink'
 import { Dialog } from './components/Dialog'
 import { putIngredientCatalog } from './db'
+import { titleCaseIngredient } from './ingredientDisplay'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import type { CatalogIngredient } from './types'
 
 const inputClassName =
   'w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2'
 
+const INGREDIENT_NOTES = [
+  'Densities are stored as kg/m³.',
+  'Leave density blank to show weight (lb/oz) in US mode. Water is 1000.',
+  'Aliases are comma-separated alternate names used for matching.',
+]
+
 export function IngredientsPage() {
   const { auth } = useAuth()
   const queryClient = useQueryClient()
   const { ingredients, refresh } = useIngredientCatalog()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogIngredient | null>(null)
   const [name, setName] = useState('')
   const [density, setDensity] = useState('')
@@ -28,18 +37,32 @@ export function IngredientsPage() {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    if (!needle) {
-      return ingredients
-    }
-    return ingredients.filter(
-      item =>
-        item.name.toLowerCase().includes(needle) ||
-        item.aliases.some(alias => alias.toLowerCase().includes(needle)),
+    const list = needle
+      ? ingredients.filter(
+          item =>
+            item.name.toLowerCase().includes(needle) ||
+            item.aliases.some(alias => alias.toLowerCase().includes(needle)),
+        )
+      : ingredients
+
+    return [...list].sort((left, right) =>
+      left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
     )
   }, [ingredients, query])
 
   const saveMutation = useMutation({
-    mutationFn: (ingredient: CatalogIngredient) => upsertIngredient(ingredient),
+    mutationFn: async ({
+      ingredient,
+      originalName,
+    }: {
+      ingredient: CatalogIngredient
+      originalName?: string
+    }) => {
+      if (originalName && originalName !== ingredient.name) {
+        await deleteIngredient(originalName)
+      }
+      return upsertIngredient(ingredient)
+    },
     onSuccess: async () => {
       const catalog = await getIngredientCatalog()
       await putIngredientCatalog(catalog)
@@ -56,6 +79,7 @@ export function IngredientsPage() {
       await putIngredientCatalog(catalog)
       queryClient.setQueryData(['ingredients'], catalog)
       await refresh()
+      closeDialog()
     },
   })
 
@@ -75,71 +99,89 @@ export function IngredientsPage() {
   }
 
   return (
-    <section className="space-y-6">
-      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-orange-700">Catalog</p>
-            <h1 className="mt-1 text-3xl font-bold">Ingredients</h1>
-            <p className="mt-2 max-w-2xl text-sm text-stone-600">
-              Densities are stored as kg/m³. Leave density blank to show weight (lb/oz) in US mode.
-            </p>
-          </div>
-          <Button onClick={() => openCreate()}>Add ingredient</Button>
+    <section className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Ingredients</h1>
+          <button
+            aria-label="Ingredient catalog notes"
+            className="inline-flex rounded-full p-1 text-stone-400 transition hover:bg-orange-50 hover:text-stone-600"
+            onClick={() => setInfoOpen(true)}
+            type="button"
+          >
+            <InformationCircleIcon aria-hidden="true" className="h-6 w-6" />
+          </button>
         </div>
 
-        <label className="mt-6 block">
-          <span className="sr-only">Search ingredients</span>
-          <input
-            className={inputClassName}
-            onChange={event => setQuery(event.target.value)}
-            placeholder="Search ingredients"
-            type="search"
-            value={query}
-          />
-        </label>
+        <div className="mt-6 flex items-center gap-2">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Search ingredients</span>
+            <input
+              className={inputClassName}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Search ingredients"
+              type="search"
+              value={query}
+            />
+          </label>
+          <Button className="shrink-0" onClick={() => openCreate()}>
+            Add ingredient
+          </Button>
+        </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-orange-100 text-stone-500">
-              <tr>
-                <th className="py-2 pr-4 font-semibold">Name</th>
-                <th className="py-2 pr-4 font-semibold">Density (kg/m³)</th>
-                <th className="py-2 pr-4 font-semibold">Aliases</th>
-                <th className="py-2 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(item => (
-                <tr className="border-b border-orange-50" key={item.name}>
-                  <td className="py-3 pr-4 font-medium text-stone-900">{item.name}</td>
-                  <td className="py-3 pr-4 tabular-nums text-stone-700">
-                    {item.density_kg_m3 ?? '—'}
-                  </td>
-                  <td className="py-3 pr-4 text-stone-600">{item.aliases.join(', ') || '—'}</td>
-                  <td className="py-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Button onClick={() => openEdit(item)} variant="secondary">
-                        Edit
-                      </Button>
-                      <Button
-                        disabled={deleteMutation.isPending}
-                        onClick={() => deleteMutation.mutate(item.name)}
-                        variant="danger"
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!filtered.length ? (
-            <p className="mt-4 text-sm text-stone-500">No ingredients match your search.</p>
-          ) : null}
+        <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">
+          {filtered.length ? (
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="sticky top-0 z-10 border-b border-orange-100 bg-white text-stone-500">
+                  <tr>
+                    <th className="py-2 pr-4 font-semibold">Name</th>
+                    <th className="py-2 pr-4 font-semibold">Density (kg/m³)</th>
+                    <th className="py-2 font-semibold">Aliases</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(item => (
+                    <tr
+                      className="cursor-pointer border-b border-orange-50 hover:bg-orange-50"
+                      key={item.name}
+                      onClick={() => openEdit(item)}
+                    >
+                      <td className="py-3 pr-4 font-medium text-stone-900">
+                        {titleCaseIngredient(item.name)}
+                      </td>
+                      <td className="py-3 pr-4 tabular-nums text-stone-700">
+                        {item.density_kg_m3 ?? '—'}
+                      </td>
+                      <td className="py-3 text-stone-600">
+                        {item.aliases.map(titleCaseIngredient).join(', ') || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-stone-500">No ingredients match your search.</p>
+          )}
         </div>
       </div>
+
+      <Dialog labelledBy="ingredient-info-dialog-title" open={infoOpen}>
+        <h2 className="text-xl font-bold" id="ingredient-info-dialog-title">
+          Notes
+        </h2>
+        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-stone-600">
+          {INGREDIENT_NOTES.map(note => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={() => setInfoOpen(false)} type="button" variant="ghost">
+            Close
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog labelledBy="ingredient-catalog-dialog-title" open={dialogOpen}>
         <h2 className="text-xl font-bold" id="ingredient-catalog-dialog-title">
@@ -184,13 +226,30 @@ export function IngredientsPage() {
           {saveMutation.error ? (
             <p className="text-sm text-red-700">{saveMutation.error.message}</p>
           ) : null}
-          <div className="flex justify-end gap-2">
-            <Button onClick={closeDialog} type="button" variant="ghost">
-              Cancel
-            </Button>
-            <Button disabled={saveMutation.isPending || !name.trim()} type="submit">
-              {saveMutation.isPending ? 'Saving...' : 'Save'}
-            </Button>
+          {deleteMutation.error ? (
+            <p className="text-sm text-red-700">{deleteMutation.error.message}</p>
+          ) : null}
+          <div className="flex justify-between gap-2">
+            {editing ? (
+              <Button
+                disabled={deleteMutation.isPending || saveMutation.isPending}
+                onClick={handleDelete}
+                type="button"
+                variant="danger"
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button onClick={closeDialog} type="button" variant="ghost">
+                Cancel
+              </Button>
+              <Button disabled={saveMutation.isPending || !name.trim()} type="submit">
+                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
           </div>
         </form>
       </Dialog>
@@ -218,6 +277,16 @@ export function IngredientsPage() {
     setEditing(null)
   }
 
+  function handleDelete() {
+    if (!editing) {
+      return
+    }
+    if (!window.confirm(`Delete ${titleCaseIngredient(editing.name)}?`)) {
+      return
+    }
+    deleteMutation.mutate(editing.name)
+  }
+
   function handleSave(event: FormEvent) {
     event.preventDefault()
     const densityValue = density.trim()
@@ -225,13 +294,17 @@ export function IngredientsPage() {
     if (densityValue && Number.isNaN(parsedDensity)) {
       return
     }
+    const normalizedName = name.trim().toLowerCase()
     saveMutation.mutate({
-      aliases: aliases
-        .split(',')
-        .map(item => item.trim())
-        .filter(Boolean),
-      density_kg_m3: parsedDensity,
-      name: name.trim(),
+      ingredient: {
+        aliases: aliases
+          .split(',')
+          .map(item => item.trim().toLowerCase())
+          .filter(Boolean),
+        density_kg_m3: parsedDensity,
+        name: normalizedName,
+      },
+      originalName: editing?.name,
     })
   }
 }
