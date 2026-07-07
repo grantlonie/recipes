@@ -153,11 +153,11 @@ export function RecipePage() {
 
   return (
     <article className="space-y-8 pb-8">
-      <section className={cardClassName}>
+      <section className={`${cardClassName} overflow-hidden p-0`}>
         {recipe.image ? (
           <img
             alt=""
-            className="h-[250px] w-full rounded-t-3xl object-cover sm:h-auto sm:max-h-[420px]"
+            className="h-[250px] w-full object-cover sm:h-auto sm:max-h-[420px]"
             referrerPolicy="no-referrer"
             src={recipe.image}
           />
