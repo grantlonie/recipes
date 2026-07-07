@@ -125,10 +125,18 @@ export async function ensureRecipe(slug: string): Promise<RecipeDetail> {
 }
 
 export async function storeRecipe(recipe: RecipeDetail, updatedAt?: string): Promise<void> {
-  const manifest = await getSyncManifest()
-  const entry = manifest.recipes.find(item => item.slug === recipe.slug)
-  const timestamp = updatedAt ?? entry?.updated_at ?? new Date().toISOString()
+  let manifest = await getSyncManifest()
+  let entry = manifest.recipes.find(item => item.slug === recipe.slug)
+  let timestamp = updatedAt ?? entry?.updated_at ?? new Date().toISOString()
   await putRecipe(recipe, timestamp)
+
+  if (!entry) {
+    manifest = await getSyncManifest()
+    entry = manifest.recipes.find(item => item.slug === recipe.slug)
+    timestamp = updatedAt ?? entry?.updated_at ?? timestamp
+    await putRecipe(recipe, timestamp)
+  }
+
   await setManifest(manifest)
 }
 
