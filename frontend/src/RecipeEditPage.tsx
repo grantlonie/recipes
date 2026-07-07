@@ -35,6 +35,7 @@ import { useRecipeSync } from './RecipeSyncContext'
 import { buildLoginUrl } from './shareImport'
 import { getLocalRecipe } from './db'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
+import { cardClassName, inputClassName } from './themeClasses'
 import type { CatalogIngredient, UnitSystem } from './types'
 import {
   defaultEditorUnit,
@@ -224,9 +225,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
   if (!auth.authenticated) {
     return (
-      <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
-        <h1 className="text-2xl font-bold">Sign in required</h1>
-        <p className="mt-2 text-stone-600">Editor access is required to change recipe files.</p>
+      <section className={`mx-auto max-w-md ${cardClassName}`}>
+        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Sign in required</h1>
+        <p className="mt-2 text-stone-600 dark:text-stone-400">Editor access is required to change recipe files.</p>
         <Link
           className="mt-6 inline-flex rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
           to={buildLoginUrl(`${location.pathname}${location.search}`)}
@@ -238,16 +239,16 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 
   if (!isNew && recipeQuery.isLoading) {
-    return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
+    return <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${cardClassName}`}>Loading recipe...</p>
   }
 
   if (!isNew && !recipeQuery.data) {
-    return <p className="rounded-2xl bg-white p-6 text-stone-600">Recipe not found.</p>
+    return <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${cardClassName}`}>Recipe not found.</p>
   }
 
   return (
     <section className="space-y-6">
-      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
+      <div className={cardClassName}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-orange-700">
@@ -338,7 +339,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                   <p className="mt-2 text-sm text-red-700">{reimportMutation.error.message}</p>
                 ) : null}
               </Field>
-              <label className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-semibold text-stone-700">
+              <label className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
                 <input
                   checked={bookmarked}
                   className="h-4 w-4 accent-orange-600"
@@ -434,7 +435,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             value={ingredientNote}
           />
         </Field>
-        <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-stone-700">
+        <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
           <input
             checked={ingredientFixed}
             className="h-4 w-4 accent-orange-600"
@@ -443,7 +444,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           />
           Fixed amount (does not scale)
         </label>
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
           Amounts are entered in {unitSystemEntryLabel(unitSystem)} and stored as grams when
           convertible.
           {unitSystem === 'us' && selectedDensity == null
@@ -487,7 +488,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         <h2 className="text-xl font-bold" id="import-mapping-title">
           Map imported ingredients
         </h2>
-        <p className="mt-2 text-sm text-stone-600">
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
           Ingredients not in your catalog are highlighted and will be created on apply. Match others
           to existing entries; extra wording is saved as details.
         </p>
@@ -501,17 +502,17 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 className={`rounded-2xl p-3 ${
                   needsCreate
                     ? 'bg-amber-100 ring-1 ring-amber-300'
-                    : 'bg-orange-50 ring-1 ring-orange-100'
+                    : 'bg-orange-50 ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700'
                 }`}
                 key={`${row.originalName}-${index}`}
               >
-                <p className="text-sm font-semibold text-stone-800">
+                <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
                   {row.quantity}
                   {row.unit ? ` ${row.unit}` : ''} {row.originalName}
                 </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm">
-                    <span className="font-semibold text-stone-700">Ingredient</span>
+                    <span className="font-semibold text-stone-700 dark:text-stone-200">Ingredient</span>
                     <div className="mt-1">
                       <Autocomplete
                         onChange={catalogName => updateMappingRow(index, { catalogName })}
@@ -522,7 +523,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                     </div>
                   </label>
                   <label className="block text-sm">
-                    <span className="font-semibold text-stone-700">Details</span>
+                    <span className="font-semibold text-stone-700 dark:text-stone-200">Details</span>
                     <input
                       className={`${inputClassName} mt-1`}
                       onChange={event => updateMappingRow(index, { note: event.target.value })}
@@ -535,12 +536,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
                       <p className="text-sm font-semibold text-amber-900">Create new ingredient</p>
-                      <p className="mt-1 text-xs text-stone-600">
+                      <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
                         Provide density for volume conversions between US and metric.
                       </p>
                     </div>
                     <label className="block text-sm">
-                      <span className="font-semibold text-stone-700">
+                      <span className="font-semibold text-stone-700 dark:text-stone-200">
                         Density (kg/m³){densityRequired ? ' *' : ''}
                       </span>
                       <div className="mt-1 flex items-center gap-1">
@@ -581,7 +582,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
   function ImportPanel() {
     return (
-      <form className="mt-6 rounded-2xl bg-orange-50 p-4" onSubmit={handleImport}>
+      <form className="mt-6 rounded-2xl bg-orange-50 p-4 dark:bg-stone-800" onSubmit={handleImport}>
         <h2 className="font-semibold">Import via URL</h2>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <input
@@ -856,13 +857,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 }
 
-const inputClassName =
-  'w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2 disabled:bg-stone-100 disabled:text-stone-500'
-
 function Field({ children, className = '', label }: FieldProps) {
   return (
     <label className={`block ${className}`}>
-      <span className="text-sm font-semibold text-stone-700">{label}</span>
+      <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">{label}</span>
       <div className="mt-1">{children}</div>
     </label>
   )

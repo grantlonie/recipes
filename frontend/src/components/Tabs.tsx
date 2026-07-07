@@ -13,11 +13,13 @@ interface TabsProps {
 
 export function Tabs({ active, items, onChange }: TabsProps) {
   return (
-    <div className="inline-flex rounded-full bg-orange-100 p-1">
+    <div className="inline-flex rounded-full bg-orange-100 p-1 dark:bg-stone-700">
       {items.map(item => (
         <button
           className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-            active === item.id ? 'bg-white text-orange-800 shadow-sm' : 'text-stone-700'
+            active === item.id
+              ? 'bg-white text-orange-800 shadow-sm dark:bg-stone-900 dark:text-orange-200'
+              : 'text-stone-700 dark:text-stone-300'
           }`}
           key={item.id}
           onClick={() => onChange(item.id)}

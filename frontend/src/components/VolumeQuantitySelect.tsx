@@ -8,8 +8,9 @@ import {
 
 const MAX_WHOLE = 24
 
-const selectClassName =
-  'w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2'
+import { inputClassName } from '../themeClasses'
+
+const selectClassName = inputClassName
 
 interface VolumeQuantitySelectProps {
   onChange: (value: string) => void

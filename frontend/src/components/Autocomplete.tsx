@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import { normalizeIngredientKey } from '../units'
+import { inputClassName } from '../themeClasses'
 
 export interface AutocompleteOption {
   label: string
@@ -106,7 +107,7 @@ export function Autocomplete({
         aria-controls={listId}
         aria-expanded={open}
         autoComplete="off"
-        className="w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2 disabled:bg-stone-100 disabled:text-stone-500"
+        className={`${inputClassName} disabled:bg-stone-100 disabled:text-stone-500 dark:disabled:bg-stone-800 dark:disabled:text-stone-500`}
         disabled={disabled}
         onChange={event => {
           const next = event.target.value
@@ -135,7 +136,7 @@ export function Autocomplete({
       {open && !disabled && suggestions.length && coords
         ? createPortal(
             <ul
-              className="fixed z-60 max-h-48 overflow-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-orange-100"
+              className="fixed z-60 max-h-48 overflow-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700"
               id={listId}
               ref={panelRef}
               role="listbox"
@@ -145,7 +146,7 @@ export function Autocomplete({
                 if (isHeader(item)) {
                   return (
                     <li
-                      className="px-3 pb-0.5 pt-2 text-[10px] font-normal uppercase tracking-wide text-stone-400 first:pt-1"
+                      className="px-3 pb-0.5 pt-2 text-[10px] font-normal uppercase tracking-wide text-stone-400 first:pt-1 dark:text-stone-500"
                       key={`header-${item.label}-${index}`}
                       role="presentation"
                     >
@@ -160,8 +161,8 @@ export function Autocomplete({
                     <button
                       className={`block w-full px-3 py-2 text-left text-sm ${
                         active
-                          ? 'bg-orange-100 font-semibold text-orange-900'
-                          : 'text-stone-700 hover:bg-orange-50'
+                          ? 'bg-orange-100 font-semibold text-orange-900 dark:bg-orange-950/50 dark:text-orange-200'
+                          : 'text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700'
                       }`}
                       onMouseDown={event => {
                         event.preventDefault()

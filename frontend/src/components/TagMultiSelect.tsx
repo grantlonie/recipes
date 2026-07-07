@@ -26,11 +26,11 @@ export function TagMultiSelect({
   )
 
   return (
-    <div className="rounded-xl border border-orange-200 bg-white p-2">
+    <div className="rounded-xl border border-orange-200 bg-white p-2 dark:border-stone-600 dark:bg-stone-900">
       <div className="flex flex-wrap gap-2">
         {value.map(tag => (
           <button
-            className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800 hover:bg-orange-200"
+            className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800 hover:bg-orange-200 dark:bg-orange-950/60 dark:text-orange-200 dark:hover:bg-orange-900/60"
             key={tag}
             onClick={() => removeTag(tag)}
             type="button"
@@ -39,7 +39,7 @@ export function TagMultiSelect({
           </button>
         ))}
         <input
-          className="min-w-32 flex-1 px-2 py-1 outline-none"
+          className="min-w-32 flex-1 bg-transparent px-2 py-1 text-stone-900 outline-none dark:text-stone-100"
           onChange={event => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -47,10 +47,10 @@ export function TagMultiSelect({
         />
       </div>
       {suggestions.length ? (
-        <div className="mt-2 flex flex-wrap gap-2 border-t border-orange-100 pt-2">
+        <div className="mt-2 flex flex-wrap gap-2 border-t border-orange-100 pt-2 dark:border-stone-700">
           {suggestions.map(tag => (
             <button
-              className="rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700 hover:bg-orange-100"
+              className="rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-700 hover:bg-orange-100 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700"
               key={tag}
               onClick={() => addTag(tag)}
               type="button"

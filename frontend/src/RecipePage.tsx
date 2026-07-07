@@ -29,14 +29,16 @@ import {
   formatDisplayAmount,
   formatIngredientAmount,
 } from './units'
+import { cardClassName, panelClassName } from './themeClasses'
+
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
 const ICON_BUTTON_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700'
+  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300'
 const ICON_CLASS = 'h-5 w-5'
 const DELETE_ICON_BUTTON_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-red-600 transition hover:bg-red-100 hover:text-red-700'
+  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-red-600 transition hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300'
 
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
@@ -140,7 +142,7 @@ export function RecipePage() {
   }, [navigate, queryClient, removeRecentRecipe, revision, slug])
 
   if (recipeQuery.isLoading && !recipeQuery.data) {
-    return <p className="rounded-2xl bg-white p-6 text-stone-600">Loading recipe...</p>
+    return <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${panelClassName}`}>Loading recipe...</p>
   }
 
   if (!recipe) {
@@ -151,7 +153,7 @@ export function RecipePage() {
 
   return (
     <article className="space-y-8 pb-8">
-      <section className="rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
+      <section className={cardClassName}>
         {recipe.image ? (
           <img
             alt=""
@@ -164,7 +166,7 @@ export function RecipePage() {
           <div>
             <h1 className="text-xl font-bold tracking-tight">{recipe.title}</h1>
             {recipe.cook_time ? (
-              <p className="mt-1 text-sm text-stone-600">{recipe.cook_time}</p>
+              <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{recipe.cook_time}</p>
             ) : null}
           </div>
 
@@ -172,12 +174,12 @@ export function RecipePage() {
             <div className="flex shrink-0 items-center gap-2">
               <div
                 aria-label="Scale servings"
-                className="flex shrink-0 items-stretch overflow-hidden rounded-full border border-orange-200 text-xs"
+                className="flex shrink-0 items-stretch overflow-hidden rounded-full border border-orange-200 text-xs dark:border-stone-600"
                 role="group"
               >
                 <button
                   aria-label="Decrease servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
                   disabled={servings <= 1}
                   id="servings-decrease"
                   onClick={() => setServings(current => Math.max(1, current - 1))}
@@ -187,14 +189,14 @@ export function RecipePage() {
                 </button>
                 <output
                   aria-live="polite"
-                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
+                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900 dark:border-stone-600 dark:text-stone-100"
                   id="servings"
                 >
                   {servings}
                 </output>
                 <button
                   aria-label="Increase servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
                   id="servings-increase"
                   onClick={() => setServings(current => current + 1)}
                   type="button"
@@ -202,14 +204,14 @@ export function RecipePage() {
                   +
                 </button>
               </div>
-              <span className="text-sm text-stone-600">serving</span>
+              <span className="text-sm text-stone-600 dark:text-stone-400">serving</span>
             </div>
 
             {recipe.tags.length ? (
               <div className="flex min-w-0 flex-wrap justify-end gap-2">
                 {recipe.tags.map(tag => (
                   <span
-                    className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800"
+                    className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800 dark:bg-orange-950/60 dark:text-orange-200"
                     key={tag}
                   >
                     {tag}
@@ -273,10 +275,10 @@ export function RecipePage() {
       </section>
 
       <Dialog labelledBy="delete-recipe-title" open={deleteDialogOpen}>
-        <h2 className="text-lg font-semibold text-stone-900" id="delete-recipe-title">
+        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100" id="delete-recipe-title">
           Delete recipe?
         </h2>
-        <p className="mt-2 text-sm text-stone-600">
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
           Delete &ldquo;{recipe.title}&rdquo;? This cannot be undone.
         </p>
         <div className="mt-6 flex justify-end gap-3">
@@ -295,12 +297,12 @@ export function RecipePage() {
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
-          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+          <section className={panelClassName}>
             <h2 className="text-lg font-semibold">Ingredients</h2>
             <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               {recipe.ingredients.map((ingredient, index) => (
                 <Fragment key={`${ingredient.name}-${index}`}>
-                  <span className="tabular-nums text-stone-600">
+                  <span className="tabular-nums text-stone-600 dark:text-stone-400">
                     {formatIngredientListAmount(ingredient, unitSystem, catalog)}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
@@ -311,9 +313,9 @@ export function RecipePage() {
           </section>
 
           {recipe.cookware.length ? (
-            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+            <section className={panelClassName}>
               <h2 className="text-lg font-semibold">Cookware</h2>
-              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700">
+              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700 dark:text-stone-300">
                 {recipe.cookware.map(item => (
                   <li key={item}>{item}</li>
                 ))}
@@ -324,9 +326,9 @@ export function RecipePage() {
 
         <div className="space-y-6">
           {recipe.notes.length ? (
-            <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+            <section className={panelClassName}>
               <h2 className="text-lg font-semibold">Notes</h2>
-              <div className="mt-3 space-y-3 text-stone-700">
+              <div className="mt-3 space-y-3 text-stone-700 dark:text-stone-300">
                 {recipe.notes.map(note => (
                   <ExpandableNote key={note} text={note} />
                 ))}
@@ -334,7 +336,7 @@ export function RecipePage() {
             </section>
           ) : null}
 
-          <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100">
+          <section className={panelClassName}>
             <h2 className="text-lg font-semibold">Steps</h2>
             <div className="mt-4 space-y-4">
               {blocks.map((block, index) => {
@@ -357,7 +359,7 @@ export function RecipePage() {
 
                 return (
                   <div
-                    className={`rounded-xl bg-orange-50 p-4 transition-all ${
+                    className={`rounded-xl bg-orange-50 p-4 transition-all dark:bg-stone-800/80 ${
                       completed ? 'py-2' : ''
                     }`}
                     key={`step-${index}`}
@@ -378,7 +380,7 @@ export function RecipePage() {
                       <span>Step {stepIndex + 1}</span>
                     </label>
                     {completed ? null : (
-                      <p className="whitespace-pre-line text-stone-800">
+                      <p className="whitespace-pre-line text-stone-800 dark:text-stone-200">
                         {renderCooklangStep(block.text, recipe.ingredients, unitSystem, catalog)}
                       </p>
                     )}
@@ -557,11 +559,11 @@ function renderCooklangLine(
 
 const STEP_MARKER_CLASS = {
   cookware:
-    'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900',
+    'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900 dark:border-stone-500 dark:bg-stone-700/90 dark:text-stone-100',
   ingredient:
-    'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900',
+    'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-100',
   timer:
-    'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900',
+    'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100',
 } as const
 
 type StepMarker = {

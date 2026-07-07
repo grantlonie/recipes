@@ -76,7 +76,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
       editorProps: {
         attributes: {
           class:
-            'min-h-128 w-full rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm leading-7 text-stone-800 outline-none focus:ring-2 focus:ring-orange-500 [&_p]:m-0 [&_[data-cooklang-note]]:m-0 [&_[data-cooklang-section]]:m-0',
+            'min-h-128 w-full rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm leading-7 text-stone-800 outline-none focus:ring-2 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-900 dark:text-stone-100 [&_p]:m-0 [&_[data-cooklang-note]]:m-0 [&_[data-cooklang-section]]:m-0',
         },
         handlePaste(_view, event) {
           const text = event.clipboardData?.getData('text/plain')
