@@ -72,7 +72,7 @@ export function Popover({ align = 'right', children, onClose, open, trigger }: P
       {open && coords
         ? createPortal(
             <div
-              className="fixed z-50 min-w-44 rounded-2xl bg-white p-2 shadow-lg ring-1 ring-orange-100"
+              className="fixed z-50 min-w-44 rounded-2xl bg-white p-2 shadow-lg ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700"
               ref={panelRef}
               style={{ left: coords.left, top: coords.top }}
             >

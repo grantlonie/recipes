@@ -48,7 +48,7 @@ export function Dialog({ children, labelledBy, open }: DialogProps) {
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-900/40 p-4 overscroll-contain"
       role="dialog"
     >
-      <div className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-orange-100">
+      <div className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700">
         {children}
       </div>
     </div>

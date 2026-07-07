@@ -26,10 +26,10 @@ export function ImportingDialog({ open }: ImportingDialogProps) {
             />
           </svg>
         </div>
-        <h2 className="mt-8 text-lg font-semibold text-stone-900" id="importing-dialog-title">
+        <h2 className="mt-8 text-lg font-semibold text-stone-900 dark:text-stone-100" id="importing-dialog-title">
           Importing recipe…
         </h2>
-        <p className="mt-2 text-sm text-stone-600">Fetching and parsing the recipe</p>
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">Fetching and parsing the recipe</p>
       </div>
     </Dialog>
   )

@@ -19,7 +19,7 @@ export function IngredientChip({ getPos, node }: NodeViewProps) {
   return (
     <NodeViewWrapper as="span" className="inline">
       <button
-        className="mx-0.5 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-900 ring-1 ring-orange-200 hover:bg-orange-200"
+        className="mx-0.5 inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-900 ring-1 ring-orange-200 hover:bg-orange-200 dark:bg-orange-950/60 dark:text-orange-200 dark:ring-orange-800 dark:hover:bg-orange-900/60"
         contentEditable={false}
         onClick={event => {
           event.preventDefault()

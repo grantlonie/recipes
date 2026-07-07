@@ -144,7 +144,7 @@ export function HomePage() {
                 title="Bookmarked"
               />
             ) : (
-              <p className="text-sm text-stone-600">No bookmarked recipes yet.</p>
+              <p className="text-sm text-stone-600 dark:text-stone-400">No bookmarked recipes yet.</p>
             )
           ) : hasTagFilter ? (
             taggedRecipes.length ? (
@@ -156,7 +156,7 @@ export function HomePage() {
                 recipes={taggedRecipes}
               />
             ) : (
-              <p className="text-sm text-stone-600">No recipes match these tags.</p>
+              <p className="text-sm text-stone-600 dark:text-stone-400">No recipes match these tags.</p>
             )
           ) : summaries.length || displayRecentRecipes.length ? (
             <CompactRecipeGrid
@@ -179,10 +179,10 @@ export function HomePage() {
               title={showAllRecipes ? 'All Recipes' : 'Recently Viewed'}
             />
           ) : (
-            <p className="text-sm text-stone-600">No recipes yet.</p>
+            <p className="text-sm text-stone-600 dark:text-stone-400">No recipes yet.</p>
           )
         ) : !localReady ? (
-          <p className="text-stone-600">Loading recipes...</p>
+          <p className="text-stone-600 dark:text-stone-400">Loading recipes...</p>
         ) : recipes.length ? (
           <CompactRecipeGrid
             bookmarkPendingSlug={
@@ -192,9 +192,9 @@ export function HomePage() {
             recipes={recipes}
           />
         ) : status === 'syncing' && !summaries.length ? (
-          <p className="text-stone-600">Syncing recipes...</p>
+          <p className="text-stone-600 dark:text-stone-400">Syncing recipes...</p>
         ) : (
-          <p className="text-stone-600">No recipes found.</p>
+          <p className="text-stone-600 dark:text-stone-400">No recipes found.</p>
         )}
 
       <Link
@@ -224,7 +224,7 @@ function CompactRecipeGrid({
       {title || headerAction ? (
         <div className="flex items-center justify-between gap-2">
           {title ? (
-            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700">{title}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700 dark:text-stone-300">{title}</h2>
           ) : (
             <span />
           )}
@@ -263,20 +263,20 @@ const CompactRecipeTile = memo(function CompactRecipeTile({
           src={recipe.image}
         />
       ) : (
-        <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-orange-100">
+        <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-orange-100 dark:bg-stone-800">
           <img alt="" className="h-16 w-16 object-contain opacity-90" src="/web-app-icon-512.png" />
         </div>
       )}
       {auth.authenticated ? (
         <BookmarkButton
           bookmarked={recipe.bookmarked}
-          className="absolute right-1 top-1 rounded-full bg-white/90 p-0.5 shadow-sm backdrop-blur-sm"
+          className="absolute right-1 top-1 rounded-full bg-white/90 p-0.5 shadow-sm backdrop-blur-sm dark:bg-stone-900/90"
           disabled={bookmarkPending}
           iconClassName="h-4 w-4"
           onToggle={() => onBookmarkToggle(recipe)}
         />
       ) : null}
-      <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">{recipe.title}</p>
+      <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-stone-900 dark:text-stone-100">{recipe.title}</p>
     </Link>
   )
 })

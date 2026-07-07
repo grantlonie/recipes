@@ -21,6 +21,7 @@ import {
 } from './shareImport'
 import { storeRecipe } from './sync'
 import type { RecipeDetail, RecipeSummary } from './types'
+import { cardClassName, inputClassName } from './themeClasses'
 
 type ImportResult =
   | { kind: 'created'; recipe: RecipeDetail }
@@ -185,11 +186,11 @@ export function ImportPage() {
       : '/recipes/new'
 
     return (
-      <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
-        <h1 className="text-2xl font-bold">Couldn't import recipe</h1>
-        <p className="mt-2 text-sm text-red-700">{errorMessage}</p>
+      <section className={`mx-auto max-w-md ${cardClassName}`}>
+        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Couldn't import recipe</h1>
+        <p className="mt-2 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
         {sharedUrl ? (
-          <p className="mt-2 break-all text-sm text-stone-600">{sharedUrl}</p>
+          <p className="mt-2 break-all text-sm text-stone-600 dark:text-stone-400">{sharedUrl}</p>
         ) : null}
         <div className="mt-6 flex flex-wrap gap-2">
           <Button onClick={handleRetryImport} variant="secondary">
@@ -202,7 +203,7 @@ export function ImportPage() {
             Open editor
           </Link>
           <Link
-            className="inline-flex rounded-full px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-100"
+            className="inline-flex rounded-full px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-100 dark:text-stone-200 dark:hover:bg-stone-700"
             to="/"
           >
             Go home
@@ -217,17 +218,17 @@ export function ImportPage() {
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
-      <h1 className="text-2xl font-bold">Import recipe</h1>
-      <p className="mt-2 text-stone-600">
+    <section className={`mx-auto max-w-md ${cardClassName}`}>
+      <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Import recipe</h1>
+      <p className="mt-2 text-stone-600 dark:text-stone-400">
         Paste a recipe URL to import it automatically, or share a link to this app from your
         browser.
       </p>
       <form className="mt-6 space-y-4" onSubmit={handleManualImport}>
         <label className="block">
-          <span className="text-sm font-semibold text-stone-700">Recipe URL</span>
+          <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Recipe URL</span>
           <input
-            className="mt-1 w-full rounded-xl border border-orange-200 px-3 py-2 outline-none ring-orange-500 focus:ring-2"
+            className={`mt-1 ${inputClassName}`}
             onChange={event => setManualUrl(event.target.value)}
             placeholder="https://example.com/recipe"
             type="url"
@@ -254,16 +255,16 @@ function ImportStatus({
   subtitleBreakAll?: boolean
 }) {
   return (
-    <section className="mx-auto max-w-md rounded-3xl bg-white p-6 text-center shadow-sm ring-1 ring-orange-100">
-      <p className="text-lg font-semibold text-stone-800">{message}</p>
+    <section className={`mx-auto max-w-md text-center ${cardClassName}`}>
+      <p className="text-lg font-semibold text-stone-800 dark:text-stone-100">{message}</p>
       {subtitle ? (
         <p
-          className={`mt-2 text-sm text-stone-600 ${subtitleBreakAll ? 'break-all' : 'text-base text-stone-700'}`}
+          className={`mt-2 text-sm text-stone-600 dark:text-stone-400 ${subtitleBreakAll ? 'break-all text-base text-stone-700 dark:text-stone-300' : ''}`}
         >
           {subtitle}
         </p>
       ) : null}
-      {detail ? <p className="mt-2 text-sm text-stone-500">{detail}</p> : null}
+      {detail ? <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{detail}</p> : null}
     </section>
   )
 }

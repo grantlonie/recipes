@@ -11,7 +11,7 @@ export function DensitySearchLink({ ingredientName }: DensitySearchLinkProps) {
   return (
     <a
       aria-label={`Search density of ${label}`}
-      className="inline-flex shrink-0 items-center justify-center rounded-lg p-2 text-stone-500 transition hover:bg-orange-100 hover:text-orange-700"
+      className="inline-flex shrink-0 items-center justify-center rounded-lg p-2 text-stone-500 transition hover:bg-orange-100 hover:text-orange-700 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-orange-300"
       href={`https://www.google.com/search?q=${encodeURIComponent(query)}`}
       rel="noopener noreferrer"
       target="_blank"

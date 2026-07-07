@@ -17,11 +17,11 @@ export function UnitSystemToggle() {
   }
 
   return (
-    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600">
+    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-600 dark:text-stone-300">
       <span className="sr-only">Unit system</span>
       <select
         aria-label="Unit system"
-        className="cursor-pointer border-0 bg-transparent py-0.5 pl-1 pr-0 text-xs font-semibold text-orange-600 focus:outline-none focus:ring-0"
+        className="cursor-pointer border-0 bg-transparent py-0.5 pl-1 pr-0 text-xs font-semibold text-orange-600 focus:outline-none focus:ring-0 dark:text-orange-300"
         onChange={onChange}
         value={unitSystem}
       >
