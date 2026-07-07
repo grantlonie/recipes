@@ -40,11 +40,6 @@ const LOWERCASE_INGREDIENT_WORDS = new Set([
   'to',
   'with',
 ])
-const MAX_SERVINGS = 12
-
-function clampServings(value: number): number {
-  return Math.min(MAX_SERVINGS, Math.max(1, Math.round(value)))
-}
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
@@ -100,7 +95,7 @@ export function RecipePage() {
 
   useEffect(() => {
     if (recipeQuery.data) {
-      setServings(clampServings(recipeQuery.data.servings))
+      setServings(recipeQuery.data.servings)
       addRecentRecipe(recipeQuery.data)
     }
   }, [addRecentRecipe, recipeQuery.data])
@@ -196,34 +191,29 @@ export function RecipePage() {
                   className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
                   disabled={servings <= 1}
                   id="servings-decrease"
-                  onClick={() => setServings(current => clampServings(current - 1))}
+                  onClick={() => setServings(current => Math.max(1, current - 1))}
                   type="button"
                 >
                   −
                 </button>
-                <input
-                  aria-label="Servings"
-                  className="w-9 min-w-9 border-x border-orange-200 bg-white px-1 py-1.5 text-center text-xs font-semibold tabular-nums text-stone-900 outline-none ring-orange-500 focus:ring-2"
+                <output
+                  aria-live="polite"
+                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900"
                   id="servings"
-                  inputMode="numeric"
-                  max={MAX_SERVINGS}
-                  min={1}
-                  onChange={event => setServings(clampServings(Number(event.target.value) || 1))}
-                  type="number"
-                  value={servings}
-                />
+                >
+                  {servings}
+                </output>
                 <button
                   aria-label="Increase servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={servings >= MAX_SERVINGS}
+                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100"
                   id="servings-increase"
-                  onClick={() => setServings(current => clampServings(current + 1))}
+                  onClick={() => setServings(current => current + 1)}
                   type="button"
                 >
                   +
                 </button>
               </div>
-              <span className="text-sm text-stone-600">{servings === 1 ? 'serving' : 'servings'}</span>
+              <span className="text-sm text-stone-600">serving</span>
             </div>
 
             {recipe.tags.length ? (
