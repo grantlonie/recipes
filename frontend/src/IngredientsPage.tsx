@@ -130,37 +130,39 @@ export function IngredientsPage() {
 
         <div className="mt-4 flex min-h-0 flex-1 flex-col">
           {filtered.length ? (
-            <div className="min-h-0 flex-1 overflow-y-auto pb-6">
-              <table className="min-w-full text-left text-sm">
-                <thead className="sticky top-0 z-10 border-b border-orange-100 bg-white text-stone-500 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-400">
-                  <tr>
-                    <th className="py-2 pr-4 font-semibold">Name</th>
-                    <th className="py-2 pr-4 font-semibold">Density (kg/m³)</th>
-                    <th className="py-2 font-semibold">Aliases</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(item => (
-                    <tr
-                      className="cursor-pointer border-b border-orange-50 hover:bg-orange-50 dark:border-stone-700 dark:hover:bg-stone-700/60"
-                      key={item.name}
-                      onClick={() => openEdit(item)}
-                    >
-                      <td className="py-3 pr-4 font-medium text-stone-900 dark:text-stone-100">
-                        {titleCaseIngredient(item.name)}
-                      </td>
-                      <td className="py-3 pr-4 tabular-nums text-stone-700 dark:text-stone-300">
-                        {item.density_kg_m3 ?? '—'}
-                      </td>
-                      <td className="max-w-xs py-3 text-stone-600 dark:text-stone-400 sm:max-w-sm md:max-w-md">
-                        <span className="line-clamp-3">
-                          {item.aliases.map(titleCaseIngredient).join(', ') || '—'}
-                        </span>
-                      </td>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="pb-6">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="sticky top-0 z-10 bg-white text-stone-500 dark:bg-stone-800 dark:text-stone-400">
+                    <tr className="border-b border-stone-200 dark:border-stone-600">
+                      <th className="py-2 pr-4 font-semibold">Name</th>
+                      <th className="py-2 pr-4 font-semibold">Density (kg/m³)</th>
+                      <th className="py-2 font-semibold">Aliases</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filtered.map(item => (
+                      <tr
+                        className="cursor-pointer border-b border-orange-50 hover:bg-orange-50 dark:border-stone-700 dark:hover:bg-stone-700/60"
+                        key={item.name}
+                        onClick={() => openEdit(item)}
+                      >
+                        <td className="py-3 pr-4 font-medium text-stone-900 dark:text-stone-100">
+                          {titleCaseIngredient(item.name)}
+                        </td>
+                        <td className="py-3 pr-4 tabular-nums text-stone-700 dark:text-stone-300">
+                          {item.density_kg_m3 ?? '—'}
+                        </td>
+                        <td className="max-w-xs py-3 text-stone-600 dark:text-stone-400 sm:max-w-sm md:max-w-md">
+                          <span className="line-clamp-3">
+                            {item.aliases.map(titleCaseIngredient).join(', ') || '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
             <p className="text-sm text-stone-500 dark:text-stone-400">No ingredients match your search.</p>
