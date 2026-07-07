@@ -121,6 +121,7 @@ export async function updateRecipeMetadata(
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
+    cache: 'no-store',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',

@@ -33,6 +33,7 @@ import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { buildLoginUrl } from './shareImport'
+import { getLocalRecipe } from './db'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import type { CatalogIngredient, UnitSystem } from './types'
 import {
@@ -52,6 +53,11 @@ import {
 import { useUnitSystem } from './UnitSystemContext'
 
 const emptyBody = 'Add @ingredient{100%g}.\n'
+const MAX_SERVINGS = 12
+
+function clampServings(value: number): number {
+  return Math.min(MAX_SERVINGS, Math.max(1, Math.round(value)))
+}
 
 interface RecipeEditPageProps {
   mode: 'edit' | 'new'
@@ -151,12 +157,16 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     },
     onSuccess: async recipe => {
       await storeRecipe(recipe)
-      await sync()
       queryClient.setQueryData(['recipe', recipe.slug], recipe)
-      addRecentRecipe(recipe)
+      queryClient.removeQueries({ queryKey: ['recipe', recipe.slug, 'scale'] })
       if (!isNew && slug !== recipe.slug) {
         queryClient.removeQueries({ queryKey: ['recipe', slug] })
+        queryClient.removeQueries({ queryKey: ['recipe', slug, 'scale'] })
       }
+      await sync()
+      const latest = (await getLocalRecipe(recipe.slug)) ?? recipe
+      queryClient.setQueryData(['recipe', recipe.slug], latest)
+      addRecentRecipe(latest)
       navigate(`/recipes/${recipe.slug}`, { replace: true })
     },
   })
@@ -297,8 +307,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               <Field label="Servings">
                 <input
                   className={inputClassName}
+                  max={MAX_SERVINGS}
                   min="1"
-                  onChange={event => setServings(Number(event.target.value) || 1)}
+                  onChange={event => setServings(clampServings(Number(event.target.value) || 1))}
                   type="number"
                   value={servings}
                 />
@@ -601,7 +612,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     if (!options.skipTags) {
       setTags(getTagsFromMetadata(metadata.tags))
     }
-    setServings(getNumber(metadata.servings) || getNumber(metadata.serves) || 1)
+    setServings(clampServings(getNumber(metadata.servings) || getNumber(metadata.serves) || 1))
     setImage(getString(metadata.image) || getString(metadata.picture))
     setSource(getString(metadata.source))
     setTime(getString(metadata.time) || getString(metadata.duration))
