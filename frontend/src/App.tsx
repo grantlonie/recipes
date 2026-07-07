@@ -41,7 +41,9 @@ function AppShell() {
   const isIngredients = location.pathname === '/ingredients'
 
   return (
-    <div className="flex min-h-dvh flex-col bg-orange-50 text-stone-900">
+    <div
+      className={`flex flex-col bg-orange-50 text-stone-900 ${isIngredients ? 'h-dvh overflow-hidden' : 'min-h-dvh'}`}
+    >
       <header className="sticky top-0 z-50 shrink-0 border-b border-orange-200 bg-white/95 backdrop-blur">
         <div className="mx-auto max-w-6xl px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-3">
@@ -102,7 +104,7 @@ function AppShell() {
       </header>
 
       <main
-        className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : 'pb-8 pt-4'} ${isIngredients ? 'flex min-h-0 flex-1 flex-col' : ''}`}
+        className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : isIngredients ? 'flex min-h-0 flex-1 flex-col overflow-hidden pb-6 pt-4' : 'pb-8 pt-4'}`}
       >
         <div aria-hidden={!isHome} className={isHome ? undefined : 'hidden'}>
           <HomePage />

@@ -1,4 +1,4 @@
-import { InformationCircleIcon } from '@heroicons/react/24/outline'
+import { InformationCircleIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
@@ -124,14 +124,15 @@ export function IngredientsPage() {
               value={query}
             />
           </label>
-          <Button className="shrink-0" onClick={() => openCreate()}>
-            Add ingredient
+          <Button className="inline-flex shrink-0 items-center gap-1.5" onClick={() => openCreate()}>
+            <PlusIcon aria-hidden="true" className="h-4 w-4" />
+            Add
           </Button>
         </div>
 
-        <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mt-4 flex min-h-0 flex-1 flex-col">
           {filtered.length ? (
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto pb-6">
               <table className="min-w-full text-left text-sm">
                 <thead className="sticky top-0 z-10 border-b border-orange-100 bg-white text-stone-500">
                   <tr>
@@ -153,8 +154,10 @@ export function IngredientsPage() {
                       <td className="py-3 pr-4 tabular-nums text-stone-700">
                         {item.density_kg_m3 ?? '—'}
                       </td>
-                      <td className="py-3 text-stone-600">
-                        {item.aliases.map(titleCaseIngredient).join(', ') || '—'}
+                      <td className="max-w-xs py-3 text-stone-600 sm:max-w-sm md:max-w-md">
+                        <span className="line-clamp-3">
+                          {item.aliases.map(titleCaseIngredient).join(', ') || '—'}
+                        </span>
                       </td>
                     </tr>
                   ))}
