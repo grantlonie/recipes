@@ -50,10 +50,11 @@ def test_ingredient_catalog_seed_and_crud(tmp_path, monkeypatch):
 
         created = client.put(
             "/api/ingredients",
-            json={"name": "rye flour", "density_kg_m3": 500, "aliases": ["rye"]},
+            json={"name": "Rye Flour", "density_kg_m3": 500, "aliases": ["Rye"]},
         )
         assert created.status_code == 200
         assert created.json()["name"] == "rye flour"
+        assert created.json()["aliases"] == ["rye"]
 
         weight_only = client.put(
             "/api/ingredients",

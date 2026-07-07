@@ -57,7 +57,7 @@ class IngredientRepository:
         return None
 
     def upsert(self, ingredient: CatalogIngredient) -> CatalogIngredient:
-        name = ingredient.name.strip()
+        name = ingredient.name.strip().casefold()
         if not name:
             raise IngredientStorageError("Ingredient name is required")
 
@@ -99,8 +99,8 @@ def _clean_aliases(aliases: list[str], name: str) -> list[str]:
     cleaned: list[str] = []
     name_key = name.casefold()
     for alias in aliases:
-        value = alias.strip()
-        key = value.casefold()
+        value = alias.strip().casefold()
+        key = value
         if not value or key == name_key or key in seen:
             continue
         seen.add(key)
