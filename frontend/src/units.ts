@@ -290,6 +290,28 @@ export function findCatalogIngredient(
   )
 }
 
+export function ingredientKnowsName(ingredient: CatalogIngredient, name: string): boolean {
+  const key = normalizeIngredientKey(name)
+  return (
+    normalizeIngredientKey(ingredient.name) === key ||
+    ingredient.aliases.some(alias => normalizeIngredientKey(alias) === key)
+  )
+}
+
+export function withLearnedAlias(
+  ingredient: CatalogIngredient,
+  alias: string,
+): CatalogIngredient | null {
+  const trimmed = alias.trim()
+  if (!trimmed || ingredientKnowsName(ingredient, trimmed)) {
+    return null
+  }
+  return {
+    ...ingredient,
+    aliases: [...ingredient.aliases, trimmed],
+  }
+}
+
 export interface CatalogMatch {
   catalog?: CatalogIngredient
   note: string

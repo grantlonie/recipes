@@ -50,6 +50,7 @@ import {
   matchCatalogIngredient,
   normalizeUnit,
   toGrams,
+  withLearnedAlias,
 } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 
@@ -707,29 +708,43 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       return
     }
 
-    const created: CatalogIngredient[] = []
+    const catalogUpdates: CatalogIngredient[] = []
     for (const row of mappingRows) {
-      if (!mappingRowNeedsCreate(row, catalog) || !row.catalogName.trim()) {
+      const catalogName = row.catalogName.trim()
+      if (!catalogName) {
         continue
       }
-      const densityValue = row.createDensity.trim()
-      const density = densityValue ? Number(densityValue) : null
-      if (densityValue && Number.isNaN(density)) {
+
+      if (mappingRowNeedsCreate(row, catalog)) {
+        const densityValue = row.createDensity.trim()
+        const density = densityValue ? Number(densityValue) : null
+        if (densityValue && Number.isNaN(density)) {
+          continue
+        }
+        const base: CatalogIngredient = {
+          aliases: [],
+          density_kg_m3: density,
+          name: catalogName,
+        }
+        const ingredient = await upsertIngredient(withLearnedAlias(base, row.originalName) ?? base)
+        catalogUpdates.push(ingredient)
         continue
       }
-      const ingredient = await upsertIngredient({
-        aliases:
-          row.originalName.toLowerCase() === row.catalogName.trim().toLowerCase()
-            ? []
-            : [row.originalName],
-        density_kg_m3: density,
-        name: row.catalogName.trim(),
-      })
-      created.push(ingredient)
+
+      const existing = findCatalogIngredient(catalogName, catalog)
+      if (!existing) {
+        continue
+      }
+      const learned = withLearnedAlias(existing, row.originalName)
+      if (!learned) {
+        continue
+      }
+      const ingredient = await upsertIngredient(learned)
+      catalogUpdates.push(ingredient)
     }
 
     let workingCatalog = catalog
-    if (created.length) {
+    if (catalogUpdates.length) {
       const nextCatalog = await getIngredientCatalog()
       await putIngredientCatalog(nextCatalog)
       queryClient.setQueryData(['ingredients'], nextCatalog)
