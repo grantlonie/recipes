@@ -124,7 +124,7 @@ function AppShell() {
         className={`mx-auto w-full max-w-6xl px-4 ${isHome ? 'pb-24 pt-2' : isIngredients ? 'flex min-h-0 flex-1 flex-col overflow-hidden pb-6 pt-4' : 'pb-8 pt-4'}`}
       >
         <div aria-hidden={!isHome} className={isHome ? undefined : 'hidden'}>
-          <HomePage />
+          <HomePage isVisible={isHome} />
         </div>
         {!isHome ? (
           <Routes>

@@ -14,7 +14,7 @@ import { searchRecipes } from './search'
 import { storeRecipe } from './sync'
 import type { RecipeDetail, RecipeSummary } from './types'
 
-export function HomePage() {
+export function HomePage({ isVisible }: HomePageProps) {
   const { auth } = useAuth()
   const { revision, status, sync } = useRecipeSync()
   const {
@@ -101,24 +101,31 @@ export function HomePage() {
   }, [revision])
 
   useLayoutEffect(() => {
+    if (!isVisible) {
+      return
+    }
     scrollRestoringRef.current = true
     window.scrollTo(0, scrollTop)
     requestAnimationFrame(() => {
       scrollRestoringRef.current = false
     })
-    // Restore scroll when returning to the home view.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isVisible, scrollTop])
 
   useEffect(() => {
+    if (!isVisible) {
+      return
+    }
     scrollRestoringRef.current = true
     window.scrollTo(0, 0)
     requestAnimationFrame(() => {
       scrollRestoringRef.current = false
     })
-  }, [filterKey])
+  }, [filterKey, isVisible])
 
   useEffect(() => {
+    if (!isVisible) {
+      return
+    }
     function handleScroll() {
       if (scrollRestoringRef.current) {
         return
@@ -128,7 +135,7 @@ export function HomePage() {
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [setScrollTop])
+  }, [isVisible, setScrollTop])
 
   return (
     <>
@@ -298,6 +305,10 @@ interface CompactRecipeTileProps {
   bookmarkPending?: boolean
   onBookmarkToggle: (recipe: RecipeSummary) => void
   recipe: RecipeSummary
+}
+
+interface HomePageProps {
+  isVisible: boolean
 }
 
 function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {

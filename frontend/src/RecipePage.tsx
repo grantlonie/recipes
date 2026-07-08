@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import {
   ArrowTopRightOnSquareIcon,
+  ChevronLeftIcon,
   PencilSquareIcon,
   ShareIcon,
   TrashIcon,
@@ -95,6 +96,10 @@ export function RecipePage() {
     setCompletedSteps(new Set())
   }, [slug])
 
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+  }, [slug])
+
   useEffect(() => {
     if (!slug || recipeQuery.isLoading) {
       return
@@ -153,6 +158,15 @@ export function RecipePage() {
 
   return (
     <article className="space-y-8 pb-8">
+      <button
+        aria-label="Back to recipes"
+        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 hover:text-orange-800 dark:hover:bg-stone-700 dark:hover:text-orange-200"
+        onClick={handleBack}
+        type="button"
+      >
+        <ChevronLeftIcon aria-hidden="true" className="h-4 w-4" />
+        Recipes
+      </button>
       <section className={`${cardClassName} overflow-hidden p-0`}>
         {recipe.image ? (
           <img
@@ -431,6 +445,14 @@ export function RecipePage() {
     }
     await deleteMutation.mutateAsync()
     setDeleteDialogOpen(false)
+  }
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+    navigate('/')
   }
 }
 
