@@ -173,3 +173,47 @@ Add @butter{1 ¼%cup} and @salt{1 1/4%tsp}.
     content = repository.recipe_path("normalized").read_text()
     assert "@butter{1.25%cup}" in content
     assert "@salt{1.25%tsp}" in content
+
+
+def test_write_recipe_renames_slug_and_assets(tmp_path):
+    sources_root = tmp_path / "sources"
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=tmp_path / "recipes",
+        sources_root=sources_root,
+    )
+    repository.write_recipe(
+        "chili",
+        """---
+image: sources/chili/image.jpg
+source: sources/chili/source.pdf
+title: Chili
+---
+
+Add @beans{2}.
+""",
+    )
+    (sources_root / "chili").mkdir(parents=True)
+    (sources_root / "chili" / "image.jpg").write_bytes(b"img")
+    (sources_root / "chili" / "source.pdf").write_bytes(b"pdf")
+
+    recipe = repository.write_recipe(
+        "chicken-soup",
+        """---
+image: sources/chili/image.jpg
+source: sources/chili/source.pdf
+title: Chicken Soup
+---
+
+Add @beans{2}.
+""",
+        previous_slug="chili",
+    )
+
+    assert recipe.slug == "chicken-soup"
+    assert not repository.recipe_path("chili").exists()
+    assert repository.recipe_path("chicken-soup").exists()
+    assert (sources_root / "chicken-soup" / "image.jpg").exists()
+    assert not (sources_root / "chili").exists()
+    assert "sources/chicken-soup/image.jpg" in recipe.content
+    assert "sources/chicken-soup/source.pdf" in recipe.content

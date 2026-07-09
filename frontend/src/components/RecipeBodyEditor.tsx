@@ -18,6 +18,7 @@ import { setSectionDisplayState } from './sectionDisplayStore'
 import { SectionExtension } from './sectionExtension'
 
 export interface RecipeBodyEditorHandle {
+  deleteIngredient: (pos: number) => void
   focus: () => void
   insertIngredient: (attrs: IngredientAttrs) => void
   insertSection: (title: string) => void
@@ -130,6 +131,20 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
       () => ({
         focus() {
           editor?.commands.focus()
+        },
+        deleteIngredient(pos) {
+          if (!editor) {
+            return
+          }
+          const node = editor.state.doc.nodeAt(pos)
+          if (!node || node.type.name !== 'ingredient') {
+            return
+          }
+          editor
+            .chain()
+            .focus()
+            .deleteRange({ from: pos, to: pos + node.nodeSize })
+            .run()
         },
         insertIngredient(attrs) {
           if (!editor) {

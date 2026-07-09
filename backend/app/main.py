@@ -265,7 +265,11 @@ def create_recipe(
     repository: RecipeRepository = Depends(get_repository),
 ) -> RecipeDetail:
     try:
-        return repository.write_recipe(payload.slug, payload.content)
+        return repository.write_recipe(
+            payload.slug,
+            payload.content,
+            previous_slug=payload.previous_slug,
+        )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
@@ -297,7 +301,13 @@ def update_recipe(
     repository: RecipeRepository = Depends(get_repository),
 ) -> RecipeDetail:
     try:
-        return repository.write_recipe(slug, payload.content)
+        target_slug = payload.slug or slug
+        previous_slug = slug if target_slug != slug else None
+        return repository.write_recipe(
+            target_slug,
+            payload.content,
+            previous_slug=previous_slug,
+        )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 

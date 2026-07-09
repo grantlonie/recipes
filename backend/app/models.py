@@ -57,11 +57,13 @@ class RecipeDetail(RecipeSummary):
 
 class RecipeWrite(BaseModel):
     content: str
+    previous_slug: str | None = None
     slug: str
 
 
 class RecipeUpdate(BaseModel):
     content: str
+    slug: str | None = None
 
 
 class MetadataUpdate(BaseModel):

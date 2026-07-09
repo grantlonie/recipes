@@ -16,12 +16,14 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
+    "lodash-es": "^4.18.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
+    "@types/lodash-es": "^4.17.12",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

@@ -35,3 +35,15 @@ def test_public_reads_and_protected_writes(tmp_path, monkeypatch):
         public_recipe = client.get("/api/recipes/chili")
         assert public_recipe.status_code == 200
         assert public_recipe.json()["title"] == "Chili"
+
+        renamed = client.put(
+            "/api/recipes/chili",
+            json={
+                "content": "---\ntitle: Chicken Soup\n---\n\nAdd @beans{2}.",
+                "slug": "chicken-soup",
+            },
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["slug"] == "chicken-soup"
+        assert client.get("/api/recipes/chili").status_code == 404
+        assert client.get("/api/recipes/chicken-soup").status_code == 200

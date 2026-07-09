@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { isEqual } from 'lodash-es'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import {
@@ -36,11 +37,11 @@ import { useIngredientCatalog } from './IngredientCatalogContext'
 import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
-import { buildLoginUrl } from './shareImport'
-import { getLocalRecipe } from './db'
+import { buildLoginUrl, ensureUniqueSlug, slugify } from './shareImport'
+import { getLocalRecipe, deleteRecipes } from './db'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import { cardClassName, inputClassName } from './themeClasses'
-import type { ImportPreview, UnitSystem } from './types'
+import type { CatalogIngredient, ImportPreview, UnitSystem } from './types'
 import {
   defaultEditorUnit,
   densityForName,
@@ -55,6 +56,47 @@ import { useUnitSystem } from './UnitSystemContext'
 
 const emptyBody = 'Add @ingredient{100%g}.\n'
 const MAX_SERVINGS = 12
+
+interface IngredientFormState {
+  fixed: boolean
+  name: string
+  note: string
+  qty: string
+  units: string
+}
+
+function emptyIngredientForm(): IngredientFormState {
+  return { fixed: false, name: '', note: '', qty: '', units: '' }
+}
+
+function newIngredientForm(unitSystem: UnitSystem): IngredientFormState {
+  return {
+    fixed: false,
+    name: '',
+    note: '',
+    qty: '1',
+    units: defaultEditorUnit(unitSystem),
+  }
+}
+
+function ingredientFormFromAttrs(
+  attrs: IngredientAttrs,
+  catalog: CatalogIngredient[],
+  unitSystem: UnitSystem,
+): IngredientFormState {
+  const density = densityForName(attrs.name, catalog)
+  const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
+    densityKgM3: density,
+    unitSystem,
+  })
+  return {
+    fixed: attrs.fixed,
+    name: attrs.name,
+    note: attrs.note,
+    qty: display.quantity || attrs.quantity,
+    units: normalizeUnit(display.unit) ?? '',
+  }
+}
 
 function clampServings(value: number): number {
   return Math.min(MAX_SERVINGS, Math.max(1, Math.round(value)))
@@ -85,11 +127,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [importUrl, setImportUrl] = useState(searchParams.get('url') ?? '')
   const [ingredientDialogOpen, setIngredientDialogOpen] = useState(false)
   const [editingPos, setEditingPos] = useState<number | null>(null)
-  const [ingredientName, setIngredientName] = useState('')
-  const [ingredientNote, setIngredientNote] = useState('')
-  const [ingredientQuantity, setIngredientQuantity] = useState('')
-  const [ingredientUnit, setIngredientUnit] = useState('')
-  const [ingredientFixed, setIngredientFixed] = useState(false)
+  const [ingredientInitial, setIngredientInitial] = useState<IngredientFormState>(emptyIngredientForm)
+  const [ingredientDraft, setIngredientDraft] = useState<IngredientFormState>(emptyIngredientForm)
   const [sectionDialogOpen, setSectionDialogOpen] = useState(false)
   const [editingSectionPos, setEditingSectionPos] = useState<number | null>(null)
   const [sectionTitle, setSectionTitle] = useState('')
@@ -111,7 +150,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     queryKey: ['recipe', slug],
   })
 
-  const selectedDensity = densityForName(ingredientName, catalog)
+  const selectedDensity = densityForName(ingredientDraft.name, catalog)
   const unitOptions = useMemo(() => editorUnitItems(unitSystem), [unitSystem])
   const ingredientOptions = useMemo(
     () =>
@@ -125,6 +164,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     () => mappingRowsAreValid(mappingRows, catalog),
     [mappingRows, catalog],
   )
+  const ingredientDirty = editingPos !== null && !isEqual(ingredientInitial, ingredientDraft)
 
   useEffect(() => {
     if (!auth.authenticated) {
@@ -134,15 +174,25 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }, [auth.authenticated, revision])
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const content = buildContent()
-      return isNew ? createRecipe(recipeSlug, content) : updateRecipe(slug, content)
+      const titleSlug = slugify(title.trim() || 'Untitled Recipe')
+      if (isNew) {
+        const targetSlug = await ensureUniqueSlug(titleSlug)
+        const previousSlug = targetSlug !== recipeSlug ? recipeSlug : undefined
+        return createRecipe(targetSlug, content, previousSlug)
+      }
+      const targetSlug = await ensureUniqueSlug(titleSlug, { excludeSlug: slug })
+      return targetSlug !== slug
+        ? updateRecipe(slug, content, targetSlug)
+        : updateRecipe(slug, content)
     },
     onSuccess: async recipe => {
       await storeRecipe(recipe)
       queryClient.setQueryData(['recipe', recipe.slug], recipe)
       queryClient.removeQueries({ queryKey: ['recipe', recipe.slug, 'scale'] })
       if (!isNew && slug !== recipe.slug) {
+        await deleteRecipes([slug])
         queryClient.removeQueries({ queryKey: ['recipe', slug] })
         queryClient.removeQueries({ queryKey: ['recipe', slug, 'scale'] })
       }
@@ -176,27 +226,27 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   })
 
   useEffect(() => {
+    if (!isNew) {
+      return
+    }
+    const baseSlug = slugify(title)
+    void ensureUniqueSlug(baseSlug).then(setRecipeSlug)
+  }, [isNew, title])
+
+  useEffect(() => {
     if (recipeQuery.data) {
       const bodyContent = splitDocument(recipeQuery.data.content).body
       applyDocumentState(recipeQuery.data.metadata, bodyContent)
       setBookmarked(recipeQuery.data.bookmarked)
-      setRecipeSlug(recipeQuery.data.slug)
     }
   }, [recipeQuery.data])
 
   const handleEditIngredient = useCallback(
     (pos: number, attrs: IngredientAttrs) => {
-      const density = densityForName(attrs.name, catalog)
-      const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
-        densityKgM3: density,
-        unitSystem,
-      })
+      const snapshot = ingredientFormFromAttrs(attrs, catalog, unitSystem)
       setEditingPos(pos)
-      setIngredientName(attrs.name)
-      setIngredientNote(attrs.note)
-      setIngredientQuantity(display.quantity || attrs.quantity)
-      setIngredientUnit(normalizeUnit(display.unit) ?? '')
-      setIngredientFixed(attrs.fixed)
+      setIngredientInitial(snapshot)
+      setIngredientDraft(snapshot)
       setIngredientDialogOpen(true)
     },
     [catalog, unitSystem],
@@ -253,7 +303,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             <Button onClick={handleCancel} variant="ghost">
               Cancel
             </Button>
-            <Button disabled={saveMutation.isPending || !recipeSlug.trim()} onClick={handleSave}>
+            <Button disabled={saveMutation.isPending || !title.trim()} onClick={handleSave}>
               {saveMutation.isPending ? 'Saving...' : isNew ? 'Create recipe' : 'Save recipe'}
             </Button>
           </div>
@@ -282,14 +332,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                   value={title}
                 />
               </Field>
-              <Field label="Slug">
-                <input
-                  className={inputClassName}
-                  disabled={!isNew}
-                  onChange={event => setRecipeSlug(event.target.value)}
-                  value={recipeSlug}
-                />
-              </Field>
               <Field label="Servings">
                 <input
                   className={inputClassName}
@@ -314,7 +356,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 label="Image"
                 onUpload={handleImageUpload}
                 onValueChange={setImage}
-                slug={recipeSlug}
+                slug={isNew ? recipeSlug : slug}
                 value={image}
               />
               <RefField
@@ -323,7 +365,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 label="Source"
                 onUpload={handleSourceUpload}
                 onValueChange={setSource}
-                slug={recipeSlug}
+                slug={isNew ? recipeSlug : slug}
                 value={source}
               />
               {!isNew && reimportMutation.error ? (
@@ -384,17 +426,19 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         </h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <Field label="Quantity">
-            {isUsCookingVolumeUnit(ingredientUnit) ? (
+            {isUsCookingVolumeUnit(ingredientDraft.units) ? (
               <VolumeQuantitySelect
-                onChange={setIngredientQuantity}
-                value={ingredientQuantity}
+                onChange={qty => setIngredientDraft(current => ({ ...current, qty }))}
+                value={ingredientDraft.qty}
               />
             ) : (
               <input
                 className={inputClassName}
-                onChange={event => setIngredientQuantity(event.target.value)}
+                onChange={event =>
+                  setIngredientDraft(current => ({ ...current, qty: event.target.value }))
+                }
                 placeholder="1"
-                value={ingredientQuantity}
+                value={ingredientDraft.qty}
               />
             )}
           </Field>
@@ -402,34 +446,38 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             <Autocomplete
               allowCustom={false}
               allowEmpty
-              onChange={setIngredientUnit}
+              onChange={units => setIngredientDraft(current => ({ ...current, units }))}
               options={unitOptions}
               placeholder="optional"
-              value={ingredientUnit}
+              value={ingredientDraft.units}
             />
           </Field>
           <Field label="Ingredient">
             <Autocomplete
-              onChange={setIngredientName}
+              onChange={name => setIngredientDraft(current => ({ ...current, name }))}
               options={ingredientOptions}
               placeholder="flour"
-              value={ingredientName}
+              value={ingredientDraft.name}
             />
           </Field>
         </div>
         <Field className="mt-4" label="Details">
           <input
             className={inputClassName}
-            onChange={event => setIngredientNote(event.target.value)}
+            onChange={event =>
+              setIngredientDraft(current => ({ ...current, note: event.target.value }))
+            }
             placeholder="large, bittersweet, unsalted…"
-            value={ingredientNote}
+            value={ingredientDraft.note}
           />
         </Field>
         <label className="mt-4 flex items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-200">
           <input
-            checked={ingredientFixed}
+            checked={ingredientDraft.fixed}
             className="h-4 w-4 accent-orange-600"
-            onChange={event => setIngredientFixed(event.target.checked)}
+            onChange={event =>
+              setIngredientDraft(current => ({ ...current, fixed: event.target.checked }))
+            }
             type="checkbox"
           />
           Fixed amount (does not scale)
@@ -441,13 +489,28 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             ? ' No density on this ingredient — volume units are stored as-is (not grams).'
             : null}
         </p>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button onClick={() => setIngredientDialogOpen(false)} variant="ghost">
-            Cancel
-          </Button>
-          <Button disabled={!ingredientName.trim()} onClick={saveIngredientToken}>
-            {editingPos !== null ? 'Update ingredient' : 'Add ingredient'}
-          </Button>
+        <div className="mt-6 flex justify-between gap-2">
+          {editingPos !== null ? (
+            <Button onClick={deleteIngredientToken} variant="danger">
+              Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            {editingPos === null || ingredientDirty ? (
+              <Button onClick={closeIngredientDialog} variant="ghost">
+                Cancel
+              </Button>
+            ) : null}
+            <Button
+              className={editingPos !== null ? 'w-[80px] justify-center' : undefined}
+              disabled={!ingredientDraft.name.trim()}
+              onClick={confirmIngredientDialog}
+            >
+              {editingPos !== null ? (ingredientDirty ? 'Update' : 'Done') : 'Add ingredient'}
+            </Button>
+          </div>
         </div>
       </Dialog>
 
@@ -664,37 +727,51 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 
   function openAddIngredient() {
+    const snapshot = newIngredientForm(unitSystem)
     setEditingPos(null)
-    setIngredientName('')
-    setIngredientNote('')
-    setIngredientQuantity('1')
-    setIngredientUnit(defaultEditorUnit(unitSystem))
-    setIngredientFixed(false)
+    setIngredientInitial(snapshot)
+    setIngredientDraft(snapshot)
     setIngredientDialogOpen(true)
   }
 
+  function closeIngredientDialog() {
+    setIngredientDialogOpen(false)
+    setEditingPos(null)
+    const snapshot = emptyIngredientForm()
+    setIngredientInitial(snapshot)
+    setIngredientDraft(snapshot)
+  }
+
+  function confirmIngredientDialog() {
+    if (editingPos !== null && !ingredientDirty) {
+      closeIngredientDialog()
+      return
+    }
+    saveIngredientToken()
+  }
+
   function saveIngredientToken() {
-    const name = ingredientName.trim()
+    const name = ingredientDraft.name.trim()
     if (!name) {
       return
     }
 
-    const quantityText = ingredientQuantity.trim()
-    const unit = ingredientUnit.trim()
-    const note = ingredientNote.trim()
+    const quantityText = ingredientDraft.qty.trim()
+    const unit = ingredientDraft.units.trim()
+    const note = ingredientDraft.note.trim()
     let attrs: IngredientAttrs
 
     if (!quantityText) {
-      attrs = { fixed: ingredientFixed, name, note, quantity: '', unit: '' }
+      attrs = { fixed: ingredientDraft.fixed, name, note, quantity: '', unit: '' }
     } else if (!unit) {
-      attrs = { fixed: ingredientFixed, name, note, quantity: quantityText, unit: '' }
+      attrs = { fixed: ingredientDraft.fixed, name, note, quantity: quantityText, unit: '' }
     } else {
       const quantity = parseQuantity(quantityText)
       const density = densityForName(name, catalog)
       const grams = quantity === null ? null : toGrams(quantity, unit, density)
       if (grams == null) {
         attrs = {
-          fixed: ingredientFixed,
+          fixed: ingredientDraft.fixed,
           name,
           note,
           quantity: quantityText,
@@ -702,7 +779,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         }
       } else {
         attrs = {
-          fixed: ingredientFixed,
+          fixed: ingredientDraft.fixed,
           name,
           note,
           quantity: formatGramsValue(grams),
@@ -717,8 +794,16 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       bodyEditorRef.current?.insertIngredient(attrs)
     }
 
-    setIngredientDialogOpen(false)
-    setEditingPos(null)
+    closeIngredientDialog()
+  }
+
+  function deleteIngredientToken() {
+    if (editingPos === null) {
+      return
+    }
+
+    bodyEditorRef.current?.deleteIngredient(editingPos)
+    closeIngredientDialog()
   }
 
   function saveSection() {

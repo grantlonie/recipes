@@ -116,6 +116,9 @@ class RecipeRepository:
         self.recipes[slug] = self._read_recipe(path, slug)
         self._mtimes[slug] = mtime
         if previous_slug and previous_slug != slug:
+            old_path = self.recipe_path(previous_slug)
+            if old_path.exists():
+                old_path.unlink()
             self.recipes.pop(previous_slug, None)
             self._mtimes.pop(previous_slug, None)
         self.version += 1

@@ -109,10 +109,24 @@ function importSessionKey(url: string): string {
   return `share-import:${url}`
 }
 
-export async function ensureUniqueSlug(baseSlug: string): Promise<string> {
+export function slugify(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return normalized || 'new-recipe'
+}
+
+export async function ensureUniqueSlug(
+  baseSlug: string,
+  options: { excludeSlug?: string } = {},
+): Promise<string> {
   const normalized = baseSlug.trim() || 'new-recipe'
   const recipes = await getRecipes('')
-  const existing = new Set(recipes.map(recipe => recipe.slug))
+  const existing = new Set(
+    recipes.map(recipe => recipe.slug).filter(slug => slug !== options.excludeSlug),
+  )
 
   if (!existing.has(normalized)) {
     return normalized

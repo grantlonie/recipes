@@ -11,9 +11,13 @@ import type {
   SyncManifest,
 } from './types'
 
-export async function createRecipe(slug: string, content: string): Promise<RecipeDetail> {
+export async function createRecipe(
+  slug: string,
+  content: string,
+  previousSlug?: string,
+): Promise<RecipeDetail> {
   return request('/api/recipes', {
-    body: JSON.stringify({ content, slug }),
+    body: JSON.stringify({ content, previous_slug: previousSlug, slug }),
     method: 'POST',
   })
 }
@@ -166,9 +170,13 @@ export async function logout(): Promise<AuthState> {
   return request('/api/auth/logout', { method: 'POST' })
 }
 
-export async function updateRecipe(slug: string, content: string): Promise<RecipeDetail> {
+export async function updateRecipe(
+  slug: string,
+  content: string,
+  newSlug?: string,
+): Promise<RecipeDetail> {
   return request(`/api/recipes/${slug}`, {
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({ content, slug: newSlug }),
     method: 'PUT',
   })
 }
