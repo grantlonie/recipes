@@ -2,18 +2,20 @@ from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import auth
 from app.config import Settings, get_settings
-from app.importer import ImportError, import_from_url
+from app.importer import ImportError, import_from_slug_file, import_from_upload, import_from_url
 from app.ingredients import IngredientRepository, IngredientStorageError
 from app.manifest import build_web_manifest
 from app.models import (
+    AssetUploadResponse,
     AuthState,
     CatalogIngredient,
+    ImportFileRequest,
     ImportPreview,
     ImportRequest,
     IngredientCatalog,
@@ -27,8 +29,15 @@ from app.models import (
     SyncManifest,
 )
 from app.search import search_details
+from app.sources import (
+    ALLOWED_IMAGE_EXTENSIONS,
+    ALLOWED_SOURCE_EXTENSIONS,
+    AssetError,
+    guess_media_type,
+    resolve_asset_file,
+    save_upload,
+)
 from app.storage import RecipeRepository, StorageError, summary_from_detail
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Iterator[None]:
@@ -36,6 +45,7 @@ async def lifespan(app: FastAPI) -> Iterator[None]:
     app.state.repository = RecipeRepository(
         app_base_url=settings.app_base_url,
         recipe_root=settings.recipe_root,
+        sources_root=settings.sources_root,
     )
     app.state.ingredients = IngredientRepository(catalog_path=settings.ingredients_path)
     yield
@@ -146,12 +156,107 @@ def delete_ingredient(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def get_settings_dep() -> Settings:
+    return get_settings()
+
+
 @app.post("/api/import", dependencies=[Depends(auth.require_editor)])
-def import_recipe(payload: ImportRequest) -> ImportPreview:
+def import_recipe(
+    payload: ImportRequest,
+    settings: Settings = Depends(get_settings_dep),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> ImportPreview:
     try:
-        return import_from_url(str(payload.url))
+        return import_from_url(str(payload.url), settings=settings, ingredients=ingredients)
     except ImportError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+
+@app.post("/api/import/file", dependencies=[Depends(auth.require_editor)])
+def import_recipe_file(
+    payload: ImportFileRequest,
+    settings: Settings = Depends(get_settings_dep),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+    repository: RecipeRepository = Depends(get_repository),
+) -> ImportPreview:
+    try:
+        return import_from_slug_file(
+            payload.slug,
+            settings=settings,
+            ingredients=ingredients,
+            sources_root=repository.sources_root or settings.sources_root,
+        )
+    except ImportError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+
+@app.post("/api/import/upload", dependencies=[Depends(auth.require_editor)])
+async def import_recipe_upload(
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings_dep),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> ImportPreview:
+    try:
+        return await import_from_upload(file, settings=settings, ingredients=ingredients)
+    except ImportError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+
+@app.post(
+    "/api/recipes/{slug}/source",
+    dependencies=[Depends(auth.require_editor)],
+)
+async def upload_recipe_source(
+    slug: str,
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings_dep),
+) -> AssetUploadResponse:
+    try:
+        path = await save_upload(
+            settings.sources_root,
+            slug,
+            "source",
+            file,
+            allowed_extensions=ALLOWED_SOURCE_EXTENSIONS,
+        )
+        return AssetUploadResponse(path=path)
+    except AssetError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@app.post(
+    "/api/recipes/{slug}/image",
+    dependencies=[Depends(auth.require_editor)],
+)
+async def upload_recipe_image(
+    slug: str,
+    file: UploadFile = File(...),
+    settings: Settings = Depends(get_settings_dep),
+) -> AssetUploadResponse:
+    try:
+        path = await save_upload(
+            settings.sources_root,
+            slug,
+            "image",
+            file,
+            allowed_extensions=ALLOWED_IMAGE_EXTENSIONS,
+        )
+        return AssetUploadResponse(path=path)
+    except AssetError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@app.get("/api/sources/{asset_path:path}")
+def get_recipe_asset(
+    asset_path: str,
+    settings: Settings = Depends(get_settings_dep),
+) -> FileResponse:
+    relative_path = f"sources/{asset_path}"
+    try:
+        file_path = resolve_asset_file(settings.sources_root, relative_path)
+    except AssetError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    return FileResponse(file_path, media_type=guess_media_type(file_path))
 
 
 @app.post("/api/recipes", dependencies=[Depends(auth.require_editor)])

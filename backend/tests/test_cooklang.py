@@ -87,7 +87,7 @@ def test_parse_cookware_keeps_braced_multi_word_names_together():
 def test_split_amount_parses_quantity_and_unit_without_separator():
     assert split_amount("1 cup") == ("1", "cup", False)
     assert split_amount("¼ cup") == ("¼", "cup", False)
-    assert split_amount("½ teaspoon") == ("½", "teaspoon", False)
+    assert split_amount("½ teaspoon") == ("½", "tsp", False)
     assert split_amount("1") == ("1", None, False)
     assert split_amount("=1%packet") == ("1", "packet", True)
 
@@ -123,7 +123,7 @@ def test_parse_ingredients_scales_amounts_with_embedded_units():
     assert flour.scaled_quantity == "0.5"
     assert egg.scaled_quantity == "0.5"
     assert salt.quantity == "½"
-    assert salt.unit == "teaspoon"
+    assert salt.unit == "tsp"
     assert salt.scaled_quantity == "0.25"
 
 
@@ -137,7 +137,7 @@ Mix @flour{1 1/4%cup} and @salt{½%teaspoon} and @sugar{1 ¼ cup}.
     normalized = normalize_document(content)
 
     assert "@flour{1.25%cup}" in normalized
-    assert "@salt{0.5%teaspoon}" in normalized
+    assert "@salt{0.5%tsp}" in normalized
     assert "@sugar{1.25 cup}" in normalized
 
 
@@ -148,7 +148,7 @@ def test_scale_steps_updates_ingredient_amounts():
         servings=4,
     )
 
-    assert steps == ["Mix @flour{0.5%cup} and @salt{0.25%teaspoon}."]
+    assert steps == ["Mix @flour{0.5%cup} and @salt{0.25%tsp}."]
 
 
 def test_scale_steps_preserves_preparation_notes():
@@ -158,4 +158,4 @@ def test_scale_steps_preserves_preparation_notes():
         servings=4,
     )
 
-    assert steps == ["Mix @flour{0.5%cup}(sifted) and @salt{0.25%teaspoon}."]
+    assert steps == ["Mix @flour{0.5%cup}(sifted) and @salt{0.25%tsp}."]

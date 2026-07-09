@@ -8,6 +8,7 @@ import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
+import { NewRecipeFab } from './components/NewRecipeFab'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { searchRecipes } from './search'
@@ -15,7 +16,6 @@ import { storeRecipe } from './sync'
 import type { RecipeDetail, RecipeSummary } from './types'
 
 export function HomePage({ isVisible }: HomePageProps) {
-  const { auth } = useAuth()
   const { revision, status, sync } = useRecipeSync()
   const {
     activeTags,
@@ -204,13 +204,7 @@ export function HomePage({ isVisible }: HomePageProps) {
           <p className="text-stone-600 dark:text-stone-400">No recipes found.</p>
         )}
 
-      <Link
-        className="fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-3xl font-light text-white shadow-lg hover:bg-orange-700"
-        to={auth.authenticated ? '/recipes/new' : '/login'}
-      >
-        <span className="sr-only">New recipe</span>
-        +
-      </Link>
+      <NewRecipeFab />
     </>
   )
 }
@@ -222,7 +216,9 @@ function CompactRecipeGrid({
   recipes,
   title,
 }: CompactRecipeGridProps) {
-  if (!recipes.length && !headerAction) {
+  const tiles = useMemo(() => uniqueRecipesForGrid(recipes), [recipes])
+
+  if (!tiles.length && !headerAction) {
     return null
   }
 
@@ -239,10 +235,10 @@ function CompactRecipeGrid({
         </div>
       ) : null}
       <div className={`grid grid-cols-3 gap-3 ${title || headerAction ? 'mt-2' : ''}`}>
-        {recipes.map(recipe => (
+        {tiles.map(({ key, recipe }) => (
           <CompactRecipeTile
+            key={key}
             bookmarkPending={bookmarkPendingSlug === recipe.slug}
-            key={recipe.slug}
             onBookmarkToggle={onBookmarkToggle}
             recipe={recipe}
           />
@@ -334,5 +330,23 @@ function filterRecipes(recipes: RecipeSummary[], bookmarkedOnly: boolean, active
       return false
     }
     return true
+  })
+}
+
+function uniqueRecipesForGrid(recipes: RecipeSummary[]): Array<{ key: string; recipe: RecipeSummary }> {
+  const seen = new Map<string, number>()
+
+  return recipes.flatMap((recipe, index) => {
+    if (!recipe.slug) {
+      return [{ key: `recipe-${index}`, recipe }]
+    }
+
+    const count = seen.get(recipe.slug) ?? 0
+    seen.set(recipe.slug, count + 1)
+    if (count > 0) {
+      return []
+    }
+
+    return [{ key: recipe.slug, recipe }]
   })
 }

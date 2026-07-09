@@ -10,7 +10,7 @@ def test_front_matter_updates_preserve_body_and_do_not_create_images(tmp_path):
         recipe_root=tmp_path / "recipes",
     )
     repository.write_recipe(
-        "dinner/chili",
+        "dinner-chili",
         """---
 title: Chili
 tags:
@@ -23,7 +23,7 @@ Brown @beef{1%lb}.
     )
 
     recipe = repository.update_metadata(
-        "dinner/chili",
+        "dinner-chili",
         bookmarked=True,
         image="https://example.com/chili.jpg",
         servings=6,
@@ -147,11 +147,11 @@ Add @melted unsalted butter{¼ cup} and @vanilla extract{½ teaspoon}.
     assert scaled["egg"].scaled_quantity == "0.5"
     assert scaled["melted unsalted butter"].scaled_quantity == "0.125"
     assert scaled["vanilla extract"].scaled_quantity == "0.25"
-    assert scaled["vanilla extract"].unit == "teaspoon"
+    assert scaled["vanilla extract"].unit == "tsp"
     step_blocks = [block for block in recipe.blocks if block.kind == "step"]
     assert step_blocks[0].text == (
         "Mix @sourdough starter{0.5 cup}, @buttermilk{0.5 cup}, and @egg{0.5}.\n"
-        "Add @melted unsalted butter{0.125 cup} and @vanilla extract{0.25 teaspoon}."
+        "Add @melted unsalted butter{0.125 cup} and @vanilla extract{0.25 tsp}."
     )
 
 

@@ -33,7 +33,7 @@ def test_split_glued_amount_parses_ml_and_liters():
 
     assert split_glued_amount("250ml", parse_quantity=parse_quantity_to_fraction) == ("250", "ml")
     assert split_glued_amount("1.5l", parse_quantity=parse_quantity_to_fraction) == ("1.5", "l")
-    assert split_glued_amount("2 liters", parse_quantity=parse_quantity_to_fraction) == (None, None)
+    assert split_glued_amount("2 liters", parse_quantity=parse_quantity_to_fraction) == ("2", "l")
 
 
 def test_format_metric_and_us():

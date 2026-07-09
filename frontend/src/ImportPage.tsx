@@ -3,29 +3,39 @@ import type { FormEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
-import { createRecipe, importRecipe } from './api'
+import { importRecipe } from './api'
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
+import { ImportMappingDialog } from './components/ImportMappingDialog'
+import { useIngredientCatalog } from './IngredientCatalogContext'
+import {
+  applyImportMapping,
+  type MappingRow,
+  type PendingImport,
+} from './importMapping'
+import {
+  buildImportContent,
+  finalizeImportedRecipe,
+  persistImportedRecipe,
+  prepareImportMapping,
+} from './importRecipeFlow'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import {
   buildImportPath,
-  buildLoginUrl,
   clearImportSession,
-  ensureUniqueSlug,
   extractRecipeUrl,
   findRecipeBySourceUrl,
   formatImportError,
   getImportSession,
   markImportDone,
 } from './shareImport'
-import { storeRecipe } from './sync'
-import type { RecipeDetail, RecipeSummary } from './types'
+import type { ImportPreview, RecipeDetail, RecipeSummary } from './types'
 import { cardClassName, inputClassName } from './themeClasses'
 
 type ImportResult =
-  | { kind: 'created'; recipe: RecipeDetail }
   | { kind: 'existing'; recipe: RecipeSummary }
+  | { kind: 'preview'; preview: ImportPreview }
 
 export function ImportPage() {
   const { auth, authLoading } = useAuth()
@@ -34,9 +44,14 @@ export function ImportPage() {
   const queryClient = useQueryClient()
   const { sync } = useRecipeSync()
   const { addRecentRecipe } = useRecipeListState()
+  const { ingredients: catalog, refresh: refreshCatalog } = useIngredientCatalog()
   const importStarted = useRef(false)
   const [manualUrl, setManualUrl] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
+  const [mappingOpen, setMappingOpen] = useState(false)
+  const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
+  const [pendingPreview, setPendingPreview] = useState<ImportPreview | null>(null)
 
   const sharedUrl = extractRecipeUrl({
     text: searchParams.get('text'),
@@ -46,7 +61,43 @@ export function ImportPage() {
   useEffect(() => {
     importStarted.current = false
     setImportError(null)
+    clearPendingMapping()
   }, [sharedUrl])
+
+  function clearPendingMapping() {
+    setMappingOpen(false)
+    setMappingRows([])
+    setPendingImport(null)
+    setPendingPreview(null)
+  }
+
+  function openCreatedRecipe(recipe: RecipeDetail) {
+    if (sharedUrl) {
+      markImportDone(sharedUrl)
+    }
+    queryClient.setQueryData(['recipe', recipe.slug], recipe)
+    addRecentRecipe(recipe)
+    navigate(`/recipes/${recipe.slug}`, { replace: true })
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async ({ content, preview }: { content: string; preview: ImportPreview }) => {
+      const recipe = await finalizeImportedRecipe(content, preview.suggested_slug)
+      await persistImportedRecipe(recipe, sync)
+      return recipe
+    },
+    onSuccess: recipe => {
+      setImportError(null)
+      clearPendingMapping()
+      openCreatedRecipe(recipe)
+    },
+    onError: error => {
+      setImportError(formatImportError(error))
+      if (pendingImport) {
+        setMappingOpen(true)
+      }
+    },
+  })
 
   const importMutation = useMutation({
     mutationFn: async (recipeUrl: string): Promise<ImportResult> => {
@@ -56,11 +107,7 @@ export function ImportPage() {
       }
 
       const preview = await importRecipe(recipeUrl)
-      const slug = await ensureUniqueSlug(preview.suggested_slug)
-      const recipe = await createRecipe(slug, preview.content)
-      await storeRecipe(recipe)
-      await sync()
-      return { kind: 'created', recipe }
+      return { kind: 'preview', preview }
     },
     onError: error => {
       setImportError(formatImportError(error))
@@ -69,6 +116,9 @@ export function ImportPage() {
       setImportError(null)
 
       if (result.kind === 'existing') {
+        if (sharedUrl) {
+          markImportDone(sharedUrl)
+        }
         addRecentRecipe(result.recipe)
         window.setTimeout(() => {
           navigate(`/recipes/${result.recipe.slug}`, { replace: true })
@@ -76,19 +126,25 @@ export function ImportPage() {
         return
       }
 
-      queryClient.setQueryData(['recipe', result.recipe.slug], result.recipe)
-      addRecentRecipe(result.recipe)
-      navigate(`/recipes/${result.recipe.slug}`, { replace: true })
+      if (result.kind !== 'preview') {
+        return
+      }
+
+      const prepared = prepareImportMapping(result.preview, catalog)
+      if (!prepared) {
+        void saveMutation.mutateAsync({
+          content: result.preview.content,
+          preview: result.preview,
+        })
+        return
+      }
+
+      setPendingPreview(result.preview)
+      setPendingImport(prepared.pendingImport)
+      setMappingRows(prepared.mappingRows)
+      setMappingOpen(true)
     },
   })
-
-  useEffect(() => {
-    if (authLoading || auth.authenticated) {
-      return
-    }
-
-    navigate(buildLoginUrl(`/import${window.location.search}`), { replace: true })
-  }, [auth.authenticated, authLoading, navigate])
 
   useEffect(() => {
     if (authLoading || !auth.authenticated || !sharedUrl || importStarted.current) {
@@ -102,22 +158,21 @@ export function ImportPage() {
 
     importStarted.current = true
 
-    void importMutation
-      .mutateAsync(sharedUrl)
-      .then(() => {
-        markImportDone(sharedUrl)
-      })
-      .catch(error => {
-        clearImportSession(sharedUrl)
-        importStarted.current = false
-        setImportError(formatImportError(error))
-      })
+    void importMutation.mutateAsync(sharedUrl).catch(error => {
+      clearImportSession(sharedUrl)
+      importStarted.current = false
+      setImportError(formatImportError(error))
+    })
   }, [auth.authenticated, authLoading, importMutation, sharedUrl])
 
-  const showImportError = Boolean(importError || importMutation.isError)
+  const showImportError = Boolean(importError || importMutation.isError || saveMutation.isError)
   const errorMessage =
     importError ??
-    (importMutation.error ? formatImportError(importMutation.error) : "Couldn't import this recipe.")
+    (saveMutation.error
+      ? formatImportError(saveMutation.error)
+      : importMutation.error
+        ? formatImportError(importMutation.error)
+        : "Couldn't import this recipe.")
 
   function handleRetryImport() {
     if (!sharedUrl) {
@@ -128,17 +183,14 @@ export function ImportPage() {
     importStarted.current = true
     setImportError(null)
     importMutation.reset()
+    saveMutation.reset()
+    clearPendingMapping()
 
-    void importMutation
-      .mutateAsync(sharedUrl)
-      .then(() => {
-        markImportDone(sharedUrl)
-      })
-      .catch(error => {
-        clearImportSession(sharedUrl)
-        importStarted.current = false
-        setImportError(formatImportError(error))
-      })
+    void importMutation.mutateAsync(sharedUrl).catch(error => {
+      clearImportSession(sharedUrl)
+      importStarted.current = false
+      setImportError(formatImportError(error))
+    })
   }
 
   function handleManualImport(event: FormEvent<HTMLFormElement>) {
@@ -151,6 +203,25 @@ export function ImportPage() {
     navigate(buildImportPath(url), { replace: true })
   }
 
+  async function applyMapping() {
+    if (!pendingImport || !pendingPreview) {
+      return
+    }
+
+    const { body } = await applyImportMapping(pendingImport, mappingRows, catalog, refreshCatalog)
+    const content = buildImportContent(pendingImport.metadata, body)
+    setMappingOpen(false)
+    await saveMutation.mutateAsync({ content, preview: pendingPreview })
+  }
+
+  function updateMappingRow(index: number, patch: Partial<MappingRow>) {
+    setMappingRows(current =>
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+    )
+  }
+
+  const busy = importMutation.isPending || saveMutation.isPending
+
   if (authLoading || (!auth.authenticated && !showImportError)) {
     return <ImportStatus message="Checking sign-in..." />
   }
@@ -159,7 +230,7 @@ export function ImportPage() {
     return <ImportStatus message="Redirecting to sign in..." />
   }
 
-  if (sharedUrl && importMutation.isPending) {
+  if (sharedUrl && busy && !mappingOpen) {
     return (
       <ImportStatus
         detail="This can take up to a minute for some sites."
@@ -170,7 +241,7 @@ export function ImportPage() {
     )
   }
 
-  if (sharedUrl && importMutation.isSuccess && importMutation.data.kind === 'existing') {
+  if (sharedUrl && importMutation.isSuccess && importMutation.data?.kind === 'existing') {
     return (
       <ImportStatus
         detail="Opening existing recipe..."
@@ -180,7 +251,7 @@ export function ImportPage() {
     )
   }
 
-  if (showImportError) {
+  if (showImportError && !mappingOpen) {
     const editorPath = sharedUrl
       ? `/recipes/new?url=${encodeURIComponent(sharedUrl)}`
       : '/recipes/new'
@@ -213,33 +284,52 @@ export function ImportPage() {
     )
   }
 
-  if (sharedUrl && importMutation.isSuccess) {
+  if (sharedUrl && saveMutation.isSuccess) {
     return <ImportStatus message="Opening recipe..." />
   }
 
   return (
-    <section className={`mx-auto max-w-md ${cardClassName}`}>
-      <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Import recipe</h1>
-      <p className="mt-2 text-stone-600 dark:text-stone-400">
-        Paste a recipe URL to import it automatically, or share a link to this app from your
-        browser.
-      </p>
-      <form className="mt-6 space-y-4" onSubmit={handleManualImport}>
-        <label className="block">
-          <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Recipe URL</span>
-          <input
-            className={`mt-1 ${inputClassName}`}
-            onChange={event => setManualUrl(event.target.value)}
-            placeholder="https://example.com/recipe"
-            type="url"
-            value={manualUrl}
-          />
-        </label>
-        <Button className="w-full" disabled={!manualUrl.trim()} type="submit">
-          Import recipe
-        </Button>
-      </form>
-    </section>
+    <>
+      <ImportMappingDialog
+        applying={saveMutation.isPending}
+        catalog={catalog}
+        onApply={() => void applyMapping()}
+        onCancel={() => {
+          clearPendingMapping()
+          setImportError(null)
+          importStarted.current = false
+          if (sharedUrl) {
+            clearImportSession(sharedUrl)
+          }
+        }}
+        onUpdateRow={updateMappingRow}
+        open={mappingOpen}
+        rows={mappingRows}
+      />
+
+      <section className={`mx-auto max-w-md ${cardClassName}`}>
+        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Import recipe</h1>
+        <p className="mt-2 text-stone-600 dark:text-stone-400">
+          Paste a recipe URL to import it automatically, or share a link to this app from your
+          browser.
+        </p>
+        <form className="mt-6 space-y-4" onSubmit={handleManualImport}>
+          <label className="block">
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Recipe URL</span>
+            <input
+              className={`mt-1 ${inputClassName}`}
+              onChange={event => setManualUrl(event.target.value)}
+              placeholder="https://example.com/recipe"
+              type="url"
+              value={manualUrl}
+            />
+          </label>
+          <Button className="w-full" disabled={!manualUrl.trim()} type="submit">
+            Import recipe
+          </Button>
+        </form>
+      </section>
+    </>
   )
 }
 

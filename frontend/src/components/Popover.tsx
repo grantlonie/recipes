@@ -1,49 +1,76 @@
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 interface PopoverProps {
   align?: 'left' | 'right'
   children: ReactNode
   onClose: () => void
   open: boolean
+  placement?: 'bottom' | 'top'
   trigger: ReactNode
 }
 
-export function Popover({ align = 'right', children, onClose, open, trigger }: PopoverProps) {
+export function Popover({
+  align = 'right',
+  children,
+  onClose,
+  open,
+  placement = 'bottom',
+  trigger,
+}: PopoverProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [coords, setCoords] = useState<{ left: number; top: number } | null>(null)
 
   const updatePosition = useCallback(() => {
-    const trigger = triggerRef.current
-    const panel = panelRef.current
-    if (!trigger) {
+    const triggerEl = triggerRef.current
+    const panelEl = panelRef.current
+    if (!triggerEl || !panelEl) {
       return
     }
 
-    const rect = trigger.getBoundingClientRect()
-    const panelWidth = panel?.offsetWidth ?? 176
+    const rect = triggerEl.getBoundingClientRect()
+    const panelWidth = panelEl.offsetWidth
+    const panelHeight = panelEl.offsetHeight
     const left = align === 'right' ? rect.right - panelWidth : rect.left
-    setCoords({ left, top: rect.bottom + 8 })
-  }, [align])
+    const top = placement === 'top' ? rect.top - panelHeight - 8 : rect.bottom + 8
+    setCoords({ left, top })
+  }, [align, placement])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       setCoords(null)
       return
     }
 
     updatePosition()
-    const frame = requestAnimationFrame(updatePosition)
+  }, [children, open, updatePosition])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
     window.addEventListener('scroll', updatePosition, true)
     window.addEventListener('resize', updatePosition)
 
+    const panelEl = panelRef.current
+    if (!panelEl) {
+      return () => {
+        window.removeEventListener('scroll', updatePosition, true)
+        window.removeEventListener('resize', updatePosition)
+      }
+    }
+
+    const observer = new ResizeObserver(updatePosition)
+    observer.observe(panelEl)
+
     return () => {
-      cancelAnimationFrame(frame)
       window.removeEventListener('scroll', updatePosition, true)
       window.removeEventListener('resize', updatePosition)
+      observer.disconnect()
     }
   }, [open, updatePosition])
 
@@ -69,12 +96,16 @@ export function Popover({ align = 'right', children, onClose, open, trigger }: P
       <div className="inline-flex" ref={triggerRef}>
         {trigger}
       </div>
-      {open && coords
+      {open
         ? createPortal(
             <div
-              className="fixed z-50 min-w-44 rounded-2xl bg-white p-2 shadow-lg ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700"
+              className="fixed z-50 min-w-52 rounded-2xl bg-white p-2 shadow-lg ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700"
               ref={panelRef}
-              style={{ left: coords.left, top: coords.top }}
+              style={{
+                left: coords?.left ?? 0,
+                top: coords?.top ?? 0,
+                visibility: coords ? 'visible' : 'hidden',
+              }}
             >
               {children}
             </div>,

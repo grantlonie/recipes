@@ -78,6 +78,15 @@ class ImportRequest(BaseModel):
 class ImportPreview(BaseModel):
     content: str
     suggested_slug: str
+    unmatched_ingredients: list[str] = Field(default_factory=list)
+
+
+class ImportFileRequest(BaseModel):
+    slug: str
+
+
+class AssetUploadResponse(BaseModel):
+    path: str
 
 
 class LoginRequest(BaseModel):

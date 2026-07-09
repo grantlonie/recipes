@@ -8,6 +8,7 @@ from app.models import Ingredient, RecipeSection, RecipeStep
 from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
+SOURCES_PREFIX = "sources/"
 TOKEN_CHARS = r"A-Za-z0-9_./' -"
 INGREDIENT_RE = re.compile(
     rf"@(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{(?P<amount>[^}}]*)\}}|"
@@ -179,30 +180,95 @@ def metadata_title(metadata: dict[str, Any], fallback: str) -> str:
     return str(title).strip() if title else fallback
 
 
-def metadata_image(metadata: dict[str, Any]) -> str | None:
-    for key in ("image", "picture"):
-        value = metadata.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    for key in ("images", "pictures"):
-        value = metadata.get(key)
-        if isinstance(value, list) and value:
-            return str(value[0]).strip()
+def parse_ref_value(metadata: dict[str, Any], key: str) -> str | None:
+    value = metadata.get(key)
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped or None
+    if isinstance(value, dict):
+        for nested_key in ("url", "path"):
+            nested = value.get(nested_key)
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
     return None
+
+
+def is_ref_url(value: str) -> bool:
+    return value.startswith(("http://", "https://"))
+
+
+def is_ref_file(value: str) -> bool:
+    return value.startswith(SOURCES_PREFIX)
+
+
+def validate_ref_value(value: str) -> bool:
+    stripped = value.strip()
+    if not stripped:
+        return True
+    return is_ref_url(stripped) or is_ref_file(stripped)
+
+
+def metadata_image(metadata: dict[str, Any]) -> str | None:
+    value = parse_ref_value(metadata, "image")
+    if value:
+        return value
+    for key in ("picture",):
+        legacy = metadata.get(key)
+        if isinstance(legacy, str) and legacy.strip():
+            return legacy.strip()
+    for key in ("images", "pictures"):
+        legacy = metadata.get(key)
+        if isinstance(legacy, list) and legacy:
+            return str(legacy[0]).strip()
+    return None
+
+
+def metadata_image_url(metadata: dict[str, Any]) -> str | None:
+    value = metadata_image(metadata)
+    if value and is_ref_url(value):
+        return value
+    return None
+
+
+def metadata_image_file(metadata: dict[str, Any]) -> str | None:
+    value = metadata_image(metadata)
+    if value and is_ref_file(value):
+        return value
+    return None
+
+
+def metadata_source_value(metadata: dict[str, Any]) -> str | None:
+    return parse_ref_value(metadata, "source")
+
+
+def metadata_source_url(metadata: dict[str, Any]) -> str | None:
+    value = metadata_source_value(metadata)
+    if value and is_ref_url(value):
+        return value
+    return None
+
+
+def metadata_source_file(metadata: dict[str, Any]) -> str | None:
+    value = metadata_source_value(metadata)
+    if value and is_ref_file(value):
+        return value
+    return None
+
+
+def resolve_image_url(metadata: dict[str, Any], app_base_url: str) -> str | None:
+    value = metadata_image(metadata)
+    if not value:
+        return None
+    if is_ref_url(value):
+        return value
+    if is_ref_file(value):
+        base = app_base_url.rstrip("/")
+        return f"{base}/api/sources/{value.removeprefix(SOURCES_PREFIX)}"
+    return value
 
 
 def metadata_original_url(metadata: dict[str, Any]) -> str | None:
-    source = metadata.get("source")
-    if isinstance(source, str) and source.startswith(("http://", "https://")):
-        return source
-    if isinstance(source, dict):
-        value = source.get("url")
-        if isinstance(value, str) and value.startswith(("http://", "https://")):
-            return value
-    value = metadata.get("source.url")
-    if isinstance(value, str) and value.startswith(("http://", "https://")):
-        return value
-    return None
+    return metadata_source_url(metadata)
 
 
 def metadata_cook_time(metadata: dict[str, Any]) -> str | None:
@@ -295,8 +361,16 @@ def normalize_quantity(quantity: str | None) -> str | None:
     return format_decimal(number)
 
 
+def validate_document_refs(metadata: dict[str, Any]) -> None:
+    for key in ("source", "image"):
+        value = parse_ref_value(metadata, key)
+        if value and not validate_ref_value(value):
+            raise ValueError(f"Invalid {key} value: must be http(s) URL or sources/ path")
+
+
 def normalize_document(content: str) -> str:
     metadata, body = parse_document(content)
+    validate_document_refs(metadata)
     return render_document(metadata, normalize_body_amounts(body))
 
 

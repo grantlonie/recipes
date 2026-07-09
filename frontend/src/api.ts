@@ -1,4 +1,5 @@
 import type {
+  AssetUploadResponse,
   AuthState,
   CatalogIngredient,
   ImportPreview,
@@ -91,6 +92,69 @@ export async function importRecipe(url: string): Promise<ImportPreview> {
   }
 }
 
+export async function importRecipeFile(slug: string): Promise<ImportPreview> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 100_000)
+
+  try {
+    return await request('/api/import/file', {
+      body: JSON.stringify({ slug }),
+      method: 'POST',
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Couldn't import this recipe. The import timed out.")
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export async function importRecipeUpload(file: File): Promise<ImportPreview> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 100_000)
+  const formData = new FormData()
+  formData.append('file', file)
+
+  try {
+    const response = await fetch('/api/import/upload', {
+      body: formData,
+      cache: 'no-store',
+      credentials: 'include',
+      method: 'POST',
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({ detail: response.statusText }))
+      throw new Error(String(detail.detail ?? response.statusText))
+    }
+    return response.json() as Promise<ImportPreview>
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Couldn't import this recipe. The import timed out.")
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
+export async function uploadRecipeSource(slug: string, file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await uploadRequest(`/api/recipes/${encodeURIComponent(slug)}/source`, formData)
+  return response.path
+}
+
+export async function uploadRecipeImage(slug: string, file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const response = await uploadRequest(`/api/recipes/${encodeURIComponent(slug)}/image`, formData)
+  return response.path
+}
+
 export async function login(username: string, password: string): Promise<AuthState> {
   return request('/api/auth/login', {
     body: JSON.stringify({ password, username }),
@@ -117,6 +181,22 @@ export async function updateRecipeMetadata(
     body: JSON.stringify(input),
     method: 'PATCH',
   })
+}
+
+async function uploadRequest(url: string, body: FormData): Promise<AssetUploadResponse> {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    credentials: 'include',
+    method: 'POST',
+    body,
+  })
+
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(String(detail.detail ?? response.statusText))
+  }
+
+  return response.json() as Promise<AssetUploadResponse>
 }
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {

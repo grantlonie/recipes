@@ -1,33 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { FormEvent, ReactNode } from 'react'
+import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import {
   createRecipe,
-  getIngredientCatalog,
   importRecipe,
+  importRecipeFile,
   updateRecipe,
-  upsertIngredient,
+  uploadRecipeImage,
+  uploadRecipeSource,
 } from './api'
 import { useAuth } from './AuthContext'
 import { Autocomplete } from './components/Autocomplete'
 import { Button } from './components/Button'
+import { CameraCaptureDialog, isCameraCaptureSupported } from './components/CameraCaptureDialog'
 import { Dialog } from './components/Dialog'
-import { DensitySearchLink } from './components/DensitySearchLink'
 import { ImportingDialog } from './components/ImportingDialog'
+import { ImportMappingDialog } from './components/ImportMappingDialog'
 import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/RecipeBodyEditor'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { VolumeQuantitySelect } from './components/VolumeQuantitySelect'
+import type { IngredientAttrs } from './cooklangTokens'
+import { getLocalTags } from './db'
 import {
-  extractTokens,
-  INGREDIENT_TOKEN_RE,
-  serializeIngredient,
-  type IngredientAttrs,
-  type IngredientToken,
-} from './cooklangTokens'
-import { getLocalTags, putIngredientCatalog } from './db'
+  applyImportMapping,
+  buildMappingRows,
+  mappingRowsAreValid,
+  parseImportedDocument,
+  type MappingRow,
+  type PendingImport,
+} from './importMapping'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
@@ -36,21 +40,16 @@ import { buildLoginUrl } from './shareImport'
 import { getLocalRecipe } from './db'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import { cardClassName, inputClassName } from './themeClasses'
-import type { CatalogIngredient, UnitSystem } from './types'
+import type { ImportPreview, UnitSystem } from './types'
 import {
   defaultEditorUnit,
   densityForName,
   editorUnitItems,
-  findCatalogIngredient,
   formatGramsValue,
   formatIngredientAmount,
-  isMassUnit,
   isUsCookingVolumeUnit,
-  isVolumeUnit,
-  matchCatalogIngredient,
   normalizeUnit,
   toGrams,
-  withLearnedAlias,
 } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 
@@ -63,24 +62,6 @@ function clampServings(value: number): number {
 
 interface RecipeEditPageProps {
   mode: 'edit' | 'new'
-}
-
-interface MappingRow {
-  catalogName: string
-  createDensity: string
-  fixed: boolean
-  note: string
-  originalName: string
-  quantity: string
-  unit: string
-}
-
-interface PendingImport {
-  body: string
-  metadata: Record<string, unknown>
-  preserveBookmarked?: boolean
-  preserveTags?: boolean
-  suggestedSlug?: string
 }
 
 export function RecipeEditPage({ mode }: RecipeEditPageProps) {
@@ -141,7 +122,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     [catalog],
   )
   const mappingCanApply = useMemo(
-    () => mappingRows.every(row => isMappingRowValid(row, catalog)),
+    () => mappingRowsAreValid(mappingRows, catalog),
     [mappingRows, catalog],
   )
 
@@ -175,16 +156,19 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const importMutation = useMutation({
     mutationFn: (url: string) => importRecipe(url),
     onSuccess: preview => {
-      const parsed = parseImportedDocument(preview.content)
-      openMapping(parsed.metadata, parsed.body, { suggestedSlug: preview.suggested_slug })
+      handleImportPreview(preview, { suggestedSlug: preview.suggested_slug })
       setImportUrl('')
     },
   })
   const reimportMutation = useMutation({
-    mutationFn: (url: string) => importRecipe(url),
+    mutationFn: async () => {
+      if (isRefFile(source)) {
+        return importRecipeFile(slug)
+      }
+      return importRecipe(source.trim())
+    },
     onSuccess: preview => {
-      const parsed = parseImportedDocument(preview.content)
-      openMapping(parsed.metadata, parsed.body, {
+      handleImportPreview(preview, {
         preserveBookmarked: true,
         preserveTags: true,
       })
@@ -323,23 +307,28 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                   value={time}
                 />
               </Field>
-              <Field label="Image URL">
-                <input
-                  className={inputClassName}
-                  onChange={event => setImage(event.target.value)}
-                  value={image}
-                />
-              </Field>
-              <Field className="lg:col-span-2" label="Source URL">
-                <input
-                  className={inputClassName}
-                  onChange={event => setSource(event.target.value)}
-                  value={source}
-                />
-                {!isNew && reimportMutation.error ? (
-                  <p className="mt-2 text-sm text-red-700">{reimportMutation.error.message}</p>
-                ) : null}
-              </Field>
+              <RefField
+                accept="image/*"
+                capture
+                className="lg:col-span-2"
+                label="Image"
+                onUpload={handleImageUpload}
+                onValueChange={setImage}
+                slug={recipeSlug}
+                value={image}
+              />
+              <RefField
+                accept="image/*,.pdf,.docx,.txt,.html,.htm,.md,.markdown"
+                className="lg:col-span-2"
+                label="Source"
+                onUpload={handleSourceUpload}
+                onValueChange={setSource}
+                slug={recipeSlug}
+                value={source}
+              />
+              {!isNew && reimportMutation.error ? (
+                <p className="lg:col-span-2 text-sm text-red-700">{reimportMutation.error.message}</p>
+              ) : null}
               <label className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
                 <input
                   checked={bookmarked}
@@ -485,99 +474,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         </div>
       </Dialog>
 
-      <Dialog labelledBy="import-mapping-title" open={mappingOpen}>
-        <h2 className="text-xl font-bold" id="import-mapping-title">
-          Map imported ingredients
-        </h2>
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
-          Ingredients not in your catalog are highlighted and will be created on apply. Match others
-          to existing entries; extra wording is saved as details.
-        </p>
-        <div className="mt-4 max-h-96 space-y-4 overflow-y-auto">
-          {mappingRows.map((row, index) => {
-            const needsCreate = mappingRowNeedsCreate(row, catalog)
-            const densityRequired = mappingRowNeedsDensity(row, catalog)
-            const densityInvalid = densityRequired && !mappingRowDensityValid(row)
-            return (
-              <div
-                className={`rounded-2xl p-3 ${
-                  needsCreate
-                    ? 'bg-amber-100 ring-1 ring-amber-300'
-                    : 'bg-orange-50 ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700'
-                }`}
-                key={`${row.originalName}-${index}`}
-              >
-                <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
-                  {row.quantity}
-                  {row.unit ? ` ${row.unit}` : ''} {row.originalName}
-                </p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm">
-                    <span className="font-semibold text-stone-700 dark:text-stone-200">Ingredient</span>
-                    <div className="mt-1">
-                      <Autocomplete
-                        onChange={catalogName => updateMappingRow(index, { catalogName })}
-                        options={ingredientOptions}
-                        placeholder="Search or enter name"
-                        value={row.catalogName}
-                      />
-                    </div>
-                  </label>
-                  <label className="block text-sm">
-                    <span className="font-semibold text-stone-700 dark:text-stone-200">Details</span>
-                    <input
-                      className={`${inputClassName} mt-1`}
-                      onChange={event => updateMappingRow(index, { note: event.target.value })}
-                      placeholder="large, bittersweet, unsalted…"
-                      value={row.note}
-                    />
-                  </label>
-                </div>
-                {needsCreate ? (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-sm font-semibold text-amber-900">Create new ingredient</p>
-                      <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                        Provide density for volume conversions between US and metric.
-                      </p>
-                    </div>
-                    <label className="block text-sm">
-                      <span className="font-semibold text-stone-700 dark:text-stone-200">
-                        Density (kg/m³){densityRequired ? ' *' : ''}
-                      </span>
-                      <div className="mt-1 flex items-center gap-1">
-                        <input
-                          className={`${inputClassName} min-w-0 flex-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
-                          onChange={event =>
-                            updateMappingRow(index, { createDensity: event.target.value })
-                          }
-                          placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
-                          value={row.createDensity}
-                        />
-                        <DensitySearchLink ingredientName={row.catalogName} />
-                      </div>
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-        {!mappingCanApply ? (
-          <p className="mt-3 text-sm text-red-700">
-            Enter an ingredient name for each row. New ingredients with volume measures (cups, ml, L, etc.) need a
-            density.
-          </p>
-        ) : null}
-        <div className="mt-6 flex justify-end gap-2">
-          <Button onClick={() => setMappingOpen(false)} variant="ghost">
-            Cancel
-          </Button>
-          <Button disabled={!mappingCanApply} onClick={() => void applyMapping()}>
-            Apply mapping
-          </Button>
-        </div>
-      </Dialog>
+      <ImportMappingDialog
+        catalog={catalog}
+        onApply={() => void applyMapping()}
+        onCancel={() => setMappingOpen(false)}
+        onUpdateRow={updateMappingRow}
+        open={mappingOpen}
+        rows={mappingRows}
+      />
     </section>
   )
 
@@ -652,46 +556,65 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 
   async function handleReimportFromSource() {
-    const url = source.trim()
-    if (!url) {
+    if (!source.trim()) {
       return
     }
 
     const confirmed = window.confirm(
-      'Re-importing will overwrite the current recipe title, metadata, and body with the latest version from the source URL. Do you want to continue?'
+      isRefFile(source)
+        ? 'Re-importing will overwrite the current recipe title, metadata, and body from the source file. Continue?'
+        : 'Re-importing will overwrite the current recipe title, metadata, and body from the source URL. Continue?'
     )
     if (!confirmed) {
       return
     }
 
-    await reimportMutation.mutateAsync(url)
+    await reimportMutation.mutateAsync()
+  }
+
+  async function handleImageUpload(file: File) {
+    const path = await uploadRecipeImage(recipeSlug, file)
+    setImage(path)
+  }
+
+  async function handleSourceUpload(file: File) {
+    const path = await uploadRecipeSource(recipeSlug, file)
+    setSource(path)
+    if (file.type.startsWith('image/')) {
+      setImage(path)
+    }
+  }
+
+  function handleImportPreview(
+    preview: ImportPreview,
+    options: Omit<PendingImport, 'body' | 'metadata'> = {}
+  ) {
+    const parsed = parseImportedDocument(preview.content)
+    const unmatched = preview.unmatched_ingredients ?? []
+    if (unmatched.length === 0) {
+      const currentBookmarked = bookmarked
+      const currentTags = tags
+      applyDocumentState(parsed.metadata, parsed.body, { skipTags: Boolean(options.preserveTags) })
+      if (options.preserveBookmarked) {
+        setBookmarked(currentBookmarked)
+      }
+      if (options.preserveTags) {
+        setTags(currentTags)
+      }
+      if (options.suggestedSlug) {
+        setRecipeSlug(options.suggestedSlug)
+      }
+      return
+    }
+    openMapping(parsed.metadata, parsed.body, { ...options, unmatchedIngredients: unmatched })
   }
 
   function openMapping(
     metadata: Record<string, unknown>,
     nextBody: string,
-    options: Omit<PendingImport, 'body' | 'metadata'> = {}
+    options: Omit<PendingImport, 'body' | 'metadata'> & { unmatchedIngredients?: string[] } = {}
   ) {
-    const tokens = extractTokens(nextBody)
-    const unique = new Map<string, IngredientToken>()
-    for (const token of tokens) {
-      const key = `${token.name.toLowerCase()}|${token.unit.toLowerCase()}`
-      if (!unique.has(key)) {
-        unique.set(key, token)
-      }
-    }
-    const rows: MappingRow[] = [...unique.values()].map(token => {
-      const match = matchCatalogIngredient(token.name, catalog)
-      return {
-        catalogName: match.catalog?.name ?? token.name,
-        createDensity: '',
-        fixed: token.fixed,
-        note: mergeImportNotes(match.note, token.note),
-        originalName: token.name,
-        quantity: token.quantity,
-        unit: normalizeUnit(token.unit) ?? token.unit,
-      }
-    })
+    const rows = buildMappingRows(nextBody, options.unmatchedIngredients ?? [], catalog)
     setPendingImport({ body: nextBody, metadata, ...options })
     setMappingRows(rows)
     setMappingOpen(true)
@@ -708,68 +631,11 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       return
     }
 
-    const catalogUpdates: CatalogIngredient[] = []
-    for (const row of mappingRows) {
-      const catalogName = row.catalogName.trim()
-      if (!catalogName) {
-        continue
-      }
-
-      if (mappingRowNeedsCreate(row, catalog)) {
-        const densityValue = row.createDensity.trim()
-        const density = densityValue ? Number(densityValue) : null
-        if (densityValue && Number.isNaN(density)) {
-          continue
-        }
-        const base: CatalogIngredient = {
-          aliases: [],
-          density_kg_m3: density,
-          name: catalogName,
-        }
-        const ingredient = await upsertIngredient(withLearnedAlias(base, row.originalName) ?? base)
-        catalogUpdates.push(ingredient)
-        continue
-      }
-
-      const existing = findCatalogIngredient(catalogName, catalog)
-      if (!existing) {
-        continue
-      }
-      const learned = withLearnedAlias(existing, row.originalName)
-      if (!learned) {
-        continue
-      }
-      const ingredient = await upsertIngredient(learned)
-      catalogUpdates.push(ingredient)
-    }
-
-    let workingCatalog = catalog
-    if (catalogUpdates.length) {
-      const nextCatalog = await getIngredientCatalog()
-      await putIngredientCatalog(nextCatalog)
-      queryClient.setQueryData(['ingredients'], nextCatalog)
-      await refreshCatalog()
-      workingCatalog = nextCatalog.ingredients
-    }
-
-    const lookup = new Map<string, MappingRow>()
-    for (const row of mappingRows) {
-      lookup.set(row.originalName.toLowerCase(), row)
-    }
-
-    const nextBody = pendingImport.body.replace(
-      INGREDIENT_TOKEN_RE,
-      (full, bracedName, _amount, bareName) => {
-        const name = (bracedName || bareName || '').trim()
-        if (!name) {
-          return full
-        }
-        const row = lookup.get(name.toLowerCase())
-        if (!row) {
-          return full
-        }
-        return buildMappedIngredientMarker(row, workingCatalog)
-      },
+    const { body: nextBody } = await applyImportMapping(
+      pendingImport,
+      mappingRows,
+      catalog,
+      refreshCatalog,
     )
 
     const currentBookmarked = bookmarked
@@ -881,6 +747,143 @@ function Field({ children, className = '', label }: FieldProps) {
   )
 }
 
+interface RefFieldProps {
+  accept: string
+  capture?: boolean
+  className?: string
+  label: string
+  onUpload: (file: File) => Promise<void>
+  onValueChange: (value: string) => void
+  slug: string
+  value: string
+}
+
+function RefField({
+  accept,
+  capture = false,
+  className = '',
+  label,
+  onUpload,
+  onValueChange,
+  slug,
+  value,
+}: RefFieldProps) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const cameraFallbackRef = useRef<HTMLInputElement>(null)
+  const uploadDisabled = !slug.trim() || uploading
+
+  async function uploadFile(file: File) {
+    setUploading(true)
+    setError(null)
+    try {
+      await onUpload(file)
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+    await uploadFile(file)
+  }
+
+  function openCamera() {
+    if (uploadDisabled) {
+      return
+    }
+    if (isCameraCaptureSupported()) {
+      setCameraOpen(true)
+      return
+    }
+    cameraFallbackRef.current?.click()
+  }
+
+  const previewUrl = isRefFile(value) ? resolveRefDisplay(value) : value
+
+  return (
+    <Field className={className} label={label}>
+      <input
+        className={inputClassName}
+        onChange={event => onValueChange(event.target.value)}
+        placeholder="https://example.com/photo.jpg or sources/slug/image.jpg"
+        value={isRefFile(value) ? '' : value}
+      />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <label className="inline-flex cursor-pointer items-center rounded-full border border-stone-300 px-3 py-1.5 text-sm font-semibold text-stone-700 dark:border-stone-600 dark:text-stone-200">
+          <input
+            accept={accept}
+            className="hidden"
+            disabled={uploadDisabled}
+            onChange={handleFileChange}
+            type="file"
+          />
+          {uploading ? 'Uploading...' : 'Attach file'}
+        </label>
+        {capture ? (
+          <>
+            <input
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+              ref={cameraFallbackRef}
+              type="file"
+            />
+            <button
+              className="inline-flex items-center rounded-full border border-stone-300 px-3 py-1.5 text-sm font-semibold text-stone-700 disabled:opacity-60 dark:border-stone-600 dark:text-stone-200"
+              disabled={uploadDisabled}
+              onClick={openCamera}
+              type="button"
+            >
+              Take photo
+            </button>
+          </>
+        ) : null}
+      </div>
+      <CameraCaptureDialog
+        onCapture={file => {
+          setCameraOpen(false)
+          void uploadFile(file)
+        }}
+        onClose={() => setCameraOpen(false)}
+        open={cameraOpen}
+        title={`Photograph ${label.toLowerCase()}`}
+      />
+      {isRefFile(value) ? (
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+          File: <a href={resolveRefDisplay(value)}>{value}</a>
+        </p>
+      ) : null}
+      {previewUrl && (isRefFile(value) || value.startsWith('http')) && accept.includes('image') ? (
+        <img
+          alt=""
+          className="mt-3 max-h-40 rounded-xl object-cover"
+          src={previewUrl}
+        />
+      ) : null}
+      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+    </Field>
+  )
+}
+
+function isRefFile(value: string): boolean {
+  return value.trim().startsWith('sources/')
+}
+
+function resolveRefDisplay(value: string): string {
+  if (isRefFile(value)) {
+    return `/api/sources/${value.slice('sources/'.length)}`
+  }
+  return value
+}
+
 interface FieldProps {
   children: ReactNode
   className?: string
@@ -893,39 +896,6 @@ function splitDocument(content: string) {
     return { body: content.replace(/^\n+/, '') }
   }
   return { body: content.slice(match[0].length) }
-}
-
-function parseImportedDocument(content: string) {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/)
-  if (!match) {
-    return { body: content, metadata: {} }
-  }
-  return { body: content.slice(match[0].length), metadata: parseSimpleMetadata(match[1]) }
-}
-
-function parseSimpleMetadata(frontMatter: string) {
-  const metadata: Record<string, unknown> = {}
-  const lines = frontMatter.split('\n')
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index]
-    const pair = line.match(/^([^:#]+):\s*(.*)$/)
-    if (!pair) {
-      continue
-    }
-    const key = pair[1].trim()
-    const rawValue = pair[2].trim()
-    if (rawValue) {
-      metadata[key] = parseScalar(rawValue)
-      continue
-    }
-    const list: string[] = []
-    while (lines[index + 1]?.trim().startsWith('- ')) {
-      index += 1
-      list.push(lines[index].trim().slice(2).trim())
-    }
-    metadata[key] = list
-  }
-  return metadata
 }
 
 function renderDocument(metadata: Record<string, unknown>, body: string) {
@@ -979,27 +949,6 @@ function yamlScalarNeedsQuotes(value: string): boolean {
   return false
 }
 
-function parseScalar(value: string) {
-  if (value === 'true') {
-    return true
-  }
-  if (value === 'false') {
-    return false
-  }
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    try {
-      return JSON.parse(value) as string
-    } catch {
-      return value.slice(1, -1)
-    }
-  }
-  const numeric = Number(value)
-  return Number.isNaN(numeric) ? value : numeric
-}
-
 function getString(value: unknown) {
   return typeof value === 'string' ? value : ''
 }
@@ -1037,75 +986,6 @@ function getTagsFromMetadata(value: unknown) {
 
 function isEmptyArray(value: unknown) {
   return Array.isArray(value) && value.length === 0
-}
-
-function mappingRowNeedsCreate(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
-  const name = row.catalogName.trim()
-  if (!name) {
-    return true
-  }
-  return !findCatalogIngredient(name, ingredients)
-}
-
-function mappingRowNeedsDensity(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
-  return mappingRowNeedsCreate(row, ingredients) && isVolumeUnit(row.unit)
-}
-
-function mappingRowDensityValid(row: MappingRow): boolean {
-  const density = Number(row.createDensity.trim())
-  return row.createDensity.trim() !== '' && !Number.isNaN(density) && density > 0
-}
-
-function isMappingRowValid(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
-  if (!row.catalogName.trim()) {
-    return false
-  }
-  if (mappingRowNeedsDensity(row, ingredients) && !mappingRowDensityValid(row)) {
-    return false
-  }
-  return true
-}
-
-function mergeImportNotes(...parts: Array<string | null | undefined>): string {
-  return parts
-    .map(part => part?.trim())
-    .filter(Boolean)
-    .join(', ')
-}
-
-function buildMappedIngredientMarker(
-  row: MappingRow,
-  catalog: CatalogIngredient[],
-): string {
-  const targetName = row.catalogName.trim() || row.originalName
-  const catalogItem = findCatalogIngredient(targetName, catalog)
-  const density = catalogItem?.density_kg_m3
-  let quantity = row.quantity
-  let unit = row.unit
-
-  const parsed = parseQuantity(row.quantity)
-  if (parsed !== null && row.unit) {
-    let grams: number | null = null
-    if (isMassUnit(row.unit)) {
-      grams = toGrams(parsed, row.unit)
-    } else if (isVolumeUnit(row.unit)) {
-      grams = toGrams(parsed, row.unit, density)
-    }
-    if (grams !== null) {
-      quantity = formatGramsValue(grams)
-      unit = 'g'
-    } else {
-      unit = normalizeUnit(row.unit) ?? row.unit
-    }
-  }
-
-  return serializeIngredient({
-    fixed: row.fixed,
-    name: targetName,
-    note: row.note,
-    quantity,
-    unit,
-  })
 }
 
 function unitSystemEntryLabel(unitSystem: UnitSystem): string {

@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 
 interface DialogProps {
   children: ReactNode
+  className?: string
   labelledBy: string
   open: boolean
 }
@@ -11,7 +12,7 @@ let openDialogCount = 0
 let savedOverflow = ''
 let savedPaddingRight = ''
 
-export function Dialog({ children, labelledBy, open }: DialogProps) {
+export function Dialog({ children, className = '', labelledBy, open }: DialogProps) {
   useEffect(() => {
     if (!open) {
       return
@@ -48,7 +49,9 @@ export function Dialog({ children, labelledBy, open }: DialogProps) {
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-900/40 p-4 overscroll-contain"
       role="dialog"
     >
-      <div className="my-auto max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700">
+      <div
+        className={`my-auto max-h-[90vh] w-full overflow-y-auto rounded-3xl bg-white p-6 shadow-xl ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700 ${className || 'max-w-2xl'}`}
+      >
         {children}
       </div>
     </div>

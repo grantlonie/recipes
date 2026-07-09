@@ -97,9 +97,26 @@ interface RecipeListProviderProps {
 function readRecentRecipes() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(RECENT_RECIPES_KEY) ?? '[]')
-    return Array.isArray(parsed)
-      ? (parsed as RecipeSummary[]).slice(0, RECENT_RECIPES_LIMIT)
-      : []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    const seen = new Set<string>()
+    const recipes: RecipeSummary[] = []
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object' || typeof item.slug !== 'string' || !item.slug.trim()) {
+        continue
+      }
+      if (seen.has(item.slug)) {
+        continue
+      }
+      seen.add(item.slug)
+      recipes.push(item as RecipeSummary)
+      if (recipes.length >= RECENT_RECIPES_LIMIT) {
+        break
+      }
+    }
+    return recipes
   } catch {
     return []
   }

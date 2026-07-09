@@ -60,6 +60,11 @@ export interface SearchResult {
 export interface ImportPreview {
   content: string
   suggested_slug: string
+  unmatched_ingredients?: string[]
+}
+
+export interface AssetUploadResponse {
+  path: string
 }
 
 export interface RecipeMetadataInput {

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
   ArrowTopRightOnSquareIcon,
@@ -16,21 +16,17 @@ import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
-import { formatIngredientLabel, extractTokens } from './cooklangTokens'
 import { getRecipeBlocks } from './cooklangEditor'
+import { extractTokens, formatIngredientLabel } from './cooklangTokens'
 import { useIngredientCatalog } from './IngredientCatalogContext'
+import { titleCaseIngredient } from './ingredientDisplay'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, purgeRecipeIfDeleted, revalidateRecipe, storeRecipe } from './sync'
-import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
-import { useUnitSystem } from './UnitSystemContext'
-import { titleCaseIngredient } from './ingredientDisplay'
-import {
-  densityForName,
-  formatDisplayAmount,
-  formatIngredientAmount,
-} from './units'
 import { cardClassName, panelClassName } from './themeClasses'
+import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
+import { densityForName, formatDisplayAmount, formatIngredientAmount } from './units'
+import { useUnitSystem } from './UnitSystemContext'
 
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
@@ -53,9 +49,7 @@ export function RecipePage() {
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () =>
-      loadRecipeStaleFirst(slug, updated =>
-        queryClient.setQueryData(['recipe', slug], updated),
-      ),
+      loadRecipeStaleFirst(slug, updated => queryClient.setQueryData(['recipe', slug], updated)),
     queryKey: ['recipe', slug],
     retry: false,
   })
@@ -147,7 +141,11 @@ export function RecipePage() {
   }, [navigate, queryClient, removeRecentRecipe, revision, slug])
 
   if (recipeQuery.isLoading && !recipeQuery.data) {
-    return <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${panelClassName}`}>Loading recipe...</p>
+    return (
+      <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${panelClassName}`}>
+        Loading recipe...
+      </p>
+    )
   }
 
   if (!recipe) {
@@ -167,7 +165,7 @@ export function RecipePage() {
         <ChevronLeftIcon aria-hidden="true" className="h-4 w-4" />
         Recipes
       </button>
-      <section className={`${cardClassName} overflow-hidden p-0`}>
+      <section className={`${cardClassName} overflow-hidden p-0!`}>
         {recipe.image ? (
           <img
             alt=""
@@ -289,7 +287,10 @@ export function RecipePage() {
       </section>
 
       <Dialog labelledBy="delete-recipe-title" open={deleteDialogOpen}>
-        <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100" id="delete-recipe-title">
+        <h2
+          className="text-lg font-semibold text-stone-900 dark:text-stone-100"
+          id="delete-recipe-title"
+        >
           Delete recipe?
         </h2>
         <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
@@ -299,11 +300,7 @@ export function RecipePage() {
           <Button onClick={() => setDeleteDialogOpen(false)} variant="ghost">
             Cancel
           </Button>
-          <Button
-            disabled={deleteMutation.isPending}
-            onClick={handleDelete}
-            variant="danger"
-          >
+          <Button disabled={deleteMutation.isPending} onClick={handleDelete} variant="danger">
             {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </div>
@@ -320,7 +317,9 @@ export function RecipePage() {
                     {formatIngredientListAmount(ingredient, unitSystem, catalog)}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
-                  <span>{titleCaseIngredient(formatIngredientLabel(ingredient.name, ingredient.note))}</span>
+                  <span>
+                    {titleCaseIngredient(formatIngredientLabel(ingredient.name, ingredient.note))}
+                  </span>
                 </Fragment>
               ))}
             </ul>
@@ -365,9 +364,7 @@ export function RecipePage() {
                   )
                 }
 
-                const stepIndex = blocks
-                  .slice(0, index)
-                  .filter(item => item.kind === 'step').length
+                const stepIndex = blocks.slice(0, index).filter(item => item.kind === 'step').length
                 const completed = completedSteps.has(stepIndex)
                 const checkboxId = `step-${stepIndex + 1}-complete`
 
@@ -487,12 +484,11 @@ function ExpandableNote({ text }: { text: string }) {
   )
 }
 
-
 function renderCooklangStep(
   step: string,
   ingredients: Ingredient[],
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ) {
   const lines = step.split('\n')
   if (lines.length === 1) {
@@ -510,9 +506,11 @@ function renderCooklangLine(
   line: string,
   ingredients: Ingredient[],
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ) {
-  const ingredientMap = new Map(ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient]))
+  const ingredientMap = new Map(
+    ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient])
+  )
   const markers: StepMarker[] = []
 
   for (const token of extractTokens(line)) {
@@ -598,7 +596,7 @@ type StepMarker = {
 function formatIngredientListAmount(
   ingredient: Ingredient,
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ) {
   const amount = formatIngredientAmount(
     ingredient.scaled_quantity ?? ingredient.quantity,
@@ -606,7 +604,7 @@ function formatIngredientListAmount(
     {
       densityKgM3: densityForName(ingredient.name, catalog),
       unitSystem,
-    },
+    }
   )
   return formatDisplayAmount(amount)
 }
@@ -614,7 +612,7 @@ function formatIngredientListAmount(
 function formatIngredientFromRecord(
   ingredient: Ingredient,
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ) {
   const amount = formatIngredientAmount(
     ingredient.scaled_quantity ?? ingredient.quantity,
@@ -622,7 +620,7 @@ function formatIngredientFromRecord(
     {
       densityKgM3: densityForName(ingredient.name, catalog),
       unitSystem,
-    },
+    }
   )
   const formatted = formatDisplayAmount(amount)
   const label = formatIngredientLabel(ingredient.name, ingredient.note)
@@ -635,7 +633,7 @@ function formatIngredientFromRecord(
 function formatIngredientFromToken(
   token: ReturnType<typeof extractTokens>[number],
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ) {
   if (!token.quantity) {
     return formatIngredientLabel(token.name, token.note)
