@@ -101,3 +101,25 @@ export function serializeIngredient(attrs: IngredientAttrs): string {
   }
   return `${core}(${note})`
 }
+
+export function ingredientToPlainText(attrs: IngredientAttrs): string {
+  const parts: string[] = []
+  const quantity = attrs.quantity.trim()
+  const unit = attrs.unit.trim()
+  const name = attrs.name.trim()
+  const note = attrs.note.trim()
+  if (quantity) {
+    parts.push(quantity)
+  }
+  if (unit) {
+    parts.push(unit)
+  }
+  if (name) {
+    parts.push(name)
+  }
+  let text = parts.join(' ')
+  if (note) {
+    text = text ? `${text} (${note})` : `(${note})`
+  }
+  return text
+}

@@ -74,6 +74,24 @@ def ingredient_note_from_match(match: re.Match[str]) -> str | None:
     return (match.group("preparation") or "").strip() or None
 
 
+def ingredient_match_to_plain_text(match: re.Match[str]) -> str:
+    name = (match.group("name_braced") or match.group("name") or "").strip()
+    amount = match.group("amount") or ""
+    note = ingredient_note_from_match(match)
+    quantity, unit, _fixed = split_amount(amount)
+    parts: list[str] = []
+    if quantity:
+        parts.append(quantity)
+    if unit:
+        parts.append(unit)
+    if name:
+        parts.append(name)
+    text = " ".join(parts)
+    if note:
+        text = f"{text} ({note})" if text else f"({note})"
+    return text or match.group(0)
+
+
 def parse_ingredients(
     body: str, scale: float | None = None, servings: float = 1
 ) -> list[Ingredient]:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from app import cooklang
 from app.ingredients import IngredientRepository, normalize_ingredient_key
 from app.models import CatalogIngredient
+from app.non_ingredients import is_non_ingredient
 from app.units import format_grams_value, is_volume_unit, to_grams
 
 
@@ -48,6 +49,8 @@ def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[
         name = (match.group("name_braced") or match.group("name") or "").strip()
         if not name:
             return match.group(0)
+        if is_non_ingredient(name):
+            return cooklang.ingredient_match_to_plain_text(match)
         amount = match.group("amount") or ""
         note = cooklang.ingredient_note_from_match(match)
         catalog_match = match_catalog_ingredient(name, catalog)

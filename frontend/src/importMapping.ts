@@ -1,6 +1,7 @@
 import { getIngredientCatalog, upsertIngredient } from './api'
 import {
   extractTokens,
+  ingredientToPlainText,
   INGREDIENT_TOKEN_RE,
   serializeIngredient,
   type IngredientToken,
@@ -22,6 +23,7 @@ import {
 export interface MappingRow {
   catalogName: string
   createDensity: string
+  excluded: boolean
   fixed: boolean
   note: string
   originalName: string
@@ -76,6 +78,7 @@ export function buildMappingRows(
       return {
         catalogName: match.catalog?.name ?? token.name,
         createDensity: '',
+        excluded: false,
         fixed: token.fixed,
         note: mergeImportNotes(match.note, token.note),
         originalName: token.name,
@@ -86,6 +89,9 @@ export function buildMappingRows(
 }
 
 export function mappingRowNeedsCreate(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
+  if (row.excluded) {
+    return false
+  }
   const name = row.catalogName.trim()
   if (!name) {
     return true
@@ -103,6 +109,9 @@ export function mappingRowDensityValid(row: MappingRow): boolean {
 }
 
 export function isMappingRowValid(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
+  if (row.excluded) {
+    return true
+  }
   if (!row.catalogName.trim()) {
     return false
   }
@@ -124,6 +133,9 @@ export async function applyImportMapping(
 ): Promise<{ body: string; catalog: CatalogIngredient[] }> {
   const catalogUpdates: CatalogIngredient[] = []
   for (const row of mappingRows) {
+    if (row.excluded) {
+      continue
+    }
     const catalogName = row.catalogName.trim()
     if (!catalogName) {
       continue
@@ -180,6 +192,15 @@ export async function applyImportMapping(
       const row = lookup.get(name.toLowerCase())
       if (!row) {
         return full
+      }
+      if (row.excluded) {
+        return ingredientToPlainText({
+          fixed: row.fixed,
+          name: row.originalName,
+          note: row.note,
+          quantity: row.quantity,
+          unit: row.unit,
+        })
       }
       return buildMappedIngredientMarker(row, workingCatalog)
     }

@@ -60,74 +60,102 @@ export function ImportMappingDialog({
           return (
             <div
               className={`rounded-2xl p-3 ${
-                needsCreate
-                  ? 'bg-amber-100 ring-1 ring-amber-300'
-                  : 'bg-orange-50 ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700'
+                row.excluded
+                  ? 'bg-stone-100 ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-700'
+                  : needsCreate
+                    ? 'bg-amber-100 ring-1 ring-amber-300'
+                    : 'bg-orange-50 ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700'
               }`}
               key={`${row.originalName}-${index}`}
             >
-              <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
-                {row.quantity}
-                {row.unit ? ` ${row.unit}` : ''} {row.originalName}
-              </p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="font-semibold text-stone-700 dark:text-stone-200">
-                    Ingredient
-                  </span>
-                  <div className="mt-1">
-                    <Autocomplete
-                      onChange={catalogName => onUpdateRow(index, { catalogName })}
-                      options={ingredientOptions}
-                      placeholder="Search or enter name"
-                      value={row.catalogName}
-                    />
-                  </div>
-                </label>
-                <label className="block text-sm">
-                  <span className="font-semibold text-stone-700 dark:text-stone-200">Details</span>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
+                  {row.quantity}
+                  {row.unit ? ` ${row.unit}` : ''} {row.originalName}
+                </p>
+                <label className="flex shrink-0 items-center gap-2 text-sm text-stone-600 dark:text-stone-400">
                   <input
-                    className={`${inputClassName} mt-1`}
-                    onChange={event => onUpdateRow(index, { note: event.target.value })}
-                    placeholder="large, bittersweet, unsalted…"
-                    value={row.note}
+                    checked={row.excluded}
+                    onChange={event =>
+                      onUpdateRow(index, {
+                        catalogName: event.target.checked ? '' : row.originalName,
+                        createDensity: event.target.checked ? '' : row.createDensity,
+                        excluded: event.target.checked,
+                      })
+                    }
+                    type="checkbox"
                   />
+                  Not an ingredient
                 </label>
               </div>
-              {needsCreate ? (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <p className="text-sm font-semibold text-amber-900">Create new ingredient</p>
-                    <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                      Provide density for volume conversions between US and metric.
-                    </p>
-                  </div>
-                  <label className="block text-sm">
-                    <span className="font-semibold text-stone-700 dark:text-stone-200">
-                      Density (kg/m³){densityRequired ? ' *' : ''}
-                    </span>
-                    <div className="mt-1 flex items-center gap-1">
+              {row.excluded ? (
+                <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
+                  This will be kept as plain text in the recipe steps.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block text-sm">
+                      <span className="font-semibold text-stone-700 dark:text-stone-200">
+                        Ingredient
+                      </span>
+                      <div className="mt-1">
+                        <Autocomplete
+                          onChange={catalogName => onUpdateRow(index, { catalogName })}
+                          options={ingredientOptions}
+                          placeholder="Search or enter name"
+                          value={row.catalogName}
+                        />
+                      </div>
+                    </label>
+                    <label className="block text-sm">
+                      <span className="font-semibold text-stone-700 dark:text-stone-200">
+                        Details
+                      </span>
                       <input
-                        className={`${inputClassName} min-w-0 flex-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
-                        onChange={event =>
-                          onUpdateRow(index, { createDensity: event.target.value })
-                        }
-                        placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
-                        value={row.createDensity}
+                        className={`${inputClassName} mt-1`}
+                        onChange={event => onUpdateRow(index, { note: event.target.value })}
+                        placeholder="large, bittersweet, unsalted…"
+                        value={row.note}
                       />
-                      <DensitySearchLink ingredientName={row.catalogName} />
+                    </label>
+                  </div>
+                  {needsCreate ? (
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <p className="text-sm font-semibold text-amber-900">Create new ingredient</p>
+                        <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+                          Provide density for volume conversions between US and metric.
+                        </p>
+                      </div>
+                      <label className="block text-sm">
+                        <span className="font-semibold text-stone-700 dark:text-stone-200">
+                          Density (kg/m³){densityRequired ? ' *' : ''}
+                        </span>
+                        <div className="mt-1 flex items-center gap-1">
+                          <input
+                            className={`${inputClassName} min-w-0 flex-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
+                            onChange={event =>
+                              onUpdateRow(index, { createDensity: event.target.value })
+                            }
+                            placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
+                            value={row.createDensity}
+                          />
+                          <DensitySearchLink ingredientName={row.catalogName} />
+                        </div>
+                      </label>
                     </div>
-                  </label>
-                </div>
-              ) : null}
+                  ) : null}
+                </>
+              )}
             </div>
           )
         })}
       </div>
       {!mappingCanApply ? (
         <p className="mt-3 text-sm text-red-700">
-          Enter an ingredient name for each row. New ingredients with volume measures (cups, ml, L,
-          etc.) need a density.
+          Enter an ingredient name for each row, or mark it as not an ingredient. New ingredients
+          with volume measures (cups, ml, L, etc.) need a density.
         </p>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">
