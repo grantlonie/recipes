@@ -110,6 +110,43 @@ def test_import_from_url_raises_on_fetch_failure(
             )
 
 
+def test_import_from_url_raises_helpful_message_on_403(
+    settings: Settings, ingredients: IngredientRepository
+):
+    transport = httpx.MockTransport(lambda request: httpx.Response(403, text="forbidden"))
+    with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with pytest.raises(ImportError, match="blocked automated access"):
+            import_from_url(
+                "https://www.allrecipes.com/recipe/example/",
+                settings=settings,
+                ingredients=ingredients,
+            )
+
+
+def test_import_from_url_sends_browser_headers(settings: Settings, ingredients: IngredientRepository):
+    recipe_url = "https://example.com/recipe"
+    captured_kwargs: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html><body>Recipe page</body></html>")
+
+    transport = httpx.MockTransport(handler)
+    original_client = httpx.Client
+
+    def client_factory(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return original_client(transport=transport, **kwargs)
+
+    with patch("app.importer.extract_html_text", return_value="Recipe text"):
+        with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG):
+            with patch("app.importer.httpx.Client", client_factory):
+                import_from_url(recipe_url, settings=settings, ingredients=ingredients)
+
+    headers = captured_kwargs.get("headers", {})
+    assert "mozilla" in headers.get("User-Agent", "").lower()
+    assert "text/html" in headers.get("Accept", "")
+
+
 def test_import_from_file_sets_source_path_for_assets(
     settings: Settings,
     ingredients: IngredientRepository,

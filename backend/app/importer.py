@@ -24,7 +24,21 @@ from app.models import ImportPreview
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
-USER_AGENT = "recipes-app/0.1 (+https://github.com/cooklang/cooklang)"
+BROWSER_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+    "DNT": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+}
 
 
 class ImportError(RuntimeError):
@@ -42,9 +56,10 @@ def import_from_url(
         raise ImportError("Recipe URL is required")
 
     timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
-    headers = {"User-Agent": USER_AGENT}
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
+        with httpx.Client(
+            follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS
+        ) as client:
             response = client.get(recipe_url)
             response.raise_for_status()
             html = response.text
@@ -52,6 +67,8 @@ def import_from_url(
             image_url = extract_page_image_url(html, str(response.url))
     except httpx.TimeoutException as error:
         raise ImportError("Recipe import timed out") from error
+    except httpx.HTTPStatusError as error:
+        raise ImportError(_fetch_error_message(error)) from error
     except httpx.HTTPError as error:
         raise ImportError(f"Recipe import failed: {error}") from error
     except ExtractError as error:
@@ -309,3 +326,13 @@ def _find_source_file(sources_root: Path, slug: str) -> Path | None:
         return None
     matches = sorted(assets_dir.glob("source.*"))
     return matches[0] if matches else None
+
+
+def _fetch_error_message(error: httpx.HTTPStatusError) -> str:
+    status = error.response.status_code
+    if status == 403:
+        return (
+            "This site blocked automated access. Try copying the recipe text "
+            "or saving the page and importing the HTML file instead."
+        )
+    return f"Recipe import failed: {error}"
