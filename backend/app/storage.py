@@ -12,6 +12,30 @@ class StorageError(ValueError):
     pass
 
 
+def summary_from_detail(recipe: RecipeDetail) -> RecipeSummary:
+    return RecipeSummary(
+        bookmarked=recipe.bookmarked,
+        cook_time=recipe.cook_time,
+        image=recipe.image,
+        notes=recipe.notes,
+        original_url=recipe.original_url,
+        servings=recipe.servings,
+        slug=recipe.slug,
+        tags=recipe.tags,
+        title=recipe.title,
+    )
+
+
+def safe_child(root: Path, slug: str, suffix: str) -> Path:
+    if not slug or slug.startswith("/") or ".." in Path(slug).parts:
+        raise StorageError("Invalid path")
+    path = (root / f"{slug}{suffix}").resolve()
+    root_resolved = root.resolve()
+    if root_resolved != path.parent:
+        raise StorageError("Invalid path")
+    return path
+
+
 @dataclass
 class RecipeRepository:
     app_base_url: str
@@ -100,7 +124,9 @@ class RecipeRepository:
             }
         )
 
-    def write_recipe(self, slug: str, content: str, *, previous_slug: str | None = None) -> RecipeDetail:
+    def write_recipe(
+        self, slug: str, content: str, *, previous_slug: str | None = None
+    ) -> RecipeDetail:
         if previous_slug and previous_slug != slug and self.sources_root is not None:
             rename_recipe_assets(self.sources_root, previous_slug, slug)
             content = _rewrite_asset_paths(content, previous_slug, slug)
@@ -177,30 +203,6 @@ class RecipeRepository:
             timers=cooklang.parse_timers(body),
             title=title,
         )
-
-
-def summary_from_detail(recipe: RecipeDetail) -> RecipeSummary:
-    return RecipeSummary(
-        bookmarked=recipe.bookmarked,
-        cook_time=recipe.cook_time,
-        image=recipe.image,
-        notes=recipe.notes,
-        original_url=recipe.original_url,
-        servings=recipe.servings,
-        slug=recipe.slug,
-        tags=recipe.tags,
-        title=recipe.title,
-    )
-
-
-def safe_child(root: Path, slug: str, suffix: str) -> Path:
-    if not slug or slug.startswith("/") or ".." in Path(slug).parts:
-        raise StorageError("Invalid path")
-    path = (root / f"{slug}{suffix}").resolve()
-    root_resolved = root.resolve()
-    if root_resolved != path.parent:
-        raise StorageError("Invalid path")
-    return path
 
 
 def _rewrite_asset_paths(content: str, old_slug: str, new_slug: str) -> str:

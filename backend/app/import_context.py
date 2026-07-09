@@ -6,7 +6,8 @@ DEFAULT_MAX_SOURCE_CHARS = 6000
 SYSTEM_PROMPT = """You convert recipes into Cooklang for a personal recipe app.
 
 Output rules:
-- Return ONLY a complete .cook document with YAML front matter between --- lines, then the recipe body.
+- Return ONLY a complete .cook document with YAML front matter between --- lines,
+  then the recipe body.
 - Use imperative step prose. Blank lines separate steps.
 - Ingredients must appear inline in steps as @name{{quantity%unit}} or @name{{quantity%unit}}(note).
 - Multi-word ingredient names MUST use braces: @olive oil{{30%ml}}, @all-purpose flour{{240%g}}.

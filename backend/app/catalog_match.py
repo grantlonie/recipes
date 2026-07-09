@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from app import cooklang
 from app.ingredients import IngredientRepository, normalize_ingredient_key
 from app.models import CatalogIngredient
-from app.units import format_grams_value, is_mass_unit, is_volume_unit, to_grams
+from app.units import format_grams_value, is_volume_unit, to_grams
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,9 @@ def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[
     return cooklang.INGREDIENT_RE.sub(replacer, body), unmatched
 
 
-def _find_catalog_ingredient(name: str, catalog: list[CatalogIngredient]) -> CatalogIngredient | None:
+def _find_catalog_ingredient(
+    name: str, catalog: list[CatalogIngredient]
+) -> CatalogIngredient | None:
     key = normalize_ingredient_key(name)
     for item in catalog:
         if normalize_ingredient_key(item.name) == key:
@@ -99,11 +101,7 @@ def _extract_unmatched_note(imported_name: str, matched_label: str) -> str:
 
 
 def _flexible_phrase_pattern(phrase: str) -> re.Pattern[str]:
-    parts = [
-        re.escape(part)
-        for part in normalize_ingredient_key(phrase).split()
-        if part
-    ]
+    parts = [re.escape(part) for part in normalize_ingredient_key(phrase).split() if part]
     body = r"[\s-]+".join(parts)
     return re.compile(rf"(^|[\s(,]){body}(?=[\s,.)]|$)", re.IGNORECASE)
 

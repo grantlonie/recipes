@@ -1,12 +1,6 @@
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-} from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 
 import { parseCooklangBody, serializeCooklangBody } from '../cooklangEditor'
 import type { IngredientAttrs } from '../cooklangTokens'
@@ -38,7 +32,7 @@ interface RecipeBodyEditorProps {
 export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEditorProps>(
   function RecipeBodyEditor(
     { catalog, onChange, onEditIngredient, onEditSection, unitSystem, value },
-    ref,
+    ref
   ) {
     const onChangeRef = useRef(onChange)
     onChangeRef.current = onChange
@@ -67,7 +61,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
         SectionExtension,
         CookNoteExtension,
       ],
-      [],
+      []
     )
 
     const editor = useEditor({
@@ -84,11 +78,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           if (!text) {
             return false
           }
-          if (
-            !text.includes('@') &&
-            !text.includes('>') &&
-            !/^=+\s*.+\s*=+\s*$/m.test(text)
-          ) {
+          if (!text.includes('@') && !text.includes('>') && !/^=+\s*.+\s*=+\s*$/m.test(text)) {
             return false
           }
           event.preventDefault()
@@ -163,11 +153,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           if (!editor) {
             return
           }
-          editor
-            .chain()
-            .focus()
-            .insertContent({ type: 'section', attrs: { title } })
-            .run()
+          editor.chain().focus().insertContent({ type: 'section', attrs: { title } }).run()
         },
         updateIngredient(pos, attrs) {
           if (!editor) {
@@ -204,9 +190,9 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
             .run()
         },
       }),
-      [editor],
+      [editor]
     )
 
     return <EditorContent editor={editor} />
-  },
+  }
 )

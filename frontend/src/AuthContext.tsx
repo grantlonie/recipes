@@ -16,6 +16,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
+interface AuthProviderProps {
+  children: ReactNode
+}
+
+interface LoginInput {
+  password: string
+  username: string
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const queryClient = useQueryClient()
   const authQuery = useQuery({
@@ -58,13 +67,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within AuthProvider')
   }
   return value
-}
-
-interface AuthProviderProps {
-  children: ReactNode
-}
-
-interface LoginInput {
-  password: string
-  username: string
 }

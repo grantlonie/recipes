@@ -8,39 +8,16 @@ def search_recipes(recipes: list[RecipeSummary], query: str) -> list[SearchResul
 
     results: list[SearchResult] = []
     for recipe in recipes:
-        score, match = score_recipe(recipe, terms)
+        score, match = _score_recipe(recipe, terms)
         if score > 0:
             results.append(SearchResult(match=match, recipe=recipe, score=score))
 
     return sorted(results, key=lambda result: (-result.score, result.recipe.title.casefold()))
 
 
-def score_recipe(recipe: RecipeSummary, terms: list[str]) -> tuple[int, str]:
-    title = recipe.title.casefold()
-    tags = " ".join(recipe.tags).casefold()
-    notes = " ".join(recipe.notes).casefold()
-    source = (recipe.original_url or "").casefold()
-
-    score = 0
-    matches: list[str] = []
-    for term in terms:
-        if term in title:
-            score += 100
-            matches.append("title")
-        elif term in tags:
-            score += 60
-            matches.append("tags")
-        elif term in notes:
-            score += 35
-            matches.append("notes")
-        elif term in source:
-            score += 25
-            matches.append("source")
-
-    return score, ", ".join(sorted(set(matches))) if matches else ""
-
-
-def search_details(recipes: list[RecipeSummary], details: dict[str, str], query: str) -> list[SearchResult]:
+def search_details(
+    recipes: list[RecipeSummary], details: dict[str, str], query: str
+) -> list[SearchResult]:
     terms = [term.casefold() for term in query.split() if term.strip()]
     if not terms:
         return [SearchResult(match="all recipes", recipe=recipe, score=0) for recipe in recipes]
@@ -69,4 +46,31 @@ def search_details(recipes: list[RecipeSummary], details: dict[str, str], query:
                 score=body_score,
             )
 
-    return sorted(summary_results.values(), key=lambda result: (-result.score, result.recipe.title.casefold()))
+    return sorted(
+        summary_results.values(), key=lambda result: (-result.score, result.recipe.title.casefold())
+    )
+
+
+def _score_recipe(recipe: RecipeSummary, terms: list[str]) -> tuple[int, str]:
+    title = recipe.title.casefold()
+    tags = " ".join(recipe.tags).casefold()
+    notes = " ".join(recipe.notes).casefold()
+    source = (recipe.original_url or "").casefold()
+
+    score = 0
+    matches: list[str] = []
+    for term in terms:
+        if term in title:
+            score += 100
+            matches.append("title")
+        elif term in tags:
+            score += 60
+            matches.append("tags")
+        elif term in notes:
+            score += 35
+            matches.append("notes")
+        elif term in source:
+            score += 25
+            matches.append("source")
+
+    return score, ", ".join(sorted(set(matches))) if matches else ""

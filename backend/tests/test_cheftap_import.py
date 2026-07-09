@@ -12,7 +12,9 @@ def test_inline_ingredients_consumes_word_amount_before_alias():
     steps = ["Heat the one tablespoon of olive oil until shimmering."]
     ingredients = [IngredientEntry("1 tablespoon olive oil", "olive oil", "1", "Tbsp")]
 
-    assert inline_ingredients(steps, ingredients) == ["Heat the one tablespoon @olive oil{1%Tbsp} until shimmering."]
+    assert inline_ingredients(steps, ingredients) == [
+        "Heat the one tablespoon @olive oil{1%Tbsp} until shimmering."
+    ]
 
 
 def test_inline_ingredients_consumes_numeric_amount_before_alias():
@@ -51,13 +53,17 @@ def test_convert_ingredient_line_keeps_cooklang_name_lowercase():
 
 def test_existing_metadata_value_reads_image(tmp_path):
     recipe = tmp_path / "recipe.cook"
-    recipe.write_text("---\ntitle: Test\nimage: 'https://example.com/photo.jpg'\n---\n\nCook.", encoding="utf-8")
+    recipe.write_text(
+        "---\ntitle: Test\nimage: 'https://example.com/photo.jpg'\n---\n\nCook.", encoding="utf-8"
+    )
 
     assert existing_metadata_value(recipe, "image") == "https://example.com/photo.jpg"
 
 
 def test_canonical_source_url_unwraps_google_amp_recipe_url():
     assert (
-        canonical_source_url("https://www.google.com/amp/s/food52.com/recipes/14948-test-recipe/amp")
+        canonical_source_url(
+            "https://www.google.com/amp/s/food52.com/recipes/14948-test-recipe/amp"
+        )
         == "https://food52.com/recipes/14948-test-recipe"
     )

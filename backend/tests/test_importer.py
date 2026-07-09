@@ -5,7 +5,13 @@ import httpx
 import pytest
 
 from app.config import Settings
-from app.importer import ImportError, import_from_file, import_from_text, import_from_url, suggest_slug
+from app.importer import (
+    ImportError,
+    import_from_file,
+    import_from_text,
+    import_from_url,
+    suggest_slug,
+)
 from app.ingredients import IngredientRepository
 from app.models import CatalogIngredient
 
@@ -40,7 +46,9 @@ def test_suggest_slug_uses_title():
     assert suggest_slug("https://example.com/recipe", content) == "chicken-bacon-pasta"
 
 
-def test_import_from_text_maps_catalog_ingredients(settings: Settings, ingredients: IngredientRepository):
+def test_import_from_text_maps_catalog_ingredients(
+    settings: Settings, ingredients: IngredientRepository
+):
     with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG):
         preview = import_from_text("Recipe text", settings=settings, ingredients=ingredients)
 
@@ -50,7 +58,9 @@ def test_import_from_text_maps_catalog_ingredients(settings: Settings, ingredien
     assert preview.unmatched_ingredients == []
 
 
-def test_import_from_text_reports_unmatched_ingredients(settings: Settings, ingredients: IngredientRepository):
+def test_import_from_text_reports_unmatched_ingredients(
+    settings: Settings, ingredients: IngredientRepository
+):
     cooklang = """---
 title: Mystery stew
 ---
@@ -89,13 +99,15 @@ def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: In
     assert "image: https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg" in preview.content
 
 
-def test_import_from_url_raises_on_fetch_failure(settings: Settings, ingredients: IngredientRepository):
-    transport = httpx.MockTransport(
-        lambda request: httpx.Response(404, text="not found")
-    )
+def test_import_from_url_raises_on_fetch_failure(
+    settings: Settings, ingredients: IngredientRepository
+):
+    transport = httpx.MockTransport(lambda request: httpx.Response(404, text="not found"))
     with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
         with pytest.raises(ImportError, match="Recipe import failed"):
-            import_from_url("https://example.com/recipe", settings=settings, ingredients=ingredients)
+            import_from_url(
+                "https://example.com/recipe", settings=settings, ingredients=ingredients
+            )
 
 
 def test_import_from_file_sets_source_path_for_assets(
@@ -109,7 +121,10 @@ def test_import_from_file_sets_source_path_for_assets(
     source_file.write_text("Chili recipe text", encoding="utf-8")
 
     with patch("app.importer.extract_text_from_path", return_value="Chili recipe text"):
-        with patch("app.importer.complete_cooklang", return_value="---\ntitle: Chili\n---\n\nBrown @beef{}.\n"):
+        with patch(
+            "app.importer.complete_cooklang",
+            return_value="---\ntitle: Chili\n---\n\nBrown @beef{}.\n",
+        ):
             preview = import_from_file(
                 source_file,
                 settings=settings,

@@ -2,34 +2,40 @@ import { ComputerDesktopIcon, MoonIcon, SunIcon } from '@heroicons/react/24/outl
 
 import { type ThemePreference, useTheme } from '../ThemeContext'
 
-const OPTIONS: { description: string; icon: typeof SunIcon; label: string; value: ThemePreference }[] =
-  [
-    {
-      description: 'Match your device settings',
-      icon: ComputerDesktopIcon,
-      label: 'Device',
-      value: 'device',
-    },
-    {
-      description: 'Always use light mode',
-      icon: SunIcon,
-      label: 'Light',
-      value: 'light',
-    },
-    {
-      description: 'Always use dark mode',
-      icon: MoonIcon,
-      label: 'Dark',
-      value: 'dark',
-    },
-  ]
+const OPTIONS: {
+  description: string
+  icon: typeof SunIcon
+  label: string
+  value: ThemePreference
+}[] = [
+  {
+    description: 'Match your device settings',
+    icon: ComputerDesktopIcon,
+    label: 'Device',
+    value: 'device',
+  },
+  {
+    description: 'Always use light mode',
+    icon: SunIcon,
+    label: 'Light',
+    value: 'light',
+  },
+  {
+    description: 'Always use dark mode',
+    icon: MoonIcon,
+    label: 'Dark',
+    value: 'dark',
+  },
+]
 
 export function ThemePicker() {
   const { setTheme, theme } = useTheme()
 
   return (
     <fieldset>
-      <legend className="text-sm font-semibold text-stone-700 dark:text-stone-200">Appearance</legend>
+      <legend className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+        Appearance
+      </legend>
       <div className="mt-3 grid gap-2">
         {OPTIONS.map(option => {
           const Icon = option.icon

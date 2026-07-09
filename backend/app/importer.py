@@ -11,7 +11,12 @@ from fastapi import UploadFile
 from app import cooklang
 from app.catalog_match import apply_catalog_mapping
 from app.config import Settings
-from app.extract import ExtractError, extract_html_text, extract_page_image_url, extract_text_from_bytes, extract_text_from_path
+from app.extract import (
+    ExtractError,
+    extract_html_text,
+    extract_page_image_url,
+    extract_text_from_path,
+)
 from app.fireworks_llm import LLMError, complete_cooklang
 from app.import_context import build_system_prompt, build_user_message
 from app.ingredients import IngredientRepository
@@ -162,6 +167,23 @@ async def import_from_upload(
         temp_path.unlink(missing_ok=True)
 
 
+def suggest_slug(url: str, content: str) -> str:
+    title_match = re.search(r"^title:\s*(?P<title>.+)$", content, re.MULTILINE)
+    if title_match:
+        return slugify(title_match.group("title"))
+
+    if url.startswith(("http://", "https://")):
+        path = urlparse(url).path.strip("/").split("/")[-1]
+        return slugify(path or "imported-recipe")
+
+    return slugify(Path(url).stem or "imported-recipe")
+
+
+def slugify(value: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value).strip("-").lower()
+    return normalized or "imported-recipe"
+
+
 def _import_image_file(
     path: Path,
     *,
@@ -287,20 +309,3 @@ def _find_source_file(sources_root: Path, slug: str) -> Path | None:
         return None
     matches = sorted(assets_dir.glob("source.*"))
     return matches[0] if matches else None
-
-
-def suggest_slug(url: str, content: str) -> str:
-    title_match = re.search(r"^title:\s*(?P<title>.+)$", content, re.MULTILINE)
-    if title_match:
-        return slugify(title_match.group("title"))
-
-    if url.startswith(("http://", "https://")):
-        path = urlparse(url).path.strip("/").split("/")[-1]
-        return slugify(path or "imported-recipe")
-
-    return slugify(Path(url).stem or "imported-recipe")
-
-
-def slugify(value: str) -> str:
-    normalized = re.sub(r"[^a-zA-Z0-9]+", "-", value).strip("-").lower()
-    return normalized or "imported-recipe"

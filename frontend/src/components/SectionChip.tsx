@@ -2,10 +2,7 @@ import type { NodeViewProps } from '@tiptap/react'
 import { NodeViewWrapper } from '@tiptap/react'
 import { useSyncExternalStore } from 'react'
 
-import {
-  getSectionDisplayState,
-  subscribeSectionDisplay,
-} from './sectionDisplayStore'
+import { getSectionDisplayState, subscribeSectionDisplay } from './sectionDisplayStore'
 
 export function SectionChip({ getPos, node, selected }: NodeViewProps) {
   const display = useSyncExternalStore(subscribeSectionDisplay, getSectionDisplayState)

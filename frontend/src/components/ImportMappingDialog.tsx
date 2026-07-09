@@ -39,7 +39,7 @@ export function ImportMappingDialog({
         label: item.density_kg_m3 == null ? `${item.name} (weight)` : item.name,
         value: item.name,
       })),
-    [catalog],
+    [catalog]
   )
   const mappingCanApply = useMemo(() => mappingRowsAreValid(rows, catalog), [rows, catalog])
 
@@ -72,7 +72,9 @@ export function ImportMappingDialog({
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <label className="block text-sm">
-                  <span className="font-semibold text-stone-700 dark:text-stone-200">Ingredient</span>
+                  <span className="font-semibold text-stone-700 dark:text-stone-200">
+                    Ingredient
+                  </span>
                   <div className="mt-1">
                     <Autocomplete
                       onChange={catalogName => onUpdateRow(index, { catalogName })}
@@ -107,7 +109,9 @@ export function ImportMappingDialog({
                     <div className="mt-1 flex items-center gap-1">
                       <input
                         className={`${inputClassName} min-w-0 flex-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
-                        onChange={event => onUpdateRow(index, { createDensity: event.target.value })}
+                        onChange={event =>
+                          onUpdateRow(index, { createDensity: event.target.value })
+                        }
                         placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
                         value={row.createDensity}
                       />

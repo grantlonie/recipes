@@ -119,8 +119,7 @@ function parseLineContent(line: string): JSONContent[] | undefined {
 
 function serializeBlock(block: JSONContent): string {
   if (block.type === 'section') {
-    const title =
-      String(block.attrs?.title ?? '').trim() || serializeInlineContent(block.content)
+    const title = String(block.attrs?.title ?? '').trim() || serializeInlineContent(block.content)
     return `==${title}==`
   }
   if (block.type === 'cookNote') {

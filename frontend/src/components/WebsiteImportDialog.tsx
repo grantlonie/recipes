@@ -1,9 +1,10 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
 
+import { inputClassName } from '../themeClasses'
+
 import { Button } from './Button'
 import { Dialog } from './Dialog'
-import { inputClassName } from '../themeClasses'
 
 interface WebsiteImportDialogProps {
   error?: string | null
@@ -11,27 +12,6 @@ interface WebsiteImportDialogProps {
   onClose: () => void
   onImport: (url: string) => void
   open: boolean
-}
-
-function normalizeUrl(value: string): string | null {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  const withProtocol =
-    trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`
-
-  try {
-    const parsed = new URL(withProtocol)
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return parsed.toString()
-    }
-  } catch {
-    return null
-  }
-
-  return null
 }
 
 export function WebsiteImportDialog({
@@ -63,10 +43,15 @@ export function WebsiteImportDialog({
   return (
     <Dialog className="max-w-lg" labelledBy="website-import-dialog-title" open={open}>
       <form onSubmit={handleSubmit}>
-        <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100" id="website-import-dialog-title">
+        <h2
+          className="text-xl font-bold text-stone-900 dark:text-stone-100"
+          id="website-import-dialog-title"
+        >
           Import from website
         </h2>
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">Paste a recipe URL to import.</p>
+        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+          Paste a recipe URL to import.
+        </p>
 
         <input
           autoFocus
@@ -90,4 +75,25 @@ export function WebsiteImportDialog({
       </form>
     </Dialog>
   )
+}
+
+function normalizeUrl(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const withProtocol =
+    trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`
+
+  try {
+    const parsed = new URL(withProtocol)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.toString()
+    }
+  } catch {
+    return null
+  }
+
+  return null
 }

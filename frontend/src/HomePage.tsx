@@ -1,30 +1,47 @@
+import { useMutation } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
 
 import { updateRecipeMetadata } from './api'
-import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
 import { NewRecipeFab } from './components/NewRecipeFab'
+import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { searchRecipes } from './search'
 import { storeRecipe } from './sync'
 import type { RecipeDetail, RecipeSummary } from './types'
 
+interface HomePageProps {
+  isVisible: boolean
+}
+
+interface BookmarkInput {
+  bookmarked: boolean
+  slug: string
+}
+
+interface CompactRecipeGridProps {
+  bookmarkPendingSlug?: string
+  headerAction?: ReactNode
+  onBookmarkToggle: (recipe: RecipeSummary) => void
+  recipes: RecipeSummary[]
+  title?: string
+}
+
+interface CompactRecipeTileProps {
+  bookmarkPending?: boolean
+  onBookmarkToggle: (recipe: RecipeSummary) => void
+  recipe: RecipeSummary
+}
+
 export function HomePage({ isVisible }: HomePageProps) {
   const { revision, status, sync } = useRecipeSync()
-  const {
-    activeTags,
-    bookmarkedOnly,
-    query,
-    recentRecipes,
-    scrollTop,
-    setScrollTop,
-  } = useRecipeListState()
+  const { activeTags, bookmarkedOnly, query, recentRecipes, scrollTop, setScrollTop } =
+    useRecipeListState()
   const scrollRestoringRef = useRef(false)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
   const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
@@ -38,26 +55,22 @@ export function HomePage({ isVisible }: HomePageProps) {
       await storeRecipe(recipe)
       await sync()
       setSummaries(current =>
-        current.map(summary =>
-          summary.slug === recipe.slug ? summaryFromDetail(recipe) : summary,
-        ),
+        current.map(summary => (summary.slug === recipe.slug ? summaryFromDetail(recipe) : summary))
       )
-      setDetails(current =>
-        current.map(detail => (detail.slug === recipe.slug ? recipe : detail)),
-      )
+      setDetails(current => current.map(detail => (detail.slug === recipe.slug ? recipe : detail)))
     },
   })
   const handleBookmarkToggle = useCallback(
     (recipe: RecipeSummary) => {
       bookmarkMutation.mutate({ bookmarked: recipe.bookmarked, slug: recipe.slug })
     },
-    [bookmarkMutation],
+    [bookmarkMutation]
   )
   const searchQuery = query.trim()
   const showSearchResults = searchQuery.length > 0
   const bookmarkedRecipes = useMemo(
     () => filterRecipes(summaries, true, activeTags),
-    [activeTags, summaries],
+    [activeTags, summaries]
   )
   const displayRecentRecipes = useMemo(() => {
     const bySlug = new Map(summaries.map(summary => [summary.slug, summary]))
@@ -67,18 +80,14 @@ export function HomePage({ isVisible }: HomePageProps) {
   }, [localReady, recentRecipes, summaries])
   const taggedRecipes = useMemo(
     () => filterRecipes(summaries, false, activeTags),
-    [activeTags, summaries],
+    [activeTags, summaries]
   )
   const hasTagFilter = activeTags.length > 0
   const recipes = useMemo(() => {
     if (!showSearchResults) {
       return []
     }
-    return filterRecipes(
-      searchRecipes(summaries, details, searchQuery),
-      bookmarkedOnly,
-      activeTags,
-    )
+    return filterRecipes(searchRecipes(summaries, details, searchQuery), bookmarkedOnly, activeTags)
   }, [activeTags, bookmarkedOnly, details, searchQuery, showSearchResults, summaries])
 
   useEffect(() => {
@@ -140,69 +149,71 @@ export function HomePage({ isVisible }: HomePageProps) {
   return (
     <>
       {!showSearchResults ? (
-          bookmarkedOnly ? (
-            bookmarkedRecipes.length ? (
-              <CompactRecipeGrid
-                bookmarkPendingSlug={
-                  bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
-                }
-                onBookmarkToggle={handleBookmarkToggle}
-                recipes={bookmarkedRecipes}
-                title="Bookmarked"
-              />
-            ) : (
-              <p className="text-sm text-stone-600 dark:text-stone-400">No bookmarked recipes yet.</p>
-            )
-          ) : hasTagFilter ? (
-            taggedRecipes.length ? (
-              <CompactRecipeGrid
-                bookmarkPendingSlug={
-                  bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
-                }
-                onBookmarkToggle={handleBookmarkToggle}
-                recipes={taggedRecipes}
-              />
-            ) : (
-              <p className="text-sm text-stone-600 dark:text-stone-400">No recipes match these tags.</p>
-            )
-          ) : summaries.length || displayRecentRecipes.length ? (
+        bookmarkedOnly ? (
+          bookmarkedRecipes.length ? (
             <CompactRecipeGrid
               bookmarkPendingSlug={
                 bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
               }
-              headerAction={
-                summaries.length ? (
-                  <Button
-                    className="px-3 py-1"
-                    onClick={() => setShowAllRecipes(current => !current)}
-                    variant="ghost"
-                  >
-                    {showAllRecipes ? 'Recently viewed' : 'View all'}
-                  </Button>
-                ) : undefined
-              }
               onBookmarkToggle={handleBookmarkToggle}
-              recipes={showAllRecipes ? summaries : displayRecentRecipes}
-              title={showAllRecipes ? 'All Recipes' : 'Recently Viewed'}
+              recipes={bookmarkedRecipes}
+              title="Bookmarked"
             />
           ) : (
-            <p className="text-sm text-stone-600 dark:text-stone-400">No recipes yet.</p>
+            <p className="text-sm text-stone-600 dark:text-stone-400">No bookmarked recipes yet.</p>
           )
-        ) : !localReady ? (
-          <p className="text-stone-600 dark:text-stone-400">Loading recipes...</p>
-        ) : recipes.length ? (
+        ) : hasTagFilter ? (
+          taggedRecipes.length ? (
+            <CompactRecipeGrid
+              bookmarkPendingSlug={
+                bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
+              }
+              onBookmarkToggle={handleBookmarkToggle}
+              recipes={taggedRecipes}
+            />
+          ) : (
+            <p className="text-sm text-stone-600 dark:text-stone-400">
+              No recipes match these tags.
+            </p>
+          )
+        ) : summaries.length || displayRecentRecipes.length ? (
           <CompactRecipeGrid
             bookmarkPendingSlug={
               bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
             }
+            headerAction={
+              summaries.length ? (
+                <Button
+                  className="px-3 py-1"
+                  onClick={() => setShowAllRecipes(current => !current)}
+                  variant="ghost"
+                >
+                  {showAllRecipes ? 'Recently viewed' : 'View all'}
+                </Button>
+              ) : undefined
+            }
             onBookmarkToggle={handleBookmarkToggle}
-            recipes={recipes}
+            recipes={showAllRecipes ? summaries : displayRecentRecipes}
+            title={showAllRecipes ? 'All Recipes' : 'Recently Viewed'}
           />
-        ) : status === 'syncing' && !summaries.length ? (
-          <p className="text-stone-600 dark:text-stone-400">Syncing recipes...</p>
         ) : (
-          <p className="text-stone-600 dark:text-stone-400">No recipes found.</p>
-        )}
+          <p className="text-sm text-stone-600 dark:text-stone-400">No recipes yet.</p>
+        )
+      ) : !localReady ? (
+        <p className="text-stone-600 dark:text-stone-400">Loading recipes...</p>
+      ) : recipes.length ? (
+        <CompactRecipeGrid
+          bookmarkPendingSlug={
+            bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
+          }
+          onBookmarkToggle={handleBookmarkToggle}
+          recipes={recipes}
+        />
+      ) : status === 'syncing' && !summaries.length ? (
+        <p className="text-stone-600 dark:text-stone-400">Syncing recipes...</p>
+      ) : (
+        <p className="text-stone-600 dark:text-stone-400">No recipes found.</p>
+      )}
 
       <NewRecipeFab />
     </>
@@ -227,7 +238,9 @@ function CompactRecipeGrid({
       {title || headerAction ? (
         <div className="flex items-center justify-between gap-2">
           {title ? (
-            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700 dark:text-stone-300">{title}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide text-stone-700 dark:text-stone-300">
+              {title}
+            </h2>
           ) : (
             <span />
           )}
@@ -237,8 +250,8 @@ function CompactRecipeGrid({
       <div className={`grid grid-cols-3 gap-3 ${title || headerAction ? 'mt-2' : ''}`}>
         {tiles.map(({ key, recipe }) => (
           <CompactRecipeTile
-            key={key}
             bookmarkPending={bookmarkPendingSlug === recipe.slug}
+            key={key}
             onBookmarkToggle={onBookmarkToggle}
             recipe={recipe}
           />
@@ -279,33 +292,12 @@ const CompactRecipeTile = memo(function CompactRecipeTile({
           onToggle={() => onBookmarkToggle(recipe)}
         />
       ) : null}
-      <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-stone-900 dark:text-stone-100">{recipe.title}</p>
+      <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-stone-900 dark:text-stone-100">
+        {recipe.title}
+      </p>
     </Link>
   )
 })
-
-interface BookmarkInput {
-  bookmarked: boolean
-  slug: string
-}
-
-interface CompactRecipeGridProps {
-  bookmarkPendingSlug?: string
-  headerAction?: ReactNode
-  onBookmarkToggle: (recipe: RecipeSummary) => void
-  recipes: RecipeSummary[]
-  title?: string
-}
-
-interface CompactRecipeTileProps {
-  bookmarkPending?: boolean
-  onBookmarkToggle: (recipe: RecipeSummary) => void
-  recipe: RecipeSummary
-}
-
-interface HomePageProps {
-  isVisible: boolean
-}
 
 function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {
   return {
@@ -333,7 +325,9 @@ function filterRecipes(recipes: RecipeSummary[], bookmarkedOnly: boolean, active
   })
 }
 
-function uniqueRecipesForGrid(recipes: RecipeSummary[]): Array<{ key: string; recipe: RecipeSummary }> {
+function uniqueRecipesForGrid(
+  recipes: RecipeSummary[]
+): Array<{ key: string; recipe: RecipeSummary }> {
   const seen = new Map<string, number>()
 
   return recipes.flatMap((recipe, index) => {

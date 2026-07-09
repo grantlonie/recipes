@@ -3,10 +3,17 @@ import type { RecipeSummary } from './types'
 
 const URL_PATTERN = /https?:\/\/[^\s<>"{}|\\^`[\]]+/i
 
-export function extractRecipeUrl(params: {
+interface ExtractRecipeUrlParams {
   text?: string | null
   url?: string | null
-}): string | null {
+}
+
+interface ImportSession {
+  at: number
+  status: 'done'
+}
+
+export function extractRecipeUrl(params: ExtractRecipeUrlParams): string | null {
   const directUrl = params.url?.trim()
   if (directUrl && isValidHttpUrl(directUrl)) {
     return directUrl
@@ -75,11 +82,6 @@ export function formatImportError(error: unknown): string {
   return `Couldn't import this recipe. ${message}`
 }
 
-interface ImportSession {
-  at: number
-  status: 'done'
-}
-
 export function clearImportSession(url: string): void {
   sessionStorage.removeItem(importSessionKey(url))
 }
@@ -101,12 +103,8 @@ export function getImportSession(url: string): ImportSession | null {
 export function markImportDone(url: string): void {
   sessionStorage.setItem(
     importSessionKey(url),
-    JSON.stringify({ at: Date.now(), status: 'done' } satisfies ImportSession),
+    JSON.stringify({ at: Date.now(), status: 'done' } satisfies ImportSession)
   )
-}
-
-function importSessionKey(url: string): string {
-  return `share-import:${url}`
 }
 
 export function slugify(value: string): string {
@@ -120,12 +118,12 @@ export function slugify(value: string): string {
 
 export async function ensureUniqueSlug(
   baseSlug: string,
-  options: { excludeSlug?: string } = {},
+  options: { excludeSlug?: string } = {}
 ): Promise<string> {
   const normalized = baseSlug.trim() || 'new-recipe'
   const recipes = await getRecipes('')
   const existing = new Set(
-    recipes.map(recipe => recipe.slug).filter(slug => slug !== options.excludeSlug),
+    recipes.map(recipe => recipe.slug).filter(slug => slug !== options.excludeSlug)
   )
 
   if (!existing.has(normalized)) {
@@ -145,8 +143,9 @@ export async function findRecipeBySourceUrl(url: string): Promise<RecipeSummary 
   const recipes = await getRecipes('')
 
   return (
-    recipes.find(recipe => recipe.original_url && sourceUrlKey(recipe.original_url) === targetKey) ??
-    null
+    recipes.find(
+      recipe => recipe.original_url && sourceUrlKey(recipe.original_url) === targetKey
+    ) ?? null
   )
 }
 
@@ -189,6 +188,10 @@ export function sourceUrlKey(url: string): string {
   } catch {
     return canonicalSourceUrl(url).toLowerCase()
   }
+}
+
+function importSessionKey(url: string): string {
+  return `share-import:${url}`
 }
 
 function isValidHttpUrl(value: string): boolean {

@@ -1,8 +1,17 @@
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -37,7 +46,8 @@ from app.sources import (
     resolve_asset_file,
     save_upload,
 )
-from app.storage import RecipeRepository, StorageError, summary_from_detail
+from app.storage import RecipeRepository, StorageError
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Iterator[None]:
@@ -60,6 +70,16 @@ def get_repository(request: Request) -> RecipeRepository:
 
 def get_ingredients(request: Request) -> IngredientRepository:
     return request.app.state.ingredients
+
+
+def get_settings_dep() -> Settings:
+    return get_settings()
+
+
+settings = get_settings()
+assets_path = settings.frontend_dist / "assets"
+if assets_path.exists():
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 
 @app.get("/health")
@@ -154,10 +174,6 @@ def delete_ingredient(
     except IngredientStorageError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-def get_settings_dep() -> Settings:
-    return get_settings()
 
 
 @app.post("/api/import", dependencies=[Depends(auth.require_editor)])
@@ -312,7 +328,11 @@ def update_recipe(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
-@app.delete("/api/recipes/{slug:path}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(auth.require_editor)])
+@app.delete(
+    "/api/recipes/{slug:path}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(auth.require_editor)],
+)
 def delete_recipe(slug: str, repository: RecipeRepository = Depends(get_repository)) -> Response:
     try:
         repository.delete_recipe(slug)
@@ -337,11 +357,6 @@ def update_metadata(
         )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
-settings = get_settings()
-dist_path = settings.frontend_dist
-assets_path = dist_path / "assets"
-if assets_path.exists():
-    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
 
 
 @app.get("/manifest.webmanifest", include_in_schema=False)

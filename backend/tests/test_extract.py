@@ -12,8 +12,7 @@ def test_extract_page_image_url_prefers_og_image():
     </html>
     """
     assert (
-        extract_page_image_url(html, "https://example.com/recipe")
-        == "https://example.com/hero.jpg"
+        extract_page_image_url(html, "https://example.com/recipe") == "https://example.com/hero.jpg"
     )
 
 

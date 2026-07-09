@@ -1,14 +1,11 @@
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from 'react'
-import { useNavigate } from 'react-router-dom'
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react'
 
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
+import { useNavigate } from 'react-router-dom'
+
+interface RecipeDetailHeaderProviderProps {
+  children: ReactNode
+}
 
 interface RecipeDetailHeaderContextValue {
   setTitle: (title: string) => void
@@ -19,7 +16,7 @@ interface RecipeDetailHeaderContextValue {
 
 const RecipeDetailHeaderContext = createContext<RecipeDetailHeaderContextValue | null>(null)
 
-export function RecipeDetailHeaderProvider({ children }: { children: ReactNode }) {
+export function RecipeDetailHeaderProvider({ children }: RecipeDetailHeaderProviderProps) {
   const [title, setTitleState] = useState('')
   const [titleInHeader, setTitleInHeaderState] = useState(false)
 
@@ -41,11 +38,13 @@ export function RecipeDetailHeaderProvider({ children }: { children: ReactNode }
       title,
       titleInHeader,
     }),
-    [setTitle, setTitleInHeader, title, titleInHeader],
+    [setTitle, setTitleInHeader, title, titleInHeader]
   )
 
   return (
-    <RecipeDetailHeaderContext.Provider value={value}>{children}</RecipeDetailHeaderContext.Provider>
+    <RecipeDetailHeaderContext.Provider value={value}>
+      {children}
+    </RecipeDetailHeaderContext.Provider>
   )
 }
 

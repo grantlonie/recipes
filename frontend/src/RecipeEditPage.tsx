@@ -24,7 +24,7 @@ import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { VolumeQuantitySelect } from './components/VolumeQuantitySelect'
 import type { IngredientAttrs } from './cooklangTokens'
-import { getLocalTags } from './db'
+import { deleteRecipes, getLocalRecipe, getLocalTags } from './db'
 import {
   applyImportMapping,
   buildMappingRows,
@@ -38,7 +38,6 @@ import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { buildLoginUrl, ensureUniqueSlug, slugify } from './shareImport'
-import { getLocalRecipe, deleteRecipes } from './db'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import { cardClassName, inputClassName } from './themeClasses'
 import type { CatalogIngredient, ImportPreview, UnitSystem } from './types'
@@ -63,43 +62,6 @@ interface IngredientFormState {
   note: string
   qty: string
   units: string
-}
-
-function emptyIngredientForm(): IngredientFormState {
-  return { fixed: false, name: '', note: '', qty: '', units: '' }
-}
-
-function newIngredientForm(unitSystem: UnitSystem): IngredientFormState {
-  return {
-    fixed: false,
-    name: '',
-    note: '',
-    qty: '1',
-    units: defaultEditorUnit(unitSystem),
-  }
-}
-
-function ingredientFormFromAttrs(
-  attrs: IngredientAttrs,
-  catalog: CatalogIngredient[],
-  unitSystem: UnitSystem,
-): IngredientFormState {
-  const density = densityForName(attrs.name, catalog)
-  const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
-    densityKgM3: density,
-    unitSystem,
-  })
-  return {
-    fixed: attrs.fixed,
-    name: attrs.name,
-    note: attrs.note,
-    qty: display.quantity || attrs.quantity,
-    units: normalizeUnit(display.unit) ?? '',
-  }
-}
-
-function clampServings(value: number): number {
-  return Math.min(MAX_SERVINGS, Math.max(1, Math.round(value)))
 }
 
 interface RecipeEditPageProps {
@@ -127,7 +89,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [importUrl, setImportUrl] = useState(searchParams.get('url') ?? '')
   const [ingredientDialogOpen, setIngredientDialogOpen] = useState(false)
   const [editingPos, setEditingPos] = useState<number | null>(null)
-  const [ingredientInitial, setIngredientInitial] = useState<IngredientFormState>(emptyIngredientForm)
+  const [ingredientInitial, setIngredientInitial] =
+    useState<IngredientFormState>(emptyIngredientForm)
   const [ingredientDraft, setIngredientDraft] = useState<IngredientFormState>(emptyIngredientForm)
   const [sectionDialogOpen, setSectionDialogOpen] = useState(false)
   const [editingSectionPos, setEditingSectionPos] = useState<number | null>(null)
@@ -158,11 +121,11 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         label: item.density_kg_m3 == null ? `${item.name} (weight)` : item.name,
         value: item.name,
       })),
-    [catalog],
+    [catalog]
   )
   const mappingCanApply = useMemo(
     () => mappingRowsAreValid(mappingRows, catalog),
-    [mappingRows, catalog],
+    [mappingRows, catalog]
   )
   const ingredientDirty = editingPos !== null && !isEqual(ingredientInitial, ingredientDraft)
 
@@ -249,7 +212,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       setIngredientDraft(snapshot)
       setIngredientDialogOpen(true)
     },
-    [catalog, unitSystem],
+    [catalog, unitSystem]
   )
 
   const handleEditSection = useCallback((pos: number, title: string) => {
@@ -262,7 +225,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     return (
       <section className={`mx-auto max-w-md ${cardClassName}`}>
         <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Sign in required</h1>
-        <p className="mt-2 text-stone-600 dark:text-stone-400">Editor access is required to change recipe files.</p>
+        <p className="mt-2 text-stone-600 dark:text-stone-400">
+          Editor access is required to change recipe files.
+        </p>
         <Link
           className="mt-6 inline-flex rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
           to={buildLoginUrl(`${location.pathname}${location.search}`)}
@@ -274,11 +239,19 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 
   if (!isNew && recipeQuery.isLoading) {
-    return <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${cardClassName}`}>Loading recipe...</p>
+    return (
+      <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${cardClassName}`}>
+        Loading recipe...
+      </p>
+    )
   }
 
   if (!isNew && !recipeQuery.data) {
-    return <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${cardClassName}`}>Recipe not found.</p>
+    return (
+      <p className={`rounded-2xl p-6 text-stone-600 dark:text-stone-400 ${cardClassName}`}>
+        Recipe not found.
+      </p>
+    )
   }
 
   return (
@@ -369,7 +342,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 value={source}
               />
               {!isNew && reimportMutation.error ? (
-                <p className="lg:col-span-2 text-sm text-red-700">{reimportMutation.error.message}</p>
+                <p className="lg:col-span-2 text-sm text-red-700">
+                  {reimportMutation.error.message}
+                </p>
               ) : null}
               <label className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
                 <input
@@ -698,7 +673,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       pendingImport,
       mappingRows,
       catalog,
-      refreshCatalog,
+      refreshCatalog
     )
 
     const currentBookmarked = bookmarked
@@ -821,6 +796,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setSectionDialogOpen(false)
     setEditingSectionPos(null)
   }
+}
+
+interface FieldProps {
+  children: ReactNode
+  className?: string
+  label: string
 }
 
 function Field({ children, className = '', label }: FieldProps) {
@@ -947,11 +928,7 @@ function RefField({
         </p>
       ) : null}
       {previewUrl && (isRefFile(value) || value.startsWith('http')) && accept.includes('image') ? (
-        <img
-          alt=""
-          className="mt-3 max-h-40 rounded-xl object-cover"
-          src={previewUrl}
-        />
+        <img alt="" className="mt-3 max-h-40 rounded-xl object-cover" src={previewUrl} />
       ) : null}
       {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
     </Field>
@@ -969,10 +946,41 @@ function resolveRefDisplay(value: string): string {
   return value
 }
 
-interface FieldProps {
-  children: ReactNode
-  className?: string
-  label: string
+function emptyIngredientForm(): IngredientFormState {
+  return { fixed: false, name: '', note: '', qty: '', units: '' }
+}
+
+function newIngredientForm(unitSystem: UnitSystem): IngredientFormState {
+  return {
+    fixed: false,
+    name: '',
+    note: '',
+    qty: '1',
+    units: defaultEditorUnit(unitSystem),
+  }
+}
+
+function ingredientFormFromAttrs(
+  attrs: IngredientAttrs,
+  catalog: CatalogIngredient[],
+  unitSystem: UnitSystem
+): IngredientFormState {
+  const density = densityForName(attrs.name, catalog)
+  const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
+    densityKgM3: density,
+    unitSystem,
+  })
+  return {
+    fixed: attrs.fixed,
+    name: attrs.name,
+    note: attrs.note,
+    qty: display.quantity || attrs.quantity,
+    units: normalizeUnit(display.unit) ?? '',
+  }
+}
+
+function clampServings(value: number): number {
+  return Math.min(MAX_SERVINGS, Math.max(1, Math.round(value)))
 }
 
 function splitDocument(content: string) {

@@ -13,6 +13,10 @@ interface RecipeSyncContextValue {
 
 const RecipeSyncContext = createContext<RecipeSyncContextValue | null>(null)
 
+interface RecipeSyncProviderProps {
+  children: ReactNode
+}
+
 export function RecipeSyncProvider({ children }: RecipeSyncProviderProps) {
   const [status, setStatus] = useState<SyncStatus>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +42,7 @@ export function RecipeSyncProvider({ children }: RecipeSyncProviderProps) {
       status,
       sync,
     }),
-    [error, revision, status, sync],
+    [error, revision, status, sync]
   )
 
   return <RecipeSyncContext.Provider value={value}>{children}</RecipeSyncContext.Provider>
@@ -50,8 +54,4 @@ export function useRecipeSync() {
     throw new Error('useRecipeSync must be used within RecipeSyncProvider')
   }
   return value
-}
-
-interface RecipeSyncProviderProps {
-  children: ReactNode
 }

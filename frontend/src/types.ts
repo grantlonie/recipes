@@ -37,9 +37,7 @@ export interface RecipeSummary {
   title: string
 }
 
-export type RecipeBlock =
-  | { kind: 'section'; title: string }
-  | { kind: 'step'; text: string }
+export type RecipeBlock = { kind: 'section'; title: string } | { kind: 'step'; text: string }
 
 export interface RecipeDetail extends RecipeSummary {
   content: string

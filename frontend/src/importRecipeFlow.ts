@@ -1,4 +1,10 @@
-import { createRecipe, importRecipe, importRecipeUpload, updateRecipe, uploadRecipeSource } from './api'
+import {
+  createRecipe,
+  importRecipe,
+  importRecipeUpload,
+  updateRecipe,
+  uploadRecipeSource,
+} from './api'
 import {
   buildMappingRows,
   parseImportedDocument,
@@ -39,7 +45,7 @@ export async function importRecipeFromFile(file: File): Promise<RecipeImportResu
 export function prepareImportMapping(
   preview: ImportPreview,
   catalog: CatalogIngredient[],
-  options: Omit<PendingImport, 'body' | 'metadata'> = {},
+  options: Omit<PendingImport, 'body' | 'metadata'> = {}
 ): PreparedImportMapping | null {
   const parsed = parseImportedDocument(preview.content)
   const unmatched = preview.unmatched_ingredients ?? []
@@ -62,7 +68,7 @@ export function prepareImportMapping(
 export async function finalizeImportedRecipe(
   content: string,
   suggestedSlug: string,
-  sourceFile?: File,
+  sourceFile?: File
 ): Promise<RecipeDetail> {
   const slug = await ensureUniqueSlug(suggestedSlug)
   let recipe = await createRecipe(slug, content)
@@ -93,7 +99,7 @@ export { formatImportError }
 
 function attachAssetsToContent(
   content: string,
-  assets: { image?: string; source: string },
+  assets: { image?: string; source: string }
 ): string {
   const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/)
   if (!match) {

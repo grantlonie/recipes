@@ -97,7 +97,7 @@ export async function purgeRecipeIfDeleted(slug: string): Promise<boolean> {
 
 export async function loadRecipeStaleFirst(
   slug: string,
-  onUpdated?: (recipe: RecipeDetail) => void,
+  onUpdated?: (recipe: RecipeDetail) => void
 ): Promise<RecipeDetail> {
   const local = await loadRecipeLocal(slug)
   if (local) {
@@ -149,7 +149,7 @@ export async function syncIngredients(): Promise<void> {
 }
 
 export async function loadIngredientCatalogStaleFirst(
-  onUpdated?: (catalog: import('./types').IngredientCatalog) => void,
+  onUpdated?: (catalog: import('./types').IngredientCatalog) => void
 ): Promise<import('./types').IngredientCatalog> {
   const local = await getLocalIngredientCatalog()
   if (local) {

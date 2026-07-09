@@ -7,6 +7,34 @@ A small Cooklang filesystem recipe app.
 - Recipes are stored as plain-text `.cook` files under `/data/recipes`.
 - Images are not stored by the app. Recipe `image` metadata should be a public URL.
 
+## Stack
+
+| Layer | Technology |
+|-------|------------|
+| Backend | Python 3.12, FastAPI, Uvicorn |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
+| Editor | TipTap (Cooklang body editing) |
+| Client data | IndexedDB + TanStack Query (offline-first sync) |
+| Import | Fireworks AI (HTML/PDF/DOCX → Cooklang) |
+| Deploy | Docker Compose, Caddy reverse proxy |
+
+## Project layout
+
+```text
+backend/app/          FastAPI app, Cooklang parsing, import pipeline, storage
+backend/tests/        pytest suite
+frontend/src/         React SPA (pages, components, sync, API client)
+frontend/public/      Static assets, service worker
+scripts/              One-off data/import utilities
+pyproject.toml        Python package and pytest config
+docker-compose.yml    Production-style single-container deploy
+docker-compose.dev.yml  Hot-reload dev stack (Vite + Uvicorn)
+```
+
+Code conventions live in [AGENTS.md](./AGENTS.md), [backend/CONTRIBUTING.md](./backend/CONTRIBUTING.md), and [frontend/CONTRIBUTING.md](./frontend/CONTRIBUTING.md).
+
+Future work: [docs/SAAS_PLAN.md](./docs/SAAS_PLAN.md) — notes on multi-user / SaaS migration (tenancy, storage, auth).
+
 ## Local Development
 
 Docker hot reload:
@@ -46,6 +74,8 @@ Copy `.env.example` to `.env` and change `RECIPE_EDITOR_PASSWORD` and `SESSION_S
 /data/
   recipes/
     weeknight/chili.cook
+  ingredients.json      Ingredient catalog (densities, aliases)
+  sources/              Per-recipe uploaded source files and images
 ```
 
 Recipe metadata follows Cooklang front matter conventions:
@@ -65,6 +95,36 @@ description: Good freezer meal.
 
 Brown @beef{1%lb}.
 ```
+
+## Offline sync
+
+The frontend caches recipes and the ingredient catalog in IndexedDB and syncs from `/api/sync/*`
+endpoints. A service worker is registered in production builds for basic offline support.
+
+## Recipe import
+
+Editors can import recipes from a URL, file upload (HTML, PDF, DOCX, Markdown, plain text), or
+camera capture. The backend fetches or extracts source text, sends it to Fireworks AI with a
+Cooklang system prompt, and returns a preview for mapping ingredients before save.
+
+Set `FIREWORKS_API_KEY` in `.env` for import to work. Model names and token limits are
+configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.example`).
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `APP_BASE_URL` | Public URL used in recipe links and redirects |
+| `COOKIE_SECURE` | Set `true` in production (HTTPS) |
+| `DATA_ROOT` | Root data directory inside the container (`/data`) |
+| `FRONTEND_DIST` | Built frontend static files path |
+| `HOST_DATA_ROOT` | Host path mounted to `DATA_ROOT` in Compose |
+| `RECIPE_EDITOR_USERNAME` / `RECIPE_EDITOR_PASSWORD` | Editor login credentials |
+| `SESSION_SECRET` | Signed session cookie secret |
+| `FIREWORKS_API_KEY` | Fireworks API key for recipe import |
+| `IMPORT_MODEL_TEXT` / `IMPORT_MODEL_VISION` / `IMPORT_MODEL_REPAIR` / `IMPORT_MODEL_BULK` | LLM models for import stages |
+| `IMPORT_MAX_SOURCE_CHARS` / `IMPORT_MAX_OUTPUT_TOKENS` | Import size limits |
+| `IMPORT_CACHE_AFFINITY_KEY` | Fireworks prompt-cache affinity key |
 
 ## Docker
 
@@ -92,17 +152,11 @@ recipes.grantlonie.com {
 }
 ```
 
-## URL Import
-
-The protected import endpoint sends recipe URLs to [cook.md](https://cook.md/) using the Cooklang
-prefix import flow (`https://cook.md/<recipe-url>`), polls until conversion finishes, and returns
-the resulting Cooklang document to the editor. No local `cooklang-import` binary or AI API keys are
-required on the server.
-
 ## Checks
 
 ```bash
 pytest
+ruff check backend/app && ruff format --check backend/app
 cd frontend && npm run build && npm run format
 docker build .
 ```

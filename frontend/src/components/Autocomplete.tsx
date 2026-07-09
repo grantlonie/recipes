@@ -2,8 +2,8 @@ import type { KeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 
-import { normalizeIngredientKey } from '../units'
 import { inputClassName } from '../themeClasses'
+import { normalizeIngredientKey } from '../units'
 
 export interface AutocompleteOption {
   label: string
@@ -11,8 +11,8 @@ export interface AutocompleteOption {
 }
 
 export interface AutocompleteHeader {
-  type: 'header'
   label: string
+  type: 'header'
 }
 
 export type AutocompleteItem = AutocompleteOption | AutocompleteHeader
@@ -121,13 +121,13 @@ export function Autocomplete({
           setOpen(true)
           event.currentTarget.select()
         }}
+        onKeyDown={handleKeyDown}
         onMouseDown={event => {
           if (document.activeElement === event.currentTarget) {
             event.preventDefault()
             event.currentTarget.select()
           }
         }}
-        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         ref={inputRef}
         role="combobox"
@@ -177,7 +177,7 @@ export function Autocomplete({
                 )
               })}
             </ul>,
-            document.body,
+            document.body
           )
         : null}
     </div>
@@ -234,7 +234,7 @@ export function Autocomplete({
     const exact = selectableOptions(options).find(
       option =>
         normalizeIngredientKey(option.value) === normalizeIngredientKey(trimmed) ||
-        normalizeIngredientKey(option.label) === normalizeIngredientKey(trimmed),
+        normalizeIngredientKey(option.label) === normalizeIngredientKey(trimmed)
     )
     if (exact) {
       onChange(exact.value)
@@ -309,7 +309,7 @@ function firstSelectableIndex(items: AutocompleteItem[]): number {
 function nextSelectableIndex(
   items: AutocompleteItem[],
   current: number,
-  direction: 1 | -1,
+  direction: 1 | -1
 ): number {
   let index = current + direction
   while (index >= 0 && index < items.length) {

@@ -32,12 +32,12 @@ export function Tabs({ active, items, onChange }: TabsProps) {
   )
 }
 
-export function TabPanel({ active, children, id }: TabPanelProps) {
-  return <div className={active === id ? undefined : 'hidden'}>{children}</div>
-}
-
 interface TabPanelProps {
   active: string
   children: ReactNode
   id: string
+}
+
+export function TabPanel({ active, children, id }: TabPanelProps) {
+  return <div className={active === id ? undefined : 'hidden'}>{children}</div>
 }

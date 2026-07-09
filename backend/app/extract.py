@@ -71,6 +71,33 @@ def extract_page_image_url(html: str, page_url: str) -> str | None:
     return None
 
 
+def extract_pdf_text(data: bytes) -> str:
+    from io import BytesIO
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(BytesIO(data))
+    pages = [page.extract_text() or "" for page in reader.pages]
+    text = "\n".join(page.strip() for page in pages if page.strip())
+    if not text.strip():
+        raise ExtractError("Could not extract text from PDF")
+    return text.strip()
+
+
+def extract_docx_text(data: bytes) -> str:
+    from io import BytesIO
+
+    from docx import Document
+
+    document = Document(BytesIO(data))
+    paragraphs = [
+        paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()
+    ]
+    if not paragraphs:
+        raise ExtractError("Could not extract text from DOCX")
+    return "\n".join(paragraphs)
+
+
 def _iter_page_image_candidates(html: str):
     yield from _meta_image_candidates(html)
     yield from _json_ld_image_candidates(html)
@@ -217,7 +244,7 @@ def _parse_dimension(value: str) -> int | None:
 
 def _parse_tag_attributes(raw: str) -> dict[str, str]:
     attrs: dict[str, str] = {}
-    for match in re.finditer(r'''([\w:.-]+)\s*=\s*["']([^"']*)["']''', raw):
+    for match in re.finditer(r"""([\w:.-]+)\s*=\s*["']([^"']*)["']""", raw):
         attrs[match.group(1).lower()] = unescape(match.group(2))
     return attrs
 
@@ -266,29 +293,6 @@ def _is_usable_image_url(url: str) -> bool:
     if path.endswith(".svg"):
         return False
     return True
-
-
-def extract_pdf_text(data: bytes) -> str:
-    from pypdf import PdfReader
-    from io import BytesIO
-
-    reader = PdfReader(BytesIO(data))
-    pages = [page.extract_text() or "" for page in reader.pages]
-    text = "\n".join(page.strip() for page in pages if page.strip())
-    if not text.strip():
-        raise ExtractError("Could not extract text from PDF")
-    return text.strip()
-
-
-def extract_docx_text(data: bytes) -> str:
-    from docx import Document
-    from io import BytesIO
-
-    document = Document(BytesIO(data))
-    paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
-    if not paragraphs:
-        raise ExtractError("Could not extract text from DOCX")
-    return "\n".join(paragraphs)
 
 
 def _decode_text(data: bytes) -> str:

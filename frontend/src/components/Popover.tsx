@@ -109,7 +109,7 @@ export function Popover({
             >
               {children}
             </div>,
-            document.body,
+            document.body
           )
         : null}
     </div>

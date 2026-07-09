@@ -52,11 +52,23 @@ type ScaleFactor = (typeof SCALE_OPTIONS)[number]['value']
 
 const SCALED_TEXT_CLASS = 'font-semibold text-orange-700 dark:text-orange-300'
 
-function formatServings(value: number) {
-  if (Number.isInteger(value)) {
-    return String(value)
-  }
-  return String(value)
+const STEP_MARKER_CLASS = {
+  cookware:
+    'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900 dark:border-stone-500 dark:bg-stone-700/90 dark:text-stone-100',
+  ingredient:
+    'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-100',
+  timer:
+    'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100',
+} as const
+
+const SCALED_INGREDIENT_MARKER_CLASS =
+  'inline rounded-md border border-orange-400 bg-orange-100 px-1 font-semibold text-orange-800 dark:border-orange-500 dark:bg-orange-950/60 dark:text-orange-200'
+
+type StepMarker = {
+  index: number
+  length: number
+  text: string
+  type: keyof typeof STEP_MARKER_CLASS
 }
 
 export function RecipePage() {
@@ -137,7 +149,7 @@ export function RecipePage() {
 
     const observer = new IntersectionObserver(
       ([entry]) => setTitleInHeader(!entry.isIntersecting),
-      { rootMargin: '-56px 0px 0px 0px', threshold: 0 },
+      { rootMargin: '-56px 0px 0px 0px', threshold: 0 }
     )
     observer.observe(element)
     return () => observer.disconnect()
@@ -284,7 +296,9 @@ export function RecipePage() {
                 {recipe.title}
               </h1>
               {recipe.cook_time ? (
-                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{recipe.cook_time}</p>
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
+                  {recipe.cook_time}
+                </p>
               ) : null}
             </div>
             {auth.authenticated ? (
@@ -464,7 +478,7 @@ export function RecipePage() {
                           recipe.ingredients,
                           unitSystem,
                           catalog,
-                          isScaled,
+                          isScaled
                         )}
                       </p>
                     )}
@@ -534,13 +548,12 @@ export function RecipePage() {
   }
 }
 
-function ScalePopover({
-  onChange,
-  value,
-}: {
+interface ScalePopoverProps {
   onChange: (value: ScaleFactor) => void
   value: ScaleFactor
-}) {
+}
+
+function ScalePopover({ onChange, value }: ScalePopoverProps) {
   const [open, setOpen] = useState(false)
   const currentLabel = SCALE_OPTIONS.find(option => option.value === value)?.label ?? '1X'
 
@@ -588,7 +601,11 @@ function ScalePopover({
   )
 }
 
-function ExpandableNote({ text }: { text: string }) {
+interface ExpandableNoteProps {
+  text: string
+}
+
+function ExpandableNote({ text }: ExpandableNoteProps) {
   const [expanded, setExpanded] = useState(false)
   const [clamped, setClamped] = useState(false)
   const textRef = useRef<HTMLParagraphElement>(null)
@@ -624,7 +641,7 @@ function renderCooklangStep(
   ingredients: Ingredient[],
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
-  isScaled: boolean,
+  isScaled: boolean
 ) {
   const lines = step.split('\n')
   if (lines.length === 1) {
@@ -643,7 +660,7 @@ function renderCooklangLine(
   ingredients: Ingredient[],
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
-  isScaled: boolean,
+  isScaled: boolean
 ) {
   const ingredientMap = new Map(
     ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient])
@@ -721,23 +738,11 @@ function renderCooklangLine(
   return rendered.length ? rendered : line
 }
 
-const STEP_MARKER_CLASS = {
-  cookware:
-    'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900 dark:border-stone-500 dark:bg-stone-700/90 dark:text-stone-100',
-  ingredient:
-    'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-100',
-  timer:
-    'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100',
-} as const
-
-const SCALED_INGREDIENT_MARKER_CLASS =
-  'inline rounded-md border border-orange-400 bg-orange-100 px-1 font-semibold text-orange-800 dark:border-orange-500 dark:bg-orange-950/60 dark:text-orange-200'
-
-type StepMarker = {
-  index: number
-  length: number
-  text: string
-  type: keyof typeof STEP_MARKER_CLASS
+function formatServings(value: number) {
+  if (Number.isInteger(value)) {
+    return String(value)
+  }
+  return String(value)
 }
 
 function formatIngredientListAmount(

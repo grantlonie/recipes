@@ -13,9 +13,7 @@ def get_serializer(settings: Settings) -> URLSafeSerializer:
     return URLSafeSerializer(settings.session_secret, salt="recipe-editor")
 
 
-def current_auth_state(
-    request: Request, settings: Settings = Depends(get_settings)
-) -> AuthState:
+def current_auth_state(request: Request, settings: Settings = Depends(get_settings)) -> AuthState:
     cookie = request.cookies.get(COOKIE_NAME)
     if not cookie:
         return AuthState(authenticated=False)
@@ -33,7 +31,9 @@ def current_auth_state(
 
 def require_editor(auth_state: AuthState = Depends(current_auth_state)) -> AuthState:
     if not auth_state.authenticated:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Editor login required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Editor login required"
+        )
     return auth_state
 
 

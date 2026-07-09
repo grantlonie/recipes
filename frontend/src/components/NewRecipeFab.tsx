@@ -18,11 +18,7 @@ import { ImportingDialog } from './ImportingDialog'
 import { Popover } from './Popover'
 import { WebsiteImportDialog } from './WebsiteImportDialog'
 import { useIngredientCatalog } from '../IngredientCatalogContext'
-import {
-  applyImportMapping,
-  type MappingRow,
-  type PendingImport,
-} from '../importMapping'
+import { applyImportMapping, type MappingRow, type PendingImport } from '../importMapping'
 import {
   buildImportContent,
   finalizeImportedRecipe,
@@ -126,11 +122,7 @@ export function NewRecipeFab() {
     setPendingSuggestedSlug('')
   }
 
-  async function saveImportedContent(
-    preview: ImportPreview,
-    content: string,
-    sourceFile?: File,
-  ) {
+  async function saveImportedContent(preview: ImportPreview, content: string, sourceFile?: File) {
     await saveMutation.mutateAsync({
       content,
       sourceFile,
@@ -239,7 +231,7 @@ export function NewRecipeFab() {
 
   function updateMappingRow(index: number, patch: Partial<MappingRow>) {
     setMappingRows(current =>
-      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row))
     )
   }
 
@@ -340,7 +332,10 @@ export function NewRecipeFab() {
       <ImportingDialog open={busy && !mappingOpen} />
 
       <Dialog labelledBy="import-error-dialog-title" open={importErrorDialogOpen}>
-        <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100" id="import-error-dialog-title">
+        <h2
+          className="text-xl font-bold text-stone-900 dark:text-stone-100"
+          id="import-error-dialog-title"
+        >
           Couldn&apos;t import recipe
         </h2>
         <p className="mt-3 text-sm text-red-700 dark:text-red-300">{importError}</p>
@@ -360,15 +355,13 @@ export function NewRecipeFab() {
   )
 }
 
-function NewRecipeMenuItem({
-  icon,
-  label,
-  onClick,
-}: {
+interface NewRecipeMenuItemProps {
   icon: ReactNode
   label: string
   onClick: () => void
-}) {
+}
+
+function NewRecipeMenuItem({ icon, label, onClick }: NewRecipeMenuItemProps) {
   return (
     <button
       className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-stone-700 transition hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"

@@ -117,13 +117,16 @@ export function CameraCaptureDialog({
         onCapture(file)
       },
       'image/jpeg',
-      0.92,
+      0.92
     )
   }
 
   return (
     <Dialog className="max-w-lg" labelledBy="camera-capture-dialog-title" open={open}>
-      <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100" id="camera-capture-dialog-title">
+      <h2
+        className="text-xl font-bold text-stone-900 dark:text-stone-100"
+        id="camera-capture-dialog-title"
+      >
         {title}
       </h2>
       <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">

@@ -5,10 +5,9 @@ import {
   eighthPartsToQuantity,
   quantityToEighthParts,
 } from '../quantities'
+import { inputClassName } from '../themeClasses'
 
 const MAX_WHOLE = 24
-
-import { inputClassName } from '../themeClasses'
 
 const selectClassName = inputClassName
 
@@ -20,10 +19,7 @@ interface VolumeQuantitySelectProps {
 export function VolumeQuantitySelect({ onChange, value }: VolumeQuantitySelectProps) {
   const { remainderEighths, whole } = useMemo(() => quantityToEighthParts(value), [value])
 
-  const wholeOptions = useMemo(
-    () => Array.from({ length: MAX_WHOLE + 1 }, (_, index) => index),
-    [],
-  )
+  const wholeOptions = useMemo(() => Array.from({ length: MAX_WHOLE + 1 }, (_, index) => index), [])
 
   function updateParts(nextWhole: number, nextRemainderEighths: number) {
     onChange(eighthPartsToQuantity(nextWhole, nextRemainderEighths))

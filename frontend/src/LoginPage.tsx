@@ -2,10 +2,10 @@ import type { FormEvent } from 'react'
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
-import { Button } from './components/Button'
 import { useAuth } from './AuthContext'
-import { cardClassName } from './themeClasses'
+import { Button } from './components/Button'
 import { getSafeReturnTo } from './shareImport'
+import { cardClassName } from './themeClasses'
 
 export function LoginPage() {
   const { auth, loginError, loginPending, signIn } = useAuth()

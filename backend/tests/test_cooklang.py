@@ -93,9 +93,7 @@ def test_split_amount_parses_quantity_and_unit_without_separator():
 
 
 def test_parse_ingredients_reads_parenthesis_preparation():
-    ingredients = parse_ingredients(
-        "Add @egg yolks{3}(large) and @chocolate{100%g}(bittersweet)."
-    )
+    ingredients = parse_ingredients("Add @egg yolks{3}(large) and @chocolate{100%g}(bittersweet).")
 
     yolks = next(ingredient for ingredient in ingredients if ingredient.name == "egg yolks")
     chocolate = next(ingredient for ingredient in ingredients if ingredient.name == "chocolate")

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-
-import re
 
 from app.models import CatalogIngredient, IngredientCatalog
 
@@ -22,7 +21,9 @@ def normalize_ingredient_key(value: str) -> str:
 @dataclass
 class IngredientRepository:
     catalog_path: Path
-    catalog: IngredientCatalog = field(default_factory=lambda: IngredientCatalog(version=0, ingredients=[]))
+    catalog: IngredientCatalog = field(
+        default_factory=lambda: IngredientCatalog(version=0, ingredients=[])
+    )
 
     def __post_init__(self) -> None:
         self.ensure_catalog()
@@ -67,7 +68,9 @@ class IngredientRepository:
             density_kg_m3=ingredient.density_kg_m3,
             aliases=_clean_aliases(ingredient.aliases, name),
         )
-        ingredients = [item for item in catalog.ingredients if item.name.casefold() != name.casefold()]
+        ingredients = [
+            item for item in catalog.ingredients if item.name.casefold() != name.casefold()
+        ]
         ingredients.append(cleaned)
         self._write(IngredientCatalog(version=catalog.version + 1, ingredients=ingredients))
         return cleaned

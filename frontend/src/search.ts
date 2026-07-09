@@ -3,7 +3,7 @@ import type { RecipeDetail, RecipeSummary } from './types'
 export function searchRecipes(
   summaries: RecipeSummary[],
   details: RecipeDetail[],
-  query: string,
+  query: string
 ): RecipeSummary[] {
   const terms = query
     .split(/\s+/)
@@ -13,7 +13,9 @@ export function searchRecipes(
     return summaries
   }
 
-  const contentBySlug = new Map(details.map(recipe => [recipe.slug, recipe.content.toLocaleLowerCase()]))
+  const contentBySlug = new Map(
+    details.map(recipe => [recipe.slug, recipe.content.toLocaleLowerCase()])
+  )
   const results: Array<{ recipe: RecipeSummary; score: number }> = []
 
   for (const recipe of summaries) {

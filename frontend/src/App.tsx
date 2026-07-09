@@ -1,7 +1,3 @@
-import type { ChangeEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
-import { Link, Route, Routes, useLocation } from 'react-router-dom'
-
 import {
   BookmarkIcon as BookmarkIconOutline,
   TagIcon,
@@ -9,6 +5,9 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
+import type { ChangeEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
 import { useAuth } from './AuthContext'
 import { getLocalTags } from './db'
@@ -58,7 +57,11 @@ function AppShell() {
             {isRecipeDetailPage ? (
               <RecipeDetailHeaderNav />
             ) : (
-              <Link aria-label="G&E Recipes home" className="inline-flex shrink-0 items-center" to="/">
+              <Link
+                aria-label="G&E Recipes home"
+                className="inline-flex shrink-0 items-center"
+                to="/"
+              >
                 <img alt="G&E Recipes" className="h-8 w-auto sm:h-10" src="/logo.png" />
               </Link>
             )}
@@ -82,22 +85,22 @@ function AppShell() {
               >
                 {auth.authenticated ? (
                   <>
-                  <Link
-                    className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                    onClick={() => setSettingsOpen(false)}
-                    to="/settings"
-                  >
-                    Settings
-                  </Link>
-                  <Link
-                    className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                    onClick={() => setSettingsOpen(false)}
-                    to="/ingredients"
-                  >
-                    Ingredients
-                  </Link>
-                  <button
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                    <Link
+                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      onClick={() => setSettingsOpen(false)}
+                      to="/settings"
+                    >
+                      Settings
+                    </Link>
+                    <Link
+                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      onClick={() => setSettingsOpen(false)}
+                      to="/ingredients"
+                    >
+                      Ingredients
+                    </Link>
+                    <button
+                      className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
                       disabled={logoutPending}
                       onClick={handleSignOut}
                       type="button"
@@ -168,7 +171,7 @@ function HomeSearchBar() {
   const selectedTags = useMemo(() => new Set(activeTags), [activeTags])
   const unselectedTags = useMemo(
     () => availableTags.filter(tag => !selectedTags.has(tag)),
-    [availableTags, selectedTags],
+    [availableTags, selectedTags]
   )
 
   useEffect(() => {
@@ -225,10 +228,7 @@ function HomeSearchBar() {
           }
         >
           {unselectedTags.length ? (
-            <div
-              className="max-h-56 overflow-y-auto"
-              role="listbox"
-            >
+            <div className="max-h-56 overflow-y-auto" role="listbox">
               {unselectedTags.map(tag => (
                 <button
                   className="block w-full rounded-xl px-3 py-2 text-left text-sm text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
@@ -242,7 +242,9 @@ function HomeSearchBar() {
               ))}
             </div>
           ) : (
-            <p className="px-3 py-2 text-sm text-stone-500 dark:text-stone-400">No tags available</p>
+            <p className="px-3 py-2 text-sm text-stone-500 dark:text-stone-400">
+              No tags available
+            </p>
           )}
         </Popover>
         <button
@@ -284,8 +286,8 @@ function HomeSearchBar() {
   function addTag(tag: string) {
     setActiveTags(
       [...activeTags, tag].sort((left, right) =>
-        left.localeCompare(right, undefined, { sensitivity: 'base' }),
-      ),
+        left.localeCompare(right, undefined, { sensitivity: 'base' })
+      )
     )
     setTagsOpen(false)
   }

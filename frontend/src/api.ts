@@ -14,7 +14,7 @@ import type {
 export async function createRecipe(
   slug: string,
   content: string,
-  previousSlug?: string,
+  previousSlug?: string
 ): Promise<RecipeDetail> {
   return request('/api/recipes', {
     body: JSON.stringify({ content, previous_slug: previousSlug, slug }),
@@ -87,7 +87,7 @@ export async function importRecipe(url: string): Promise<ImportPreview> {
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(
-        "Couldn't import this recipe. The URL may not be a supported recipe page, or the import timed out.",
+        "Couldn't import this recipe. The URL may not be a supported recipe page, or the import timed out."
       )
     }
     throw error
@@ -173,7 +173,7 @@ export async function logout(): Promise<AuthState> {
 export async function updateRecipe(
   slug: string,
   content: string,
-  newSlug?: string,
+  newSlug?: string
 ): Promise<RecipeDetail> {
   return request(`/api/recipes/${slug}`, {
     body: JSON.stringify({ content, slug: newSlug }),

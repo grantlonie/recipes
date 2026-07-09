@@ -48,7 +48,7 @@ export function parseImportedDocument(content: string) {
 export function renderImportDocument(metadata: Record<string, unknown>, body: string): string {
   const lines = Object.entries(metadata)
     .filter(
-      ([, value]) => value !== undefined && value !== null && value !== '' && !isEmptyArray(value),
+      ([, value]) => value !== undefined && value !== null && value !== '' && !isEmptyArray(value)
     )
     .flatMap(([key, value]) => renderMetadataValue(key, value))
   return `---\n${lines.join('\n')}\n---\n\n${body.replace(/^\n+/, '')}`
@@ -57,7 +57,7 @@ export function renderImportDocument(metadata: Record<string, unknown>, body: st
 export function buildMappingRows(
   body: string,
   unmatchedIngredients: string[],
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ): MappingRow[] {
   const tokens = extractTokens(body)
   const unique = new Map<string, IngredientToken>()
@@ -120,7 +120,7 @@ export async function applyImportMapping(
   pendingImport: PendingImport,
   mappingRows: MappingRow[],
   catalog: CatalogIngredient[],
-  refreshCatalog: () => Promise<void>,
+  refreshCatalog: () => Promise<void>
 ): Promise<{ body: string; catalog: CatalogIngredient[] }> {
   const catalogUpdates: CatalogIngredient[] = []
   for (const row of mappingRows) {
@@ -182,7 +182,7 @@ export async function applyImportMapping(
         return full
       }
       return buildMappedIngredientMarker(row, workingCatalog)
-    },
+    }
   )
 
   return { body, catalog: workingCatalog }

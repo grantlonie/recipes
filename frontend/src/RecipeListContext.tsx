@@ -21,6 +21,10 @@ interface RecipeListState {
 
 const RecipeListContext = createContext<RecipeListState | null>(null)
 
+interface RecipeListProviderProps {
+  children: ReactNode
+}
+
 export function RecipeListProvider({ children }: RecipeListProviderProps) {
   const [activeTags, setActiveTagsState] = useState<string[]>([])
   const [bookmarkedOnly, setBookmarkedOnlyState] = useState(false)
@@ -31,15 +35,14 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
   useEffect(() => {
     window.localStorage.setItem(
       RECENT_RECIPES_KEY,
-      JSON.stringify(recentRecipes.slice(0, RECENT_RECIPES_LIMIT)),
+      JSON.stringify(recentRecipes.slice(0, RECENT_RECIPES_LIMIT))
     )
   }, [recentRecipes])
 
   const addRecentRecipe = useCallback((recipe: RecipeSummary) => {
-    setRecentRecipes(current => [
-      recipe,
-      ...current.filter(item => item.slug !== recipe.slug),
-    ].slice(0, RECENT_RECIPES_LIMIT))
+    setRecentRecipes(current =>
+      [recipe, ...current.filter(item => item.slug !== recipe.slug)].slice(0, RECENT_RECIPES_LIMIT)
+    )
   }, [])
 
   const removeRecentRecipe = useCallback((slug: string) => {
@@ -88,10 +91,6 @@ export function useRecipeListState() {
     throw new Error('useRecipeListState must be used within RecipeListProvider')
   }
   return value
-}
-
-interface RecipeListProviderProps {
-  children: ReactNode
 }
 
 function readRecentRecipes() {

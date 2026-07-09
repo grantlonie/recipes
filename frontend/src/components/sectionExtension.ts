@@ -4,12 +4,12 @@ import { NodeSelection } from '@tiptap/pm/state'
 
 import { SectionChip } from './SectionChip'
 
-function deleteSelectedSection(editor: { commands: { deleteSelection: () => boolean }; state: { selection: unknown } }) {
+function deleteSelectedSection(editor: {
+  commands: { deleteSelection: () => boolean }
+  state: { selection: unknown }
+}) {
   const { selection } = editor.state
-  if (
-    selection instanceof NodeSelection &&
-    selection.node.type.name === 'section'
-  ) {
+  if (selection instanceof NodeSelection && selection.node.type.name === 'section') {
     return editor.commands.deleteSelection()
   }
   return false
@@ -40,7 +40,7 @@ export const SectionExtension = Node.create({
           class: 'text-sm font-bold uppercase tracking-wide text-orange-800',
           'data-cooklang-section': '',
         },
-        HTMLAttributes,
+        HTMLAttributes
       ),
       String(HTMLAttributes.title ?? ''),
     ]

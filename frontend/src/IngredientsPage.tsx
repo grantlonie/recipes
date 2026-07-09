@@ -12,14 +12,19 @@ import { Dialog } from './components/Dialog'
 import { putIngredientCatalog } from './db'
 import { titleCaseIngredient } from './ingredientDisplay'
 import { useIngredientCatalog } from './IngredientCatalogContext'
-import type { CatalogIngredient } from './types'
 import { cardClassName, inputClassName } from './themeClasses'
+import type { CatalogIngredient } from './types'
 
 const INGREDIENT_NOTES = [
   'Densities are stored as kg/m³.',
   'Leave density blank to show weight (lb/oz) in US mode. Water is 1000.',
   'Aliases are comma-separated alternate names used for matching.',
 ]
+
+interface SaveIngredientInput {
+  ingredient: CatalogIngredient
+  originalName?: string
+}
 
 export function IngredientsPage() {
   const { auth } = useAuth()
@@ -39,23 +44,17 @@ export function IngredientsPage() {
       ? ingredients.filter(
           item =>
             item.name.toLowerCase().includes(needle) ||
-            item.aliases.some(alias => alias.toLowerCase().includes(needle)),
+            item.aliases.some(alias => alias.toLowerCase().includes(needle))
         )
       : ingredients
 
     return [...list].sort((left, right) =>
-      left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
+      left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
     )
   }, [ingredients, query])
 
   const saveMutation = useMutation({
-    mutationFn: async ({
-      ingredient,
-      originalName,
-    }: {
-      ingredient: CatalogIngredient
-      originalName?: string
-    }) => {
+    mutationFn: async ({ ingredient, originalName }: SaveIngredientInput) => {
       if (originalName && originalName !== ingredient.name) {
         await deleteIngredient(originalName)
       }
@@ -85,7 +84,9 @@ export function IngredientsPage() {
     return (
       <section className={`mx-auto max-w-md ${cardClassName}`}>
         <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Sign in required</h1>
-        <p className="mt-2 text-stone-600 dark:text-stone-400">Editor access is required to manage ingredients.</p>
+        <p className="mt-2 text-stone-600 dark:text-stone-400">
+          Editor access is required to manage ingredients.
+        </p>
         <Link
           className="mt-6 inline-flex rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
           to="/login"
@@ -122,7 +123,10 @@ export function IngredientsPage() {
               value={query}
             />
           </label>
-          <Button className="inline-flex shrink-0 items-center gap-1.5" onClick={() => openCreate()}>
+          <Button
+            className="inline-flex shrink-0 items-center gap-1.5"
+            onClick={() => openCreate()}
+          >
             <PlusIcon aria-hidden="true" className="h-4 w-4" />
             Add
           </Button>
@@ -165,13 +169,18 @@ export function IngredientsPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-stone-500 dark:text-stone-400">No ingredients match your search.</p>
+            <p className="text-sm text-stone-500 dark:text-stone-400">
+              No ingredients match your search.
+            </p>
           )}
         </div>
       </div>
 
       <Dialog labelledBy="ingredient-info-dialog-title" open={infoOpen}>
-        <h2 className="text-xl font-bold text-stone-900 dark:text-stone-100" id="ingredient-info-dialog-title">
+        <h2
+          className="text-xl font-bold text-stone-900 dark:text-stone-100"
+          id="ingredient-info-dialog-title"
+        >
           Notes
         </h2>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-stone-600 dark:text-stone-400">
@@ -201,7 +210,9 @@ export function IngredientsPage() {
             />
           </label>
           <label className="block">
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Density (kg/m³)</span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+              Density (kg/m³)
+            </span>
             <div className="mt-1 flex items-center gap-1">
               <input
                 className={`${inputClassName} min-w-0 flex-1`}
@@ -217,14 +228,18 @@ export function IngredientsPage() {
             </span>
           </label>
           <label className="block">
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Aliases</span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+              Aliases
+            </span>
             <input
               className={`${inputClassName} mt-1`}
               onChange={event => setAliases(event.target.value)}
               placeholder="flour, ap flour"
               value={aliases}
             />
-            <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">Comma-separated alternate names.</span>
+            <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
+              Comma-separated alternate names.
+            </span>
           </label>
           {saveMutation.error ? (
             <p className="text-sm text-red-700">{saveMutation.error.message}</p>

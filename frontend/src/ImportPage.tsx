@@ -8,11 +8,7 @@ import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
 import { ImportMappingDialog } from './components/ImportMappingDialog'
 import { useIngredientCatalog } from './IngredientCatalogContext'
-import {
-  applyImportMapping,
-  type MappingRow,
-  type PendingImport,
-} from './importMapping'
+import { applyImportMapping, type MappingRow, type PendingImport } from './importMapping'
 import {
   buildImportContent,
   finalizeImportedRecipe,
@@ -36,6 +32,11 @@ import { cardClassName, inputClassName } from './themeClasses'
 type ImportResult =
   | { kind: 'existing'; recipe: RecipeSummary }
   | { kind: 'preview'; preview: ImportPreview }
+
+interface SaveImportInput {
+  content: string
+  preview: ImportPreview
+}
 
 export function ImportPage() {
   const { auth, authLoading } = useAuth()
@@ -81,7 +82,7 @@ export function ImportPage() {
   }
 
   const saveMutation = useMutation({
-    mutationFn: async ({ content, preview }: { content: string; preview: ImportPreview }) => {
+    mutationFn: async ({ content, preview }: SaveImportInput) => {
       const recipe = await finalizeImportedRecipe(content, preview.suggested_slug)
       await persistImportedRecipe(recipe, sync)
       return recipe
@@ -216,7 +217,7 @@ export function ImportPage() {
 
   function updateMappingRow(index: number, patch: Partial<MappingRow>) {
     setMappingRows(current =>
-      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row))
     )
   }
 
@@ -258,7 +259,9 @@ export function ImportPage() {
 
     return (
       <section className={`mx-auto max-w-md ${cardClassName}`}>
-        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Couldn't import recipe</h1>
+        <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
+          Couldn't import recipe
+        </h1>
         <p className="mt-2 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
         {sharedUrl ? (
           <p className="mt-2 break-all text-sm text-stone-600 dark:text-stone-400">{sharedUrl}</p>
@@ -315,7 +318,9 @@ export function ImportPage() {
         </p>
         <form className="mt-6 space-y-4" onSubmit={handleManualImport}>
           <label className="block">
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Recipe URL</span>
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+              Recipe URL
+            </span>
             <input
               className={`mt-1 ${inputClassName}`}
               onChange={event => setManualUrl(event.target.value)}
@@ -333,17 +338,14 @@ export function ImportPage() {
   )
 }
 
-function ImportStatus({
-  detail,
-  message,
-  subtitle,
-  subtitleBreakAll = false,
-}: {
+interface ImportStatusProps {
   detail?: string
   message: string
   subtitle?: string
   subtitleBreakAll?: boolean
-}) {
+}
+
+function ImportStatus({ detail, message, subtitle, subtitleBreakAll = false }: ImportStatusProps) {
   return (
     <section className={`mx-auto max-w-md text-center ${cardClassName}`}>
       <p className="text-lg font-semibold text-stone-800 dark:text-stone-100">{message}</p>

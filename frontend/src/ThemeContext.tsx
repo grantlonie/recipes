@@ -18,9 +18,13 @@ interface ThemeContextValue {
   theme: ThemePreference
 }
 
+interface ThemeProviderProps {
+  children: ReactNode
+}
+
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<ThemePreference>(readTheme)
   const [systemDark, setSystemDark] = useState(readSystemDark)
 
@@ -51,7 +55,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setTheme,
       theme,
     }),
-    [resolvedTheme, setTheme, theme],
+    [resolvedTheme, setTheme, theme]
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

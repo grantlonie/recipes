@@ -131,7 +131,7 @@ export function isUsCookingVolumeUnit(unit: string | null | undefined): boolean 
 export function toGrams(
   quantity: number,
   unit: string | null | undefined,
-  densityKgM3?: number | null,
+  densityKgM3?: number | null
 ): number | null {
   const canonical = normalizeUnit(unit)
   if (!canonical) {
@@ -216,7 +216,7 @@ function formatUsVolume(grams: number, densityKgM3: number): DisplayAmount {
 export function formatAmount(
   quantity: number | null,
   unit: string | null | undefined,
-  options: { unitSystem: UnitSystem; densityKgM3?: number | null },
+  options: { unitSystem: UnitSystem; densityKgM3?: number | null }
 ): DisplayAmount {
   if (quantity === null) {
     return { quantity: '', unit: normalizeUnit(unit) }
@@ -258,7 +258,7 @@ export function formatIngredientAmount(
   options: {
     unitSystem: UnitSystem
     densityKgM3?: number | null
-  },
+  }
 ): DisplayAmount {
   if (!quantityText) {
     return { quantity: '', unit: normalizeUnit(unit) }
@@ -271,22 +271,18 @@ export function formatIngredientAmount(
 }
 
 export function normalizeIngredientKey(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/-/g, ' ')
-    .replace(/\s+/g, ' ')
+  return value.trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ')
 }
 
 export function findCatalogIngredient(
   name: string,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ): CatalogIngredient | undefined {
   const key = normalizeIngredientKey(name)
   return catalog.find(
     item =>
       normalizeIngredientKey(item.name) === key ||
-      item.aliases.some(alias => normalizeIngredientKey(alias) === key),
+      item.aliases.some(alias => normalizeIngredientKey(alias) === key)
   )
 }
 
@@ -300,7 +296,7 @@ export function ingredientKnowsName(ingredient: CatalogIngredient, name: string)
 
 export function withLearnedAlias(
   ingredient: CatalogIngredient,
-  alias: string,
+  alias: string
 ): CatalogIngredient | null {
   const trimmed = alias.trim()
   if (!trimmed || ingredientKnowsName(ingredient, trimmed)) {
@@ -319,7 +315,7 @@ export interface CatalogMatch {
 
 export function matchCatalogIngredient(
   importedName: string,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ): CatalogMatch {
   const trimmed = importedName.trim()
   if (!trimmed) {
@@ -370,10 +366,7 @@ function extractUnmatchedNote(importedName: string, matchedLabel: string): strin
 }
 
 function flexiblePhrasePattern(phrase: string): RegExp {
-  const parts = normalizeIngredientKey(phrase)
-    .split(' ')
-    .filter(Boolean)
-    .map(escapeRegExp)
+  const parts = normalizeIngredientKey(phrase).split(' ').filter(Boolean).map(escapeRegExp)
   const body = parts.join('[\\s-]+')
   return new RegExp(`(^|[\\s(,])${body}(?=[\\s,.)]|$)`, 'i')
 }
@@ -384,7 +377,7 @@ function escapeRegExp(value: string): string {
 
 export function densityForName(
   name: string,
-  catalog: CatalogIngredient[],
+  catalog: CatalogIngredient[]
 ): number | null | undefined {
   return findCatalogIngredient(name, catalog)?.density_kg_m3
 }
@@ -405,7 +398,7 @@ export function unitDisplayLabel(unit: string): string {
 }
 
 export function editorUnitItems(
-  unitSystem: UnitSystem,
+  unitSystem: UnitSystem
 ): Array<{ label: string; value: string } | { type: 'header'; label: string }> {
   const metric = ['g', 'kg'].map(unit => ({
     label: unitDisplayLabel(unit),

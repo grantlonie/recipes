@@ -24,11 +24,10 @@ NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
 SECTION_LINE_RE = re.compile(r"^=+\s*(.+?)\s*=+\s*$")
 UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"
 QUANTITY_PATTERN = (
-    rf"(?:\d+\s+\d+/\d+|\d+\s+[{UNICODE_FRACTION_CHARS}]|\d+/\d+|\d+(?:\.\d+)?|[{UNICODE_FRACTION_CHARS}])"
+    rf"(?:\d+\s+\d+/\d+|\d+\s+[{UNICODE_FRACTION_CHARS}]|"
+    rf"\d+/\d+|\d+(?:\.\d+)?|[{UNICODE_FRACTION_CHARS}])"
 )
-AMOUNT_WITHOUT_SEPARATOR_RE = re.compile(
-    rf"^(?P<quantity>{QUANTITY_PATTERN})(?:\s+(?P<unit>.+))?$"
-)
+AMOUNT_WITHOUT_SEPARATOR_RE = re.compile(rf"^(?P<quantity>{QUANTITY_PATTERN})(?:\s+(?P<unit>.+))?$")
 UNICODE_FRACTION_MAP = {
     "¼": Fraction(1, 4),
     "½": Fraction(1, 2),
@@ -75,7 +74,9 @@ def ingredient_note_from_match(match: re.Match[str]) -> str | None:
     return (match.group("preparation") or "").strip() or None
 
 
-def parse_ingredients(body: str, scale: float | None = None, servings: float = 1) -> list[Ingredient]:
+def parse_ingredients(
+    body: str, scale: float | None = None, servings: float = 1
+) -> list[Ingredient]:
     ingredients: list[Ingredient] = []
     factor = None if scale is None else scale / servings
     for match in INGREDIENT_RE.finditer(strip_comments(body)):

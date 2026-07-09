@@ -1,11 +1,4 @@
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from 'react'
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from 'react'
 
 import type { UnitSystem } from './types'
 
@@ -16,9 +9,13 @@ interface UnitSystemContextValue {
   unitSystem: UnitSystem
 }
 
+interface UnitSystemProviderProps {
+  children: ReactNode
+}
+
 const UnitSystemContext = createContext<UnitSystemContextValue | null>(null)
 
-export function UnitSystemProvider({ children }: { children: ReactNode }) {
+export function UnitSystemProvider({ children }: UnitSystemProviderProps) {
   const [unitSystem, setUnitSystemState] = useState<UnitSystem>(readUnitSystem)
 
   const setUnitSystem = useCallback((system: UnitSystem) => {
@@ -31,7 +28,7 @@ export function UnitSystemProvider({ children }: { children: ReactNode }) {
       setUnitSystem,
       unitSystem,
     }),
-    [setUnitSystem, unitSystem],
+    [setUnitSystem, unitSystem]
   )
 
   return <UnitSystemContext.Provider value={value}>{children}</UnitSystemContext.Provider>

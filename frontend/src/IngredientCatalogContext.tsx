@@ -13,11 +13,15 @@ interface IngredientCatalogContextValue {
   refresh: () => Promise<void>
 }
 
+interface IngredientCatalogProviderProps {
+  children: ReactNode
+}
+
 const emptyCatalog: IngredientCatalog = { ingredients: [], version: 0 }
 
 const IngredientCatalogContext = createContext<IngredientCatalogContextValue | null>(null)
 
-export function IngredientCatalogProvider({ children }: { children: ReactNode }) {
+export function IngredientCatalogProvider({ children }: IngredientCatalogProviderProps) {
   const queryClient = useQueryClient()
   const catalogQuery = useQuery({
     queryFn: () =>
@@ -42,7 +46,7 @@ export function IngredientCatalogProvider({ children }: { children: ReactNode })
         await catalogQuery.refetch()
       },
     }),
-    [catalog, catalogQuery, queryClient],
+    [catalog, catalogQuery, queryClient]
   )
 
   return (

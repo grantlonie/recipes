@@ -6,10 +6,7 @@ import type { IngredientAttrs } from '../cooklangTokens'
 import { formatIngredientLabel } from '../cooklangTokens'
 import type { CatalogIngredient, UnitSystem } from '../types'
 import { densityForName, formatDisplayAmount, formatIngredientAmount } from '../units'
-import {
-  getIngredientDisplayState,
-  subscribeIngredientDisplay,
-} from './ingredientDisplayStore'
+import { getIngredientDisplayState, subscribeIngredientDisplay } from './ingredientDisplayStore'
 
 export function IngredientChip({ getPos, node }: NodeViewProps) {
   const display = useSyncExternalStore(subscribeIngredientDisplay, getIngredientDisplayState)
@@ -40,7 +37,7 @@ export function IngredientChip({ getPos, node }: NodeViewProps) {
 function formatChipLabel(
   attrs: IngredientAttrs,
   catalog: CatalogIngredient[],
-  unitSystem: UnitSystem,
+  unitSystem: UnitSystem
 ) {
   const amount = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
     densityKgM3: densityForName(attrs.name, catalog),

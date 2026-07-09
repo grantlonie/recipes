@@ -49,8 +49,8 @@ self.addEventListener('fetch', event => {
             }
             return response
           })
-        }),
-      ),
+        })
+      )
     )
     return
   }
@@ -69,20 +69,22 @@ self.addEventListener('fetch', event => {
           }
           return response
         })
-        .catch(() => caches.match(event.request)),
+        .catch(() => caches.match(event.request))
     )
     return
   }
 
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).then(response => {
-        if (response.ok) {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then(cache => cache.put('/', copy))
-        }
-        return response
-      }).catch(() => caches.match(event.request).then(cached => cached || caches.match('/')))
+      fetch(event.request)
+        .then(response => {
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE_NAME).then(cache => cache.put('/', copy))
+          }
+          return response
+        })
+        .catch(() => caches.match(event.request).then(cached => cached || caches.match('/')))
     )
     return
   }
