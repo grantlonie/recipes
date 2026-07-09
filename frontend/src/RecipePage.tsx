@@ -5,7 +5,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
   ArrowTopRightOnSquareIcon,
-  ChevronLeftIcon,
+  ChevronDownIcon,
+  EllipsisVerticalIcon,
   PencilSquareIcon,
   ShareIcon,
   TrashIcon,
@@ -16,10 +17,13 @@ import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
 import { Button } from './components/Button'
 import { Dialog } from './components/Dialog'
+import { Popover } from './components/Popover'
+import { UnitSystemToggle } from './components/UnitSystemToggle'
 import { getRecipeBlocks } from './cooklangEditor'
 import { extractTokens, formatIngredientLabel } from './cooklangTokens'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { titleCaseIngredient } from './ingredientDisplay'
+import { useRecipeDetailHeader } from './RecipeDetailHeaderContext'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, purgeRecipeIfDeleted, revalidateRecipe, storeRecipe } from './sync'
@@ -31,11 +35,29 @@ import { useUnitSystem } from './UnitSystemContext'
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
-const ICON_BUTTON_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-orange-600 transition hover:bg-orange-100 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300'
 const ICON_CLASS = 'h-5 w-5'
-const DELETE_ICON_BUTTON_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-red-600 transition hover:bg-red-100 hover:text-red-700 dark:hover:bg-red-950/40 dark:hover:text-red-300'
+const IMAGE_ACTION_BUTTON_CLASS =
+  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-white transition hover:bg-white/20'
+const OVERFLOW_BUTTON_CLASS =
+  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-200'
+
+const SCALE_OPTIONS = [
+  { label: '0.5X', value: 0.5 },
+  { label: '1X', value: 1 },
+  { label: '1.5X', value: 1.5 },
+  { label: '2X', value: 2 },
+] as const
+
+type ScaleFactor = (typeof SCALE_OPTIONS)[number]['value']
+
+const SCALED_TEXT_CLASS = 'font-semibold text-orange-700 dark:text-orange-300'
+
+function formatServings(value: number) {
+  if (Number.isInteger(value)) {
+    return String(value)
+  }
+  return String(value)
+}
 
 export function RecipePage() {
   const { '*': slug = '' } = useParams()
@@ -46,6 +68,8 @@ export function RecipePage() {
   const { revision, sync } = useRecipeSync()
   const { unitSystem } = useUnitSystem()
   const { ingredients: catalog } = useIngredientCatalog()
+  const { setTitle, setTitleInHeader } = useRecipeDetailHeader()
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const recipeQuery = useQuery({
     enabled: Boolean(slug),
     queryFn: () =>
@@ -53,13 +77,17 @@ export function RecipePage() {
     queryKey: ['recipe', slug],
     retry: false,
   })
-  const [servings, setServings] = useState(1)
+  const [scaleFactor, setScaleFactor] = useState<ScaleFactor>(1)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [overflowOpen, setOverflowOpen] = useState(false)
+  const baseServings = recipeQuery.data?.servings ?? 1
+  const targetServings = baseServings * scaleFactor
+  const isScaled = scaleFactor !== 1
   const scaledQuery = useQuery({
-    enabled: Boolean(slug) && servings !== recipeQuery.data?.servings,
-    queryFn: () => getScaledRecipe(slug, servings),
-    queryKey: ['recipe', slug, 'scale', servings],
+    enabled: Boolean(slug) && isScaled,
+    queryFn: () => getScaledRecipe(slug, targetServings),
+    queryKey: ['recipe', slug, 'scale', targetServings],
   })
   const bookmarkMutation = useMutation({
     mutationFn: () => updateRecipeMetadata(slug, { bookmarked: !recipeQuery.data?.bookmarked }),
@@ -81,7 +109,7 @@ export function RecipePage() {
 
   useEffect(() => {
     if (recipeQuery.data) {
-      setServings(recipeQuery.data.servings)
+      setScaleFactor(1)
       addRecentRecipe(recipeQuery.data)
     }
   }, [addRecentRecipe, recipeQuery.data])
@@ -93,6 +121,27 @@ export function RecipePage() {
   useLayoutEffect(() => {
     window.scrollTo(0, 0)
   }, [slug])
+
+  useEffect(() => {
+    const title = recipeQuery.data?.title ?? ''
+    setTitle(title)
+    return () => setTitle('')
+  }, [recipeQuery.data?.title, setTitle])
+
+  useEffect(() => {
+    const element = titleRef.current
+    if (!element || !recipeQuery.data?.title) {
+      setTitleInHeader(false)
+      return
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setTitleInHeader(!entry.isIntersecting),
+      { rootMargin: '-56px 0px 0px 0px', threshold: 0 },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [recipeQuery.data?.title, setTitleInHeader])
 
   useEffect(() => {
     if (!slug || recipeQuery.isLoading) {
@@ -156,88 +205,52 @@ export function RecipePage() {
 
   return (
     <article className="space-y-8 pb-8">
-      <button
-        aria-label="Back to recipes"
-        className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-orange-700 transition hover:bg-orange-100 hover:text-orange-800 dark:hover:bg-stone-700 dark:hover:text-orange-200"
-        onClick={handleBack}
-        type="button"
-      >
-        <ChevronLeftIcon aria-hidden="true" className="h-4 w-4" />
-        Recipes
-      </button>
       <section className={`${cardClassName} overflow-hidden p-0!`}>
         {recipe.image ? (
-          <img
-            alt=""
-            className="h-[250px] w-full object-cover sm:h-auto sm:max-h-[420px]"
-            referrerPolicy="no-referrer"
-            src={recipe.image}
-          />
-        ) : null}
-        <div className="space-y-5 p-6">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">{recipe.title}</h1>
-            {recipe.cook_time ? (
-              <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{recipe.cook_time}</p>
-            ) : null}
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex shrink-0 items-center gap-2">
-              <div
-                aria-label="Scale servings"
-                className="flex shrink-0 items-stretch overflow-hidden rounded-full border border-orange-200 text-xs dark:border-stone-600"
-                role="group"
+          <div className="relative">
+            <img
+              alt=""
+              className="h-[250px] w-full object-cover sm:h-auto sm:max-h-[420px]"
+              referrerPolicy="no-referrer"
+              src={recipe.image}
+            />
+            <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-full bg-black/55 p-1 backdrop-blur-sm">
+              {recipe.original_url ? (
+                <a
+                  aria-label="View source"
+                  className={IMAGE_ACTION_BUTTON_CLASS}
+                  href={recipe.original_url}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <ArrowTopRightOnSquareIcon aria-hidden="true" className={ICON_CLASS} />
+                </a>
+              ) : null}
+              <button
+                aria-label="Share recipe"
+                className={IMAGE_ACTION_BUTTON_CLASS}
+                onClick={handleShare}
+                type="button"
               >
-                <button
-                  aria-label="Decrease servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
-                  disabled={servings <= 1}
-                  id="servings-decrease"
-                  onClick={() => setServings(current => Math.max(1, current - 1))}
-                  type="button"
-                >
-                  −
-                </button>
-                <output
-                  aria-live="polite"
-                  className="flex min-w-7 items-center justify-center border-x border-orange-200 px-2 py-1.5 font-semibold tabular-nums text-stone-900 dark:border-stone-600 dark:text-stone-100"
-                  id="servings"
-                >
-                  {servings}
-                </output>
-                <button
-                  aria-label="Increase servings"
-                  className="flex w-7 shrink-0 items-center justify-center bg-orange-50 font-semibold text-orange-800 transition hover:bg-orange-100 dark:bg-stone-800 dark:text-orange-200 dark:hover:bg-stone-700"
-                  id="servings-increase"
-                  onClick={() => setServings(current => current + 1)}
-                  type="button"
-                >
-                  +
-                </button>
-              </div>
-              <span className="text-sm text-stone-600 dark:text-stone-400">serving</span>
+                <ShareIcon aria-hidden="true" className={ICON_CLASS} />
+              </button>
+              {auth.authenticated ? (
+                <BookmarkButton
+                  bookmarked={recipe.bookmarked}
+                  className={IMAGE_ACTION_BUTTON_CLASS}
+                  disabled={bookmarkMutation.isPending}
+                  iconClassName={ICON_CLASS}
+                  onToggle={handleToggleBookmark}
+                />
+              ) : null}
             </div>
-
-            {recipe.tags.length ? (
-              <div className="flex min-w-0 flex-wrap justify-end gap-2">
-                {recipe.tags.map(tag => (
-                  <span
-                    className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800 dark:bg-orange-950/60 dark:text-orange-200"
-                    key={tag}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            ) : null}
           </div>
-
-          <div className="flex items-center gap-2">
+        ) : (
+          <div className="flex justify-end gap-1 p-4 pb-0">
             {recipe.original_url ? (
               <a
                 aria-label="View source"
-                className={ICON_BUTTON_CLASS}
+                className={OVERFLOW_BUTTON_CLASS}
                 href={recipe.original_url}
                 rel="noreferrer"
                 target="_blank"
@@ -247,7 +260,7 @@ export function RecipePage() {
             ) : null}
             <button
               aria-label="Share recipe"
-              className={ICON_BUTTON_CLASS}
+              className={OVERFLOW_BUTTON_CLASS}
               onClick={handleShare}
               type="button"
             >
@@ -256,31 +269,70 @@ export function RecipePage() {
             {auth.authenticated ? (
               <BookmarkButton
                 bookmarked={recipe.bookmarked}
-                className={ICON_BUTTON_CLASS}
+                className={OVERFLOW_BUTTON_CLASS}
                 disabled={bookmarkMutation.isPending}
                 iconClassName={ICON_CLASS}
                 onToggle={handleToggleBookmark}
               />
             ) : null}
+          </div>
+        )}
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight" ref={titleRef}>
+                {recipe.title}
+              </h1>
+              {recipe.cook_time ? (
+                <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">{recipe.cook_time}</p>
+              ) : null}
+            </div>
             {auth.authenticated ? (
-              <div className="ml-auto flex items-center gap-2">
-                <Link
-                  aria-label="Edit recipe"
-                  className={ICON_BUTTON_CLASS}
-                  to={`/recipes/edit/${slug}`}
-                >
-                  <PencilSquareIcon aria-hidden="true" className={ICON_CLASS} />
-                </Link>
-                <button
-                  aria-label="Delete recipe"
-                  className={DELETE_ICON_BUTTON_CLASS}
-                  disabled={deleteMutation.isPending}
-                  onClick={() => setDeleteDialogOpen(true)}
-                  type="button"
-                >
-                  <TrashIcon aria-hidden="true" className={ICON_CLASS} />
-                </button>
-              </div>
+              <Popover
+                align="right"
+                onClose={() => setOverflowOpen(false)}
+                open={overflowOpen}
+                trigger={
+                  <button
+                    aria-expanded={overflowOpen}
+                    aria-haspopup="menu"
+                    aria-label="Recipe actions"
+                    className={OVERFLOW_BUTTON_CLASS}
+                    onClick={() => setOverflowOpen(open => !open)}
+                    type="button"
+                  >
+                    <EllipsisVerticalIcon aria-hidden="true" className={ICON_CLASS} />
+                  </button>
+                }
+              >
+                <div className="py-1" role="menu">
+                  <Link
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-stone-700 transition hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                    onClick={() => setOverflowOpen(false)}
+                    role="menuitem"
+                    to={`/recipes/edit/${slug}`}
+                  >
+                    <PencilSquareIcon
+                      aria-hidden="true"
+                      className="h-5 w-5 text-orange-600 dark:text-orange-400"
+                    />
+                    Edit
+                  </Link>
+                  <button
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      setOverflowOpen(false)
+                      setDeleteDialogOpen(true)
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    <TrashIcon aria-hidden="true" className="h-5 w-5" />
+                    Delete
+                  </button>
+                </div>
+              </Popover>
             ) : null}
           </div>
         </div>
@@ -310,14 +362,29 @@ export function RecipePage() {
         <aside className="space-y-6">
           <section className={panelClassName}>
             <h2 className="text-lg font-semibold">Ingredients</h2>
+            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+              <output
+                aria-live="polite"
+                className={`tabular-nums font-semibold ${isScaled ? SCALED_TEXT_CLASS : 'text-stone-600 dark:text-stone-400'}`}
+                id="servings"
+              >
+                Serves {formatServings(targetServings)}
+              </output>
+              <div className="flex items-center gap-5">
+                <ScalePopover onChange={setScaleFactor} value={scaleFactor} />
+                <UnitSystemToggle />
+              </div>
+            </div>
             <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               {recipe.ingredients.map((ingredient, index) => (
                 <Fragment key={`${ingredient.name}-${index}`}>
-                  <span className="tabular-nums text-stone-600 dark:text-stone-400">
+                  <span
+                    className={`tabular-nums ${isScaled ? SCALED_TEXT_CLASS : 'text-stone-600 dark:text-stone-400'}`}
+                  >
                     {formatIngredientListAmount(ingredient, unitSystem, catalog)}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
-                  <span>
+                  <span className={isScaled ? SCALED_TEXT_CLASS : undefined}>
                     {titleCaseIngredient(formatIngredientLabel(ingredient.name, ingredient.note))}
                   </span>
                 </Fragment>
@@ -392,7 +459,13 @@ export function RecipePage() {
                     </label>
                     {completed ? null : (
                       <p className="whitespace-pre-line text-stone-800 dark:text-stone-200">
-                        {renderCooklangStep(block.text, recipe.ingredients, unitSystem, catalog)}
+                        {renderCooklangStep(
+                          block.text,
+                          recipe.ingredients,
+                          unitSystem,
+                          catalog,
+                          isScaled,
+                        )}
                       </p>
                     )}
                   </div>
@@ -402,6 +475,22 @@ export function RecipePage() {
           </section>
         </div>
       </div>
+
+      {recipe.tags.length ? (
+        <section className={cardClassName}>
+          <h2 className="text-lg font-semibold">Tags</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {recipe.tags.map(tag => (
+              <span
+                className="rounded-full bg-orange-100 px-3 py-1 text-sm text-orange-800 dark:bg-orange-950/60 dark:text-orange-200"
+                key={tag}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </article>
   )
 
@@ -443,14 +532,60 @@ export function RecipePage() {
     await deleteMutation.mutateAsync()
     setDeleteDialogOpen(false)
   }
+}
 
-  function handleBack() {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-    navigate('/')
-  }
+function ScalePopover({
+  onChange,
+  value,
+}: {
+  onChange: (value: ScaleFactor) => void
+  value: ScaleFactor
+}) {
+  const [open, setOpen] = useState(false)
+  const currentLabel = SCALE_OPTIONS.find(option => option.value === value)?.label ?? '1X'
+
+  return (
+    <Popover
+      align="right"
+      onClose={() => setOpen(false)}
+      open={open}
+      trigger={
+        <button
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-label="Recipe scale"
+          className="inline-flex items-center gap-1 border-0 bg-transparent py-0.5 text-xs font-semibold text-orange-600 focus:outline-none focus:ring-0 dark:text-orange-300"
+          onClick={() => setOpen(current => !current)}
+          type="button"
+        >
+          {currentLabel}
+          <ChevronDownIcon aria-hidden="true" className="h-3.5 w-3.5" />
+        </button>
+      }
+    >
+      <div className="py-1" role="listbox">
+        {SCALE_OPTIONS.map(option => (
+          <button
+            aria-selected={option.value === value}
+            className={`block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-orange-50 dark:hover:bg-stone-700 ${
+              option.value === value
+                ? 'font-semibold text-orange-700 dark:text-orange-300'
+                : 'text-stone-700 dark:text-stone-200'
+            }`}
+            key={option.value}
+            onClick={() => {
+              onChange(option.value)
+              setOpen(false)
+            }}
+            role="option"
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </Popover>
+  )
 }
 
 function ExpandableNote({ text }: { text: string }) {
@@ -488,16 +623,17 @@ function renderCooklangStep(
   step: string,
   ingredients: Ingredient[],
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[]
+  catalog: CatalogIngredient[],
+  isScaled: boolean,
 ) {
   const lines = step.split('\n')
   if (lines.length === 1) {
-    return renderCooklangLine(step, ingredients, unitSystem, catalog)
+    return renderCooklangLine(step, ingredients, unitSystem, catalog, isScaled)
   }
   return lines.map((line, index) => (
     <Fragment key={`${index}-${line}`}>
       {index > 0 ? '\n' : null}
-      {renderCooklangLine(line, ingredients, unitSystem, catalog)}
+      {renderCooklangLine(line, ingredients, unitSystem, catalog, isScaled)}
     </Fragment>
   ))
 }
@@ -506,7 +642,8 @@ function renderCooklangLine(
   line: string,
   ingredients: Ingredient[],
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[]
+  catalog: CatalogIngredient[],
+  isScaled: boolean,
 ) {
   const ingredientMap = new Map(
     ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient])
@@ -562,7 +699,14 @@ function renderCooklangLine(
       rendered.push(line.slice(cursor, marker.index))
     }
     rendered.push(
-      <span className={STEP_MARKER_CLASS[marker.type]} key={`${marker.index}-${markerIndex}`}>
+      <span
+        className={
+          marker.type === 'ingredient' && isScaled
+            ? SCALED_INGREDIENT_MARKER_CLASS
+            : STEP_MARKER_CLASS[marker.type]
+        }
+        key={`${marker.index}-${markerIndex}`}
+      >
         {marker.text}
       </span>
     )
@@ -585,6 +729,9 @@ const STEP_MARKER_CLASS = {
   timer:
     'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100',
 } as const
+
+const SCALED_INGREDIENT_MARKER_CLASS =
+  'inline rounded-md border border-orange-400 bg-orange-100 px-1 font-semibold text-orange-800 dark:border-orange-500 dark:bg-orange-950/60 dark:text-orange-200'
 
 type StepMarker = {
   index: number

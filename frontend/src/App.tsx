@@ -17,6 +17,7 @@ import { ImportPage } from './ImportPage'
 import { IngredientsPage } from './IngredientsPage'
 import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
+import { RecipeDetailHeaderNav, RecipeDetailHeaderProvider } from './RecipeDetailHeaderContext'
 import { RecipeListProvider, useRecipeListState } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
 import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
@@ -28,7 +29,9 @@ export function App() {
   return (
     <RecipeSyncProvider>
       <RecipeListProvider>
-        <AppShell />
+        <RecipeDetailHeaderProvider>
+          <AppShell />
+        </RecipeDetailHeaderProvider>
       </RecipeListProvider>
     </RecipeSyncProvider>
   )
@@ -40,6 +43,10 @@ function AppShell() {
   const location = useLocation()
   const isHome = location.pathname === '/'
   const isIngredients = location.pathname === '/ingredients'
+  const isRecipeDetailPage =
+    location.pathname.startsWith('/recipes/') &&
+    !location.pathname.startsWith('/recipes/edit') &&
+    location.pathname !== '/recipes/new'
 
   return (
     <div
@@ -48,11 +55,15 @@ function AppShell() {
       <header className="sticky top-0 z-50 shrink-0 border-b border-orange-200 bg-white/95 backdrop-blur dark:border-stone-700 dark:bg-stone-900/95">
         <div className="mx-auto max-w-6xl px-4 py-2 sm:py-3">
           <div className="flex items-center justify-between gap-3">
-            <Link aria-label="G&E Recipes home" className="inline-flex shrink-0 items-center" to="/">
-              <img alt="G&E Recipes" className="h-8 w-auto sm:h-10" src="/logo.png" />
-            </Link>
+            {isRecipeDetailPage ? (
+              <RecipeDetailHeaderNav />
+            ) : (
+              <Link aria-label="G&E Recipes home" className="inline-flex shrink-0 items-center" to="/">
+                <img alt="G&E Recipes" className="h-8 w-auto sm:h-10" src="/logo.png" />
+              </Link>
+            )}
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
-              {!isHome ? <UnitSystemToggle /> : null}
+              {!isHome && !isRecipeDetailPage ? <UnitSystemToggle /> : null}
               <Popover
                 onClose={() => setSettingsOpen(false)}
                 open={settingsOpen}
