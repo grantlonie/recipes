@@ -9,6 +9,10 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "prep time: 15 minutes" in prompt
     assert "cook time: 45 minutes" in prompt
     assert "Do not collapse prep and cook" in prompt
+    assert "Preserve the source's measurement units" in prompt
+    assert "Do not convert between volume and mass" in prompt
+    assert "@kidney beans{2%cup}" in prompt
+    assert "Prefer grams" not in prompt
 
 
 def test_truncate_source_text_limits_length():

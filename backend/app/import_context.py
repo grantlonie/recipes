@@ -11,12 +11,15 @@ Output rules:
 - Do not wrap the document in markdown fences (no ```yaml or ```cooklang).
 - Use imperative step prose. Blank lines separate steps.
 - Ingredients must appear inline in steps as @name{{quantity%unit}} or @name{{quantity%unit}}(note).
-- Multi-word ingredient names MUST use braces: @olive oil{{30%ml}}, @all-purpose flour{{240%g}}.
+- Multi-word ingredient names MUST use braces: @olive oil{{2%Tbsp}}, @all-purpose flour{{1.5%cup}}.
 - Put preparation words in (notes) after the amount, not in the ingredient name.
 - Use ==Section Title== for sections (not markdown headings).
 - Use #cookware{{}} markers when relevant and ~timer{{10%minutes}} for timers.
 - Prefer decimal quantities in amounts, not fractions.
-- Prefer grams (g) for mass and simple canonical ingredient names when possible.
+- Preserve the source's measurement units (cups, Tbsp, tsp, ml, L, g, oz, lb, counts).
+  Do not convert between volume and mass (no cups/Tbsp/tsp/ml to grams or vice versa).
+  A later step converts volumes to grams using catalog densities.
+- Prefer simple canonical ingredient names when possible.
 - Use Tbsp with capital T for tablespoons.
 - Do not invent ingredients or steps that are not supported by the source text.
 - Omit tags from front matter.
@@ -34,7 +37,7 @@ Output rules:
 - source and image must be flat strings: either an http(s) URL or omitted if unknown.
 
 Language: {output_language}
-Unit style: quantities use % between amount and unit (example: 240%g).
+Unit style: quantities use % between amount and unit (example: 1.5%cup).
 """
 
 FEW_SHOT_EXAMPLE = """---
@@ -45,11 +48,11 @@ servings: 6
 prep time: 15 minutes
 cook time: 45 minutes
 ---
-Brown @beef{454%g} in #large pot{}.
+Brown @beef{1%lb} in #large pot{}.
 
 Add @onion{1}(diced) and @garlic{3%cloves}(minced). Cook until softened.
 
-Stir in @tomatoes{800%g}(crushed) and @kidney beans{400%g}. Simmer ~{30%minutes}.
+Stir in @tomatoes{28%oz}(crushed) and @kidney beans{2%cup}. Simmer ~{30%minutes}.
 """
 
 
