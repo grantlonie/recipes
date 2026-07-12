@@ -10,6 +10,7 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../AuthContext'
+import { BulkImportControls } from './BulkImportControls'
 import { Button } from './Button'
 import { CameraCaptureDialog, isCameraCaptureSupported } from './CameraCaptureDialog'
 import { Dialog } from './Dialog'
@@ -31,9 +32,8 @@ import {
 } from '../importRecipeFlow'
 import { buildLoginUrl } from '../shareImport'
 import { useRecipeSync } from '../RecipeSyncContext'
+import { errorTextClassName } from '../themeClasses'
 import type { ImportPreview } from '../types'
-
-const SOURCE_ACCEPT = 'image/*,.pdf,.docx,.txt,.html,.htm,.md,.markdown'
 
 export function NewRecipeFab() {
   const { auth } = useAuth()
@@ -52,7 +52,6 @@ export function NewRecipeFab() {
   const [pendingSourceFile, setPendingSourceFile] = useState<File | undefined>()
   const [pendingSuggestedSlug, setPendingSuggestedSlug] = useState('')
   const cameraFallbackRef = useRef<HTMLInputElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const saveMutation = useMutation({
     mutationFn: async ({
@@ -196,13 +195,6 @@ export function NewRecipeFab() {
     })
   }
 
-  function openFilePicker() {
-    requireEditor(() => {
-      closeMenu()
-      fileInputRef.current?.click()
-    })
-  }
-
   function openManualEntry() {
     closeMenu()
     navigate(auth.authenticated ? '/recipes/new' : buildLoginUrl('/recipes/new'))
@@ -219,12 +211,16 @@ export function NewRecipeFab() {
     importMutation.mutate({ file })
   }
 
-  function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
+  function handleCameraFallbackSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) {
       return
     }
+    handleCapturedPhoto(file)
+  }
+
+  function handleSingleFileImport(file: File) {
     setImportError(null)
     importMutation.mutate({ file })
   }
@@ -242,61 +238,63 @@ export function NewRecipeFab() {
       <input
         accept="image/*"
         className="hidden"
-        onChange={handleFileSelected}
+        onChange={handleCameraFallbackSelected}
         ref={cameraFallbackRef}
         type="file"
       />
-      <input
-        accept={SOURCE_ACCEPT}
-        className="hidden"
-        onChange={handleFileSelected}
-        ref={fileInputRef}
-        type="file"
-      />
 
-      <div className="fixed bottom-6 right-6 z-40">
-        <Popover
-          align="right"
-          onClose={closeMenu}
-          open={menuOpen}
-          placement="top"
-          trigger={
-            <button
-              aria-expanded={menuOpen}
-              aria-haspopup="menu"
-              aria-label="New recipe"
-              className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-3xl font-light text-white shadow-lg transition hover:bg-orange-700"
-              onClick={() => setMenuOpen(open => !open)}
-              type="button"
+      <BulkImportControls onSingleFile={handleSingleFileImport}>
+        {({ openFiles }) => (
+          <div className="fixed bottom-6 right-6 z-40">
+            <Popover
+              align="right"
+              onClose={closeMenu}
+              open={menuOpen}
+              placement="top"
+              trigger={
+                <button
+                  aria-expanded={menuOpen}
+                  aria-haspopup="menu"
+                  aria-label="New recipe"
+                  className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-orange-600 text-3xl font-light text-white shadow-lg transition hover:bg-orange-700"
+                  onClick={() => setMenuOpen(open => !open)}
+                  type="button"
+                >
+                  +
+                </button>
+              }
             >
-              +
-            </button>
-          }
-        >
-          <div className="py-1" role="menu">
-            <NewRecipeMenuItem
-              icon={<GlobeAltIcon className="h-5 w-5" />}
-              label="Website"
-              onClick={openUrlDialog}
-            />
-            <NewRecipeMenuItem
-              icon={<CameraIcon className="h-5 w-5" />}
-              label="Camera"
-              onClick={openCamera}
-            />
-            <NewRecipeMenuItem
-              icon={<DocumentTextIcon className="h-5 w-5" />}
-              label="File"
-              onClick={openFilePicker}
-            />
-            <NewRecipeMenuItem
-              icon={<PencilSquareIcon className="h-5 w-5" />}
-              label="Text"
-              onClick={openManualEntry}
-            />
+              <div className="py-1" role="menu">
+                <NewRecipeMenuItem
+                  icon={<GlobeAltIcon className="h-5 w-5" />}
+                  label="Website"
+                  onClick={openUrlDialog}
+                />
+                <NewRecipeMenuItem
+                  icon={<CameraIcon className="h-5 w-5" />}
+                  label="Camera"
+                  onClick={openCamera}
+                />
+                <NewRecipeMenuItem
+                  icon={<DocumentTextIcon className="h-5 w-5" />}
+                  label="Files"
+                  onClick={() =>
+                    requireEditor(() => {
+                      closeMenu()
+                      openFiles()
+                    })
+                  }
+                />
+                <NewRecipeMenuItem
+                  icon={<PencilSquareIcon className="h-5 w-5" />}
+                  label="Text"
+                  onClick={openManualEntry}
+                />
+              </div>
+            </Popover>
           </div>
-        </Popover>
-      </div>
+        )}
+      </BulkImportControls>
 
       <CameraCaptureDialog
         onCapture={handleCapturedPhoto}
@@ -338,7 +336,7 @@ export function NewRecipeFab() {
         >
           Couldn&apos;t import recipe
         </h2>
-        <p className="mt-3 text-sm text-red-700 dark:text-red-300">{importError}</p>
+        <p className={`mt-3 text-sm ${errorTextClassName}`}>{importError}</p>
         <div className="mt-6 flex justify-end">
           <Button
             onClick={() => {

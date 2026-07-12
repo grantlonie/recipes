@@ -1,10 +1,25 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
+import { useAuth } from './AuthContext'
+import { BulkImportControls } from './components/BulkImportControls'
+import { Button } from './components/Button'
 import { ThemePicker } from './components/ThemePicker'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
+import { buildLoginUrl } from './shareImport'
 import { cardClassName } from './themeClasses'
 
 export function SettingsPage() {
+  const { auth } = useAuth()
+  const navigate = useNavigate()
+
+  function requireEditor(run: () => void) {
+    if (!auth.authenticated) {
+      navigate(buildLoginUrl('/settings'))
+      return
+    }
+    run()
+  }
+
   return (
     <section className={`mx-auto max-w-md ${cardClassName}`}>
       <div className="flex items-start justify-between gap-3">
@@ -33,6 +48,23 @@ export function SettingsPage() {
           <div className="mt-3 rounded-2xl border border-orange-200 bg-white px-4 py-3 dark:border-stone-600 dark:bg-stone-900">
             <UnitSystemToggle />
           </div>
+        </div>
+
+        <div>
+          <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-200">Files</h2>
+          <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+            Import one or more recipes from files, a folder, or a zip. Matching source URLs are
+            skipped so existing recipes are not remapped.
+          </p>
+          <BulkImportControls>
+            {({ openFiles }) => (
+              <div className="mt-3">
+                <Button onClick={() => requireEditor(openFiles)} type="button" variant="secondary">
+                  Import files
+                </Button>
+              </div>
+            )}
+          </BulkImportControls>
         </div>
       </div>
     </section>

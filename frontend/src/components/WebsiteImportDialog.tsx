@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react'
 import { useEffect, useState } from 'react'
 
-import { inputClassName } from '../themeClasses'
+import { errorTextClassName, inputClassName } from '../themeClasses'
 
 import { Button } from './Button'
 import { Dialog } from './Dialog'
@@ -62,7 +62,7 @@ export function WebsiteImportDialog({
           value={url}
         />
 
-        {error ? <p className="mt-3 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+        {error ? <p className={`mt-3 text-sm ${errorTextClassName}`}>{error}</p> : null}
 
         <div className="mt-6 flex flex-wrap justify-end gap-2">
           <Button disabled={importing} onClick={onClose} type="button" variant="ghost">

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
-from app.cooklang import SOURCES_PREFIX
+from app.cooklang import RECIPES_PREFIX
 
 ALLOWED_SOURCE_EXTENSIONS = {
     ".docx",
@@ -25,50 +25,55 @@ ALLOWED_SOURCE_EXTENSIONS = {
 }
 ALLOWED_IMAGE_EXTENSIONS = {".heic", ".jpeg", ".jpg", ".png", ".webp"}
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+RECIPE_FILENAME = "recipe.cook"
 
 
 class AssetError(ValueError):
     pass
 
 
-def recipe_assets_dir(sources_root: Path, slug: str) -> Path:
+def recipe_dir(recipe_root: Path, slug: str) -> Path:
     _validate_slug(slug)
-    return sources_root / slug
+    return recipe_root / slug
+
+
+def recipe_file(recipe_root: Path, slug: str) -> Path:
+    return recipe_dir(recipe_root, slug) / RECIPE_FILENAME
 
 
 def metadata_asset_path(slug: str, kind: str, extension: str) -> str:
     ext = extension.lower().lstrip(".")
-    return f"{SOURCES_PREFIX}{slug}/{kind}.{ext}"
+    return f"{RECIPES_PREFIX}{slug}/{kind}.{ext}"
 
 
-def delete_recipe_assets(sources_root: Path, slug: str) -> None:
-    path = recipe_assets_dir(sources_root, slug)
+def delete_recipe_dir(recipe_root: Path, slug: str) -> None:
+    path = recipe_dir(recipe_root, slug)
     if path.exists():
         shutil.rmtree(path)
 
 
-def rename_recipe_assets(sources_root: Path, old_slug: str, new_slug: str) -> None:
+def rename_recipe_dir(recipe_root: Path, old_slug: str, new_slug: str) -> None:
     if old_slug == new_slug:
         return
-    source = recipe_assets_dir(sources_root, old_slug)
+    source = recipe_dir(recipe_root, old_slug)
     if not source.exists():
         return
-    destination = recipe_assets_dir(sources_root, new_slug)
+    destination = recipe_dir(recipe_root, new_slug)
     if destination.exists():
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     source.rename(destination)
 
 
-def resolve_asset_file(sources_root: Path, relative_path: str) -> Path:
-    if not relative_path.startswith(SOURCES_PREFIX):
+def resolve_asset_file(recipe_root: Path, relative_path: str) -> Path:
+    if not relative_path.startswith(RECIPES_PREFIX):
         raise AssetError("Invalid asset path")
-    remainder = relative_path.removeprefix(SOURCES_PREFIX)
+    remainder = relative_path.removeprefix(RECIPES_PREFIX)
     parts = Path(remainder).parts
     if not parts or ".." in parts:
         raise AssetError("Invalid asset path")
-    path = (sources_root / Path(*parts)).resolve()
-    root = sources_root.resolve()
+    path = (recipe_root / Path(*parts)).resolve()
+    root = recipe_root.resolve()
     if root not in path.parents and path != root:
         raise AssetError("Invalid asset path")
     if not path.exists() or not path.is_file():
@@ -77,7 +82,7 @@ def resolve_asset_file(sources_root: Path, relative_path: str) -> Path:
 
 
 async def save_upload(
-    sources_root: Path,
+    recipe_root: Path,
     slug: str,
     kind: str,
     upload: UploadFile,
@@ -98,7 +103,7 @@ async def save_upload(
     if len(data) > MAX_UPLOAD_BYTES:
         raise AssetError("Uploaded file is too large")
 
-    assets_dir = recipe_assets_dir(sources_root, slug)
+    assets_dir = recipe_dir(recipe_root, slug)
     assets_dir.mkdir(parents=True, exist_ok=True)
     for existing in assets_dir.glob(f"{kind}.*"):
         existing.unlink()

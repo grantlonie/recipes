@@ -55,7 +55,6 @@ async def lifespan(app: FastAPI) -> Iterator[None]:
     app.state.repository = RecipeRepository(
         app_base_url=settings.app_base_url,
         recipe_root=settings.recipe_root,
-        sources_root=settings.sources_root,
     )
     app.state.ingredients = IngredientRepository(catalog_path=settings.ingredients_path)
     yield
@@ -200,7 +199,7 @@ def import_recipe_file(
             payload.slug,
             settings=settings,
             ingredients=ingredients,
-            sources_root=repository.sources_root or settings.sources_root,
+            recipe_root=repository.recipe_root,
         )
     except ImportError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
@@ -229,7 +228,7 @@ async def upload_recipe_source(
 ) -> AssetUploadResponse:
     try:
         path = await save_upload(
-            settings.sources_root,
+            settings.recipe_root,
             slug,
             "source",
             file,
@@ -251,7 +250,7 @@ async def upload_recipe_image(
 ) -> AssetUploadResponse:
     try:
         path = await save_upload(
-            settings.sources_root,
+            settings.recipe_root,
             slug,
             "image",
             file,
@@ -267,9 +266,9 @@ def get_recipe_asset(
     asset_path: str,
     settings: Settings = Depends(get_settings_dep),
 ) -> FileResponse:
-    relative_path = f"sources/{asset_path}"
+    relative_path = f"recipes/{asset_path}"
     try:
-        file_path = resolve_asset_file(settings.sources_root, relative_path)
+        file_path = resolve_asset_file(settings.recipe_root, relative_path)
     except AssetError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return FileResponse(file_path, media_type=guess_media_type(file_path))

@@ -39,7 +39,7 @@ import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { buildLoginUrl, ensureUniqueSlug, slugify } from './shareImport'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
-import { cardClassName, inputClassName } from './themeClasses'
+import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
 import type { CatalogIngredient, ImportPreview, UnitSystem } from './types'
 import {
   defaultEditorUnit,
@@ -104,6 +104,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [tags, setTags] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [time, setTime] = useState('')
+  const [prepTime, setPrepTime] = useState('')
+  const [cookTime, setCookTime] = useState('')
   const [title, setTitle] = useState('New Recipe')
   const isNew = mode === 'new'
   const recipeQuery = useQuery({
@@ -315,13 +317,32 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                   value={servings}
                 />
               </Field>
-              <Field label="Time">
+              <Field label="Prep time">
                 <input
                   className={inputClassName}
-                  onChange={event => setTime(event.target.value)}
-                  value={time}
+                  onChange={event => setPrepTime(event.target.value)}
+                  placeholder="20 minutes"
+                  value={prepTime}
                 />
               </Field>
+              <Field label="Cook time">
+                <input
+                  className={inputClassName}
+                  onChange={event => setCookTime(event.target.value)}
+                  placeholder="1 hour 30 minutes"
+                  value={cookTime}
+                />
+              </Field>
+              {!prepTime.trim() && !cookTime.trim() ? (
+                <Field label="Time">
+                  <input
+                    className={inputClassName}
+                    onChange={event => setTime(event.target.value)}
+                    placeholder="1 hour"
+                    value={time}
+                  />
+                </Field>
+              ) : null}
               <RefField
                 accept="image/*"
                 capture
@@ -342,7 +363,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 value={source}
               />
               {!isNew && reimportMutation.error ? (
-                <p className="lg:col-span-2 text-sm text-red-700">
+                <p className={`lg:col-span-2 text-sm ${errorTextClassName}`}>
                   {reimportMutation.error.message}
                 </p>
               ) : null}
@@ -389,7 +410,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </TabPanel>
         </div>
         {saveMutation.error ? (
-          <p className="mt-2 text-sm text-red-700">{saveMutation.error.message}</p>
+          <p className={`mt-2 text-sm ${errorTextClassName}`}>{saveMutation.error.message}</p>
         ) : null}
       </div>
 
@@ -540,7 +561,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </Button>
         </div>
         {importMutation.error ? (
-          <p className="mt-2 text-sm text-red-700">{importMutation.error.message}</p>
+          <p className={`mt-2 text-sm ${errorTextClassName}`}>{importMutation.error.message}</p>
         ) : null}
       </form>
     )
@@ -559,14 +580,27 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setServings(clampServings(getNumber(metadata.servings) || getNumber(metadata.serves) || 1))
     setImage(getString(metadata.image) || getString(metadata.picture))
     setSource(getString(metadata.source))
-    setTime(getString(metadata.time) || getString(metadata.duration))
+    const nextPrep =
+      getString(metadata['prep time']) || getString(metadata['time.prep']) || ''
+    const nextCook =
+      getString(metadata['cook time']) || getString(metadata['time.cook']) || ''
+    setPrepTime(nextPrep)
+    setCookTime(nextCook)
+    setTime(
+      nextPrep || nextCook
+        ? ''
+        : getString(metadata.time) || getString(metadata.duration) || ''
+    )
     setDescription(getString(metadata.description) || getString(metadata.introduction))
     setBookmarked(getBoolean(metadata.bookmarked))
     setBody(nextBody || emptyBody)
   }
 
   function buildContent() {
-    const metadata = {
+    const nextPrep = prepTime.trim()
+    const nextCook = cookTime.trim()
+    const nextTotal = time.trim()
+    const metadata: Record<string, unknown> = {
       ...baseMetadata,
       bookmarked,
       description: description.trim() || undefined,
@@ -574,8 +608,19 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       servings,
       source: source.trim() || undefined,
       tags,
-      time: time.trim() || undefined,
       title: title.trim() || 'Untitled Recipe',
+    }
+    delete metadata.duration
+    delete metadata['time.prep']
+    delete metadata['time.cook']
+    if (nextPrep || nextCook) {
+      metadata['prep time'] = nextPrep || undefined
+      metadata['cook time'] = nextCook || undefined
+      delete metadata.time
+    } else {
+      delete metadata['prep time']
+      delete metadata['cook time']
+      metadata.time = nextTotal || undefined
     }
     return renderDocument(metadata, body)
   }
@@ -879,7 +924,7 @@ function RefField({
       <input
         className={inputClassName}
         onChange={event => onValueChange(event.target.value)}
-        placeholder="https://example.com/photo.jpg or sources/slug/image.jpg"
+        placeholder="https://example.com/photo.jpg or recipes/slug/image.jpg"
         value={isRefFile(value) ? '' : value}
       />
       <div className="mt-2 flex flex-wrap gap-2">
@@ -930,18 +975,18 @@ function RefField({
       {previewUrl && (isRefFile(value) || value.startsWith('http')) && accept.includes('image') ? (
         <img alt="" className="mt-3 max-h-40 rounded-xl object-cover" src={previewUrl} />
       ) : null}
-      {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+      {error ? <p className={`mt-2 text-sm ${errorTextClassName}`}>{error}</p> : null}
     </Field>
   )
 }
 
 function isRefFile(value: string): boolean {
-  return value.trim().startsWith('sources/')
+  return value.trim().startsWith('recipes/')
 }
 
 function resolveRefDisplay(value: string): string {
   if (isRefFile(value)) {
-    return `/api/sources/${value.slice('sources/'.length)}`
+    return `/api/sources/${value.slice('recipes/'.length)}`
   }
   return value
 }

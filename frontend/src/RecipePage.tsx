@@ -473,13 +473,7 @@ export function RecipePage() {
                     </label>
                     {completed ? null : (
                       <p className="whitespace-pre-line text-stone-800 dark:text-stone-200">
-                        {renderCooklangStep(
-                          block.text,
-                          recipe.ingredients,
-                          unitSystem,
-                          catalog,
-                          isScaled
-                        )}
+                        {renderCooklangStep(block.text, unitSystem, catalog, isScaled)}
                       </p>
                     )}
                   </div>
@@ -638,44 +632,35 @@ function ExpandableNote({ text }: ExpandableNoteProps) {
 
 function renderCooklangStep(
   step: string,
-  ingredients: Ingredient[],
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
   isScaled: boolean
 ) {
   const lines = step.split('\n')
   if (lines.length === 1) {
-    return renderCooklangLine(step, ingredients, unitSystem, catalog, isScaled)
+    return renderCooklangLine(step, unitSystem, catalog, isScaled)
   }
   return lines.map((line, index) => (
     <Fragment key={`${index}-${line}`}>
       {index > 0 ? '\n' : null}
-      {renderCooklangLine(line, ingredients, unitSystem, catalog, isScaled)}
+      {renderCooklangLine(line, unitSystem, catalog, isScaled)}
     </Fragment>
   ))
 }
 
 function renderCooklangLine(
   line: string,
-  ingredients: Ingredient[],
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
   isScaled: boolean
 ) {
-  const ingredientMap = new Map(
-    ingredients.map(ingredient => [ingredient.name.toLowerCase(), ingredient])
-  )
   const markers: StepMarker[] = []
 
   for (const token of extractTokens(line)) {
-    const lookup = ingredientMap.get(token.name.toLowerCase())
-    const text = lookup
-      ? formatIngredientFromRecord(lookup, unitSystem, catalog)
-      : formatIngredientFromToken(token, unitSystem, catalog)
     markers.push({
       index: token.start,
       length: token.end - token.start,
-      text,
+      text: formatIngredientFromToken(token, unitSystem, catalog),
       type: 'ingredient',
     })
   }
@@ -759,27 +744,6 @@ function formatIngredientListAmount(
     }
   )
   return formatDisplayAmount(amount)
-}
-
-function formatIngredientFromRecord(
-  ingredient: Ingredient,
-  unitSystem: UnitSystem,
-  catalog: CatalogIngredient[]
-) {
-  const amount = formatIngredientAmount(
-    ingredient.scaled_quantity ?? ingredient.quantity,
-    ingredient.unit,
-    {
-      densityKgM3: densityForName(ingredient.name, catalog),
-      unitSystem,
-    }
-  )
-  const formatted = formatDisplayAmount(amount)
-  const label = formatIngredientLabel(ingredient.name, ingredient.note)
-  if (!formatted) {
-    return label
-  }
-  return `${formatted} ${label}`
 }
 
 function formatIngredientFromToken(

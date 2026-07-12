@@ -6,3 +6,10 @@ export const cardClassName =
 
 export const panelClassName =
   'rounded-2xl bg-white p-5 shadow-sm ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700'
+
+export const errorTextClassName = 'text-red-700 dark:text-red-300'
+
+export const mappingCreateCardClassName =
+  'bg-amber-100 ring-1 ring-amber-300 dark:bg-amber-950/45 dark:ring-amber-800'
+
+export const mappingCreateTitleClassName = 'text-amber-900 dark:text-amber-200'

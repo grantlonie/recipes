@@ -274,24 +274,147 @@ export function normalizeIngredientKey(value: string): string {
   return value.trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ')
 }
 
+const UNINFLECTED = new Set([
+  'asparagus',
+  'bass',
+  'couscous',
+  'hummus',
+  'molasses',
+  'news',
+  'rice',
+  'series',
+  'species',
+])
+
+const IRREGULAR_PLURALS: Record<string, string> = {
+  leaf: 'leaves',
+  loaf: 'loaves',
+  potato: 'potatoes',
+  tomato: 'tomatoes',
+  knife: 'knives',
+  life: 'lives',
+  wolf: 'wolves',
+  calf: 'calves',
+  self: 'selves',
+  half: 'halves',
+  elf: 'elves',
+  thief: 'thieves',
+}
+
+const IRREGULAR_SINGULARS = Object.fromEntries(
+  Object.entries(IRREGULAR_PLURALS).map(([singular, plural]) => [plural, singular])
+)
+
+function singularizeToken(token: string): string {
+  const value = token.toLowerCase()
+  if (!value || UNINFLECTED.has(value)) {
+    return value
+  }
+  if (IRREGULAR_SINGULARS[value]) {
+    return IRREGULAR_SINGULARS[value]
+  }
+  if (value.endsWith('ies') && value.length > 4) {
+    return `${value.slice(0, -3)}y`
+  }
+  if (
+    (value.endsWith('ches') ||
+      value.endsWith('shes') ||
+      value.endsWith('xes') ||
+      value.endsWith('zes')) &&
+    value.length > 4
+  ) {
+    return value.slice(0, -2)
+  }
+  if (value.endsWith('oes') && value.length > 4) {
+    return value.slice(0, -2)
+  }
+  if (value.endsWith('ves') && value.length > 4) {
+    return `${value.slice(0, -3)}f`
+  }
+  if (value.endsWith('s') && !value.endsWith('ss') && !value.endsWith('us') && !value.endsWith('is') && value.length > 3) {
+    return value.slice(0, -1)
+  }
+  return value
+}
+
+function pluralizeToken(token: string): string {
+  const value = token.toLowerCase()
+  if (!value || UNINFLECTED.has(value)) {
+    return value
+  }
+  if (IRREGULAR_PLURALS[value]) {
+    return IRREGULAR_PLURALS[value]
+  }
+  if (value.endsWith('y') && value.length > 1 && !'aeiou'.includes(value[value.length - 2] ?? '')) {
+    return `${value.slice(0, -1)}ies`
+  }
+  if (
+    value.endsWith('s') ||
+    value.endsWith('x') ||
+    value.endsWith('z') ||
+    value.endsWith('ch') ||
+    value.endsWith('sh')
+  ) {
+    return `${value}es`
+  }
+  if (value.endsWith('f')) {
+    return `${value.slice(0, -1)}ves`
+  }
+  if (value.endsWith('fe')) {
+    return `${value.slice(0, -2)}ves`
+  }
+  if (!value.endsWith('s')) {
+    return `${value}s`
+  }
+  return value
+}
+
+export function inflectionForms(value: string): string[] {
+  const key = normalizeIngredientKey(value)
+  if (!key) {
+    return []
+  }
+  const parts = key.split(' ')
+  const last = parts[parts.length - 1] ?? ''
+  const variants = new Set<string>([key])
+  for (const token of new Set([last, singularizeToken(last), pluralizeToken(last)])) {
+    if (!token) {
+      continue
+    }
+    variants.add(parts.length > 1 ? [...parts.slice(0, -1), token].join(' ') : token)
+  }
+  return [...variants]
+}
+
 export function findCatalogIngredient(
   name: string,
   catalog: CatalogIngredient[]
 ): CatalogIngredient | undefined {
-  const key = normalizeIngredientKey(name)
-  return catalog.find(
-    item =>
-      normalizeIngredientKey(item.name) === key ||
-      item.aliases.some(alias => normalizeIngredientKey(alias) === key)
-  )
+  const importedForms = new Set(inflectionForms(name))
+  return catalog.find(item => {
+    const labelForms = new Set(
+      [item.name, ...item.aliases].flatMap(label => inflectionForms(label))
+    )
+    for (const form of importedForms) {
+      if (labelForms.has(form)) {
+        return true
+      }
+    }
+    return false
+  })
 }
 
 export function ingredientKnowsName(ingredient: CatalogIngredient, name: string): boolean {
-  const key = normalizeIngredientKey(name)
-  return (
-    normalizeIngredientKey(ingredient.name) === key ||
-    ingredient.aliases.some(alias => normalizeIngredientKey(alias) === key)
+  const importedForms = new Set(inflectionForms(name))
+  const labelForms = new Set(
+    [ingredient.name, ...ingredient.aliases].flatMap(label => inflectionForms(label))
   )
+  for (const form of importedForms) {
+    if (labelForms.has(form)) {
+      return true
+    }
+  }
+  return false
 }
 
 export function withLearnedAlias(
@@ -327,15 +450,22 @@ export function matchCatalogIngredient(
     return { catalog: exact, note: '' }
   }
 
-  let best: { item: CatalogIngredient; label: string } | undefined
+  let best:
+    | { item: CatalogIngredient; label: string; matchedForm: string; score: [number, number, number] }
+    | undefined
   for (const item of catalog) {
     for (const label of [item.name, ...item.aliases]) {
       const candidate = label.trim()
-      if (!candidate || !containsPhrase(trimmed, candidate)) {
+      if (!candidate) {
         continue
       }
-      if (!best || candidate.length > best.label.length) {
-        best = { item, label: candidate }
+      const matchedForm = matchedPhraseForm(trimmed, candidate)
+      if (!matchedForm) {
+        continue
+      }
+      const score = phraseMatchScore(trimmed, candidate, matchedForm)
+      if (!best || compareScore(score, best.score) > 0) {
+        best = { item, label: candidate, matchedForm, score }
       }
     }
   }
@@ -346,12 +476,43 @@ export function matchCatalogIngredient(
 
   return {
     catalog: best.item,
-    note: extractUnmatchedNote(trimmed, best.label),
+    note: extractUnmatchedNote(trimmed, best.matchedForm),
   }
 }
 
-function containsPhrase(haystack: string, phrase: string): boolean {
-  return flexiblePhrasePattern(phrase).test(haystack.trim())
+function matchedPhraseForm(haystack: string, phrase: string): string | undefined {
+  const trimmed = haystack.trim()
+  let best: string | undefined
+  for (const form of inflectionForms(phrase)) {
+    if (!flexiblePhrasePattern(form).test(trimmed)) {
+      continue
+    }
+    if (!best || form.length > best.length) {
+      best = form
+    }
+  }
+  return best
+}
+
+function phraseMatchScore(
+  haystack: string,
+  candidate: string,
+  matchedForm: string
+): [number, number, number] {
+  const match = flexiblePhrasePattern(matchedForm).exec(haystack.trim())
+  const wordCount = normalizeIngredientKey(candidate).split(' ').filter(Boolean).length
+  const end = match ? match.index + match[0].length : -1
+  return [wordCount, end, candidate.length]
+}
+
+function compareScore(left: [number, number, number], right: [number, number, number]): number {
+  for (let index = 0; index < left.length; index += 1) {
+    const delta = (left[index] ?? 0) - (right[index] ?? 0)
+    if (delta !== 0) {
+      return delta
+    }
+  }
+  return 0
 }
 
 function extractUnmatchedNote(importedName: string, matchedLabel: string): string {

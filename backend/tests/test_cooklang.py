@@ -1,9 +1,12 @@
 from app.cooklang import (
+    metadata_cook_time,
     normalize_document,
     parse_blocks,
     parse_cookware,
+    parse_document,
     parse_ingredients,
     prepare_imported_content,
+    sanitize_front_matter,
     scale_steps,
     split_amount,
 )
@@ -15,6 +18,33 @@ def test_split_amount_parses_ml_and_liter_units():
     assert split_amount("250ml") == ("250", "ml", False)
     assert split_amount("1.5%liters") == ("1.5", "l", False)
     assert split_amount("2 l") == ("2", "l", False)
+
+
+def test_sanitize_front_matter_fixes_embedded_title_quotes():
+    raw = """---
+title: "Greek" Lamb with Orzo
+source: https://food52.com/recipes/21102-greek-lamb-with-orzo
+---
+
+Cook @lamb{}.
+"""
+    fixed = sanitize_front_matter(raw)
+    metadata, body = parse_document(fixed)
+    assert metadata["title"] == '"Greek" Lamb with Orzo'
+    assert "Cook @lamb{}." in body
+    assert sanitize_front_matter(fixed) == fixed
+
+
+def test_sanitize_front_matter_leaves_valid_yaml_unchanged():
+    raw = """---
+title: Chili
+servings: 6
+---
+
+Brown @beef{454%g}.
+"""
+    assert sanitize_front_matter(raw) == raw
+
 
 
 def test_prepare_imported_content_normalizes_volume_units():
@@ -157,3 +187,19 @@ def test_scale_steps_preserves_preparation_notes():
     )
 
     assert steps == ["Mix @flour{0.5%cup}(sifted) and @salt{0.25%tsp}."]
+
+
+def test_format_ingredient_markup_keeps_empty_braces():
+    from app.cooklang import format_ingredient_markup
+
+    assert format_ingredient_markup("kalamata olives", "", "pitted") == (
+        "@kalamata olives{}(pitted)"
+    )
+    assert format_ingredient_markup("salt", "", None) == "@salt{}"
+    assert format_ingredient_markup("olive oil", "27%g", None) == "@olive oil{27%g}"
+    assert (
+        metadata_cook_time({"prep time": "20 minutes", "cook time": "1 hour 30 minutes"})
+        == "20 minutes prep + 1 hour 30 minutes cook"
+    )
+    assert metadata_cook_time({"time": "1 hour 50 minutes"}) == "1 hour 50 minutes"
+    assert metadata_cook_time({"cook time": "45 minutes"}) == "45 minutes cook"

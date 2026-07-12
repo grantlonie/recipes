@@ -12,7 +12,7 @@ import { Dialog } from './components/Dialog'
 import { putIngredientCatalog } from './db'
 import { titleCaseIngredient } from './ingredientDisplay'
 import { useIngredientCatalog } from './IngredientCatalogContext'
-import { cardClassName, inputClassName } from './themeClasses'
+import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
 import type { CatalogIngredient } from './types'
 
 const INGREDIENT_NOTES = [
@@ -242,10 +242,10 @@ export function IngredientsPage() {
             </span>
           </label>
           {saveMutation.error ? (
-            <p className="text-sm text-red-700">{saveMutation.error.message}</p>
+            <p className={`text-sm ${errorTextClassName}`}>{saveMutation.error.message}</p>
           ) : null}
           {deleteMutation.error ? (
-            <p className="text-sm text-red-700">{deleteMutation.error.message}</p>
+            <p className={`text-sm ${errorTextClassName}`}>{deleteMutation.error.message}</p>
           ) : null}
           <div className="flex justify-between gap-2">
             {editing ? (

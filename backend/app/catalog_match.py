@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app import cooklang
+from app.ingredient_inflection import inflection_forms
 from app.ingredients import IngredientRepository, normalize_ingredient_key
 from app.models import CatalogIngredient
 from app.non_ingredients import is_non_ingredient
@@ -25,20 +26,24 @@ def match_catalog_ingredient(imported_name: str, catalog: list[CatalogIngredient
     if exact:
         return CatalogMatch(catalog=exact, note="")
 
-    best: tuple[CatalogIngredient, str] | None = None
+    best: tuple[CatalogIngredient, str, str, tuple[int, int, int]] | None = None
     for item in catalog:
         for label in [item.name, *item.aliases]:
             candidate = label.strip()
-            if not candidate or not _contains_phrase(trimmed, candidate):
+            if not candidate:
                 continue
-            if best is None or len(candidate) > len(best[1]):
-                best = (item, candidate)
+            matched_form = _matched_phrase_form(trimmed, candidate)
+            if matched_form is None:
+                continue
+            score = _phrase_match_score(trimmed, candidate, matched_form)
+            if best is None or score > best[3]:
+                best = (item, candidate, matched_form, score)
 
     if best is None:
         return CatalogMatch(catalog=None, note="")
 
-    item, label = best
-    return CatalogMatch(catalog=item, note=_extract_unmatched_note(trimmed, label))
+    item, _label, matched_form, _score = best
+    return CatalogMatch(catalog=item, note=_extract_unmatched_note(trimmed, matched_form))
 
 
 def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[str, list[str]]:
@@ -80,17 +85,31 @@ def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[
 def _find_catalog_ingredient(
     name: str, catalog: list[CatalogIngredient]
 ) -> CatalogIngredient | None:
-    key = normalize_ingredient_key(name)
+    imported_forms = set(inflection_forms(name))
     for item in catalog:
-        if normalize_ingredient_key(item.name) == key:
-            return item
-        if any(normalize_ingredient_key(alias) == key for alias in item.aliases):
+        label_forms = {form for label in [item.name, *item.aliases] for form in inflection_forms(label)}
+        if imported_forms & label_forms:
             return item
     return None
 
 
-def _contains_phrase(haystack: str, phrase: str) -> bool:
-    return _flexible_phrase_pattern(phrase).search(haystack.strip()) is not None
+def _matched_phrase_form(haystack: str, phrase: str) -> str | None:
+    trimmed = haystack.strip()
+    best: str | None = None
+    for form in inflection_forms(phrase):
+        if _flexible_phrase_pattern(form).search(trimmed) is None:
+            continue
+        if best is None or len(form) > len(best):
+            best = form
+    return best
+
+
+def _phrase_match_score(haystack: str, candidate: str, matched_form: str) -> tuple[int, int, int]:
+    """Prefer multi-word labels, then rightmost head-noun matches, then longer labels."""
+    match = _flexible_phrase_pattern(matched_form).search(haystack.strip())
+    word_count = len(normalize_ingredient_key(candidate).split())
+    end = match.end() if match else -1
+    return (word_count, end, len(candidate))
 
 
 def _extract_unmatched_note(imported_name: str, matched_label: str) -> str:

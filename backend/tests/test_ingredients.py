@@ -1,12 +1,27 @@
 from fastapi.testclient import TestClient
+import pytest
 
-from app.ingredients import IngredientRepository, normalize_ingredient_key
+from app.ingredients import IngredientRepository, IngredientStorageError, normalize_ingredient_key
 from app.models import CatalogIngredient
 
 
-def test_normalize_ingredient_key_treats_hyphens_as_spaces():
-    assert normalize_ingredient_key("Half-and-Half") == "half and half"
-    assert normalize_ingredient_key("half and half") == "half and half"
+def test_ingredient_catalog_write_is_atomic(tmp_path):
+    catalog_path = tmp_path / "ingredients.json"
+    repository = IngredientRepository(catalog_path=catalog_path)
+    repository.upsert(CatalogIngredient(name="flour", density_kg_m3=530, aliases=[]))
+
+    assert catalog_path.exists()
+    assert not catalog_path.with_suffix(".json.tmp").exists()
+    payload = catalog_path.read_text(encoding="utf-8")
+    assert '"flour"' in payload
+    assert payload.strip().startswith("{")
+
+
+def test_ingredient_catalog_rejects_empty_file(tmp_path):
+    catalog_path = tmp_path / "ingredients.json"
+    catalog_path.write_text("", encoding="utf-8")
+    with pytest.raises(IngredientStorageError, match="empty"):
+        IngredientRepository(catalog_path=catalog_path)
 
 
 def test_find_by_name_matches_hyphen_and_space_variants(tmp_path):

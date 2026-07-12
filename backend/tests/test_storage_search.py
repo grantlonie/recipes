@@ -4,6 +4,33 @@ from app.storage import RecipeRepository, StorageError
 from app.search import search_details
 
 
+def test_sync_index_tolerates_missing_cached_slug(tmp_path):
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=tmp_path / "recipes",
+    )
+    repository.write_recipe(
+        "peanut-butter-cake",
+        """---
+title: Peanut Butter Cake
+---
+
+Mix @flour{}.
+""",
+    )
+    repository.sync_index()
+    assert "peanut-butter-cake" in repository.recipes
+
+    # Simulate a concurrent delete that already removed the in-memory recipe entry.
+    del repository.recipes["peanut-butter-cake"]
+    path = repository.recipe_path("peanut-butter-cake")
+    path.unlink()
+
+    repository.sync_index()
+    assert "peanut-butter-cake" not in repository.recipes
+    assert "peanut-butter-cake" not in repository._mtimes
+
+
 def test_front_matter_updates_preserve_body_and_do_not_create_images(tmp_path):
     repository = RecipeRepository(
         app_base_url="http://testserver",
@@ -176,32 +203,31 @@ Add @butter{1 ¼%cup} and @salt{1 1/4%tsp}.
 
 
 def test_write_recipe_renames_slug_and_assets(tmp_path):
-    sources_root = tmp_path / "sources"
+    recipe_root = tmp_path / "recipes"
     repository = RecipeRepository(
         app_base_url="http://testserver",
-        recipe_root=tmp_path / "recipes",
-        sources_root=sources_root,
+        recipe_root=recipe_root,
     )
     repository.write_recipe(
         "chili",
         """---
-image: sources/chili/image.jpg
-source: sources/chili/source.pdf
+image: recipes/chili/image.jpg
+source: recipes/chili/source.pdf
 title: Chili
 ---
 
 Add @beans{2}.
 """,
     )
-    (sources_root / "chili").mkdir(parents=True)
-    (sources_root / "chili" / "image.jpg").write_bytes(b"img")
-    (sources_root / "chili" / "source.pdf").write_bytes(b"pdf")
+    chili_dir = recipe_root / "chili"
+    (chili_dir / "image.jpg").write_bytes(b"img")
+    (chili_dir / "source.pdf").write_bytes(b"pdf")
 
     recipe = repository.write_recipe(
         "chicken-soup",
         """---
-image: sources/chili/image.jpg
-source: sources/chili/source.pdf
+image: recipes/chili/image.jpg
+source: recipes/chili/source.pdf
 title: Chicken Soup
 ---
 
@@ -213,7 +239,8 @@ Add @beans{2}.
     assert recipe.slug == "chicken-soup"
     assert not repository.recipe_path("chili").exists()
     assert repository.recipe_path("chicken-soup").exists()
-    assert (sources_root / "chicken-soup" / "image.jpg").exists()
-    assert not (sources_root / "chili").exists()
-    assert "sources/chicken-soup/image.jpg" in recipe.content
-    assert "sources/chicken-soup/source.pdf" in recipe.content
+    assert (recipe_root / "chicken-soup" / "image.jpg").exists()
+    assert (recipe_root / "chicken-soup" / "recipe.cook").exists()
+    assert not (recipe_root / "chili").exists()
+    assert "recipes/chicken-soup/image.jpg" in recipe.content
+    assert "recipes/chicken-soup/source.pdf" in recipe.content

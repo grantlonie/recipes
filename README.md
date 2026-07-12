@@ -4,8 +4,8 @@ A small Cooklang filesystem recipe app.
 
 - Public users can browse, search, share, and view recipes.
 - Editor users can sign in with env-configured credentials to create, import, edit, tag, and bookmark recipes.
-- Recipes are stored as plain-text `.cook` files under `/data/recipes`.
-- Images are not stored by the app. Recipe `image` metadata should be a public URL.
+- Recipes are stored as plain-text `.cook` files under `/data/recipes/{slug}/recipe.cook`.
+- Uploaded images and source files live next to each recipe as `image.*` / `source.*`.
 
 ## Stack
 
@@ -73,9 +73,11 @@ Copy `.env.example` to `.env` and change `RECIPE_EDITOR_PASSWORD` and `SESSION_S
 ```text
 /data/
   recipes/
-    weeknight/chili.cook
+    chili/
+      recipe.cook
+      source.pdf       # optional uploaded source
+      image.jpg        # optional uploaded image
   ingredients.json      Ingredient catalog (densities, aliases)
-  sources/              Per-recipe uploaded source files and images
 ```
 
 Recipe metadata follows Cooklang front matter conventions:
@@ -89,7 +91,8 @@ bookmarked: false
 servings: 6
 image: https://example.com/chili.jpg
 source: https://example.com/original-recipe
-time: 1 hour
+prep time: 15 minutes
+cook time: 45 minutes
 description: Good freezer meal.
 ---
 
@@ -124,7 +127,6 @@ configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.exampl
 | `FIREWORKS_API_KEY` | Fireworks API key for recipe import |
 | `IMPORT_MODEL_TEXT` / `IMPORT_MODEL_VISION` / `IMPORT_MODEL_REPAIR` / `IMPORT_MODEL_BULK` | LLM models for import stages |
 | `IMPORT_MAX_SOURCE_CHARS` / `IMPORT_MAX_OUTPUT_TOKENS` | Import size limits |
-| `IMPORT_CACHE_AFFINITY_KEY` | Fireworks prompt-cache affinity key |
 
 ## Docker
 

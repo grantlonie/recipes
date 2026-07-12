@@ -5,7 +5,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
 import { getSafeReturnTo } from './shareImport'
-import { cardClassName } from './themeClasses'
+import { cardClassName, errorTextClassName } from './themeClasses'
 
 export function LoginPage() {
   const { auth, loginError, loginPending, signIn } = useAuth()
@@ -51,7 +51,7 @@ export function LoginPage() {
         <Button className="w-full" disabled={loginPending} type="submit">
           {loginPending ? 'Signing in...' : 'Sign in'}
         </Button>
-        {loginError ? <p className="text-sm text-red-700 dark:text-red-300">{loginError}</p> : null}
+        {loginError ? <p className={`text-sm ${errorTextClassName}`}>{loginError}</p> : null}
       </form>
     </section>
   )

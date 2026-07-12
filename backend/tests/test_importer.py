@@ -73,6 +73,40 @@ Add @mystery spice{}.
     assert preview.unmatched_ingredients == ["mystery spice"]
 
 
+def test_import_from_text_sanitizes_invalid_yaml_title_quotes(
+    settings: Settings, ingredients: IngredientRepository
+):
+    invalid = """---
+title: "Greek" Lamb with Orzo
+---
+
+Cook @lamb{}.
+"""
+    with patch("app.importer.complete_cooklang", return_value=invalid) as mock_complete:
+        preview = import_from_text("Recipe text", settings=settings, ingredients=ingredients)
+
+    assert mock_complete.call_count == 1
+    assert '"Greek" Lamb with Orzo' in preview.content or "Greek" in preview.content
+    metadata_line = next(
+        line for line in preview.content.splitlines() if line.startswith("title:")
+    )
+    assert "Greek" in metadata_line
+    assert preview.suggested_slug
+
+
+def test_import_from_text_raises_when_repair_still_invalid(
+    settings: Settings, ingredients: IngredientRepository
+):
+    invalid = """---
+---
+
+Cook @lamb{}.
+"""
+    with patch("app.importer.complete_cooklang", side_effect=[invalid, invalid]):
+        with pytest.raises(ImportError, match="not valid Cooklang"):
+            import_from_text("Recipe text", settings=settings, ingredients=ingredients)
+
+
 def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: IngredientRepository):
     recipe_url = "https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta"
 
@@ -147,6 +181,66 @@ def test_import_from_url_sends_browser_headers(settings: Settings, ingredients: 
     assert "text/html" in headers.get("Accept", "")
 
 
+def test_import_from_text_fetches_image_from_source_when_missing(
+    settings: Settings, ingredients: IngredientRepository
+):
+    cooklang = """---
+title: Chicken & bacon pasta
+source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta
+---
+
+Add @chicken{} and @bacon{}.
+"""
+    source_url = "https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta"
+    image_url = "https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == source_url:
+            return httpx.Response(
+                200,
+                text=(
+                    f'<html><head><meta property="og:image" content="{image_url}" />'
+                    "</head><body>Recipe page</body></html>"
+                ),
+            )
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    with patch("app.importer.complete_cooklang", return_value=cooklang):
+        with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+            preview = import_from_text(
+                "Recipe text",
+                settings=settings,
+                ingredients=ingredients,
+            )
+
+    assert f"image: {image_url}" in preview.content
+
+
+def test_import_from_text_keeps_existing_image(
+    settings: Settings, ingredients: IngredientRepository
+):
+    cooklang = """---
+title: Chicken & bacon pasta
+source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta
+image: https://cdn.example.com/existing.jpg
+---
+
+Add @chicken{} and @bacon{}.
+"""
+
+    with patch("app.importer.complete_cooklang", return_value=cooklang):
+        with patch("app.importer._fetch_source_image_url") as mock_fetch:
+            preview = import_from_text(
+                "Recipe text",
+                settings=settings,
+                ingredients=ingredients,
+            )
+
+    mock_fetch.assert_not_called()
+    assert "image: https://cdn.example.com/existing.jpg" in preview.content
+
+
 def test_import_from_file_sets_source_path_for_assets(
     settings: Settings,
     ingredients: IngredientRepository,
@@ -166,7 +260,7 @@ def test_import_from_file_sets_source_path_for_assets(
                 source_file,
                 settings=settings,
                 ingredients=ingredients,
-                source_path="sources/chili/source.txt",
+                source_path="recipes/chili/source.txt",
             )
 
-    assert "source: sources/chili/source.txt" in preview.content
+    assert "source: recipes/chili/source.txt" in preview.content

@@ -24,7 +24,7 @@ from app.fireworks_llm import (  # noqa: E402
     normalize_model_output,
 )
 from app.import_context import build_system_prompt, build_user_message  # noqa: E402
-from app.importer import USER_AGENT, _finalize_import, _is_valid_import  # noqa: E402
+from app.importer import BROWSER_HEADERS, _finalize_import, _is_valid_import  # noqa: E402
 from app.ingredients import IngredientRepository  # noqa: E402
 from openai import APIStatusError  # noqa: E402
 
@@ -45,7 +45,6 @@ def complete_cooklang_with_logs(
 ) -> tuple[str, dict[str, str | None], str]:
     client = create_client(settings)
     selected_model = model or settings.import_model_text
-    cache_key = settings.import_cache_affinity_key.strip() or "recipes-import"
 
     request_kwargs = import_request_kwargs(
         settings=settings,
@@ -63,8 +62,8 @@ def complete_cooklang_with_logs(
     stream_lines: list[str] = [
         f"# {label}",
         f"model={selected_model}",
-        f"cache_key={cache_key}",
-        f"reasoning_effort=none",
+        f"user={request_kwargs.get('user')}",
+        f"extra_body={request_kwargs.get('extra_body')}",
         f"started_at={datetime.now(UTC).isoformat()}",
         "",
     ]
@@ -148,7 +147,7 @@ def debug_import_url(url: str, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     timeout = httpx.Timeout(90.0, connect=15.0)
-    with httpx.Client(follow_redirects=True, timeout=timeout, headers={"User-Agent": USER_AGENT}) as client:
+    with httpx.Client(follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS) as client:
         response = client.get(url)
         response.raise_for_status()
         html = response.text
@@ -177,7 +176,6 @@ def debug_import_url(url: str, output_dir: Path) -> None:
                 f"import_model_repair={settings.import_model_repair}",
                 f"import_max_source_chars={settings.import_max_source_chars}",
                 f"import_max_output_tokens={settings.import_max_output_tokens}",
-                f"import_cache_affinity_key={settings.import_cache_affinity_key}",
             ]
         )
         + "\n",
@@ -194,10 +192,8 @@ def debug_import_url(url: str, output_dir: Path) -> None:
                     {"role": "user", "content": user_message},
                 ],
                 "model": settings.import_model_text,
-                "user": settings.import_cache_affinity_key,
                 "max_tokens": settings.import_max_output_tokens,
                 "temperature": 0.2,
-                "reasoning_effort": "none",
             },
             indent=2,
         )
@@ -219,7 +215,7 @@ def debug_import_url(url: str, output_dir: Path) -> None:
     write_text(output_dir / "07_llm_response_normalized.txt", normalized)
 
     repair_headers: dict[str, str | None] = {}
-    if not _is_valid_import(raw):
+    if not _is_valid_import(normalized):
         repair_message = (
             f"{user_message}\n\n"
             "The previous output was invalid Cooklang. "

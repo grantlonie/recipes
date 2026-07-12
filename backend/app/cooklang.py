@@ -8,7 +8,8 @@ from app.models import Ingredient, RecipeSection, RecipeStep
 from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
-SOURCES_PREFIX = "sources/"
+FRONT_MATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
+RECIPES_PREFIX = "recipes/"
 TOKEN_CHARS = r"A-Za-z0-9_./' -"
 INGREDIENT_RE = re.compile(
     rf"@(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{(?P<amount>[^}}]*)\}}|"
@@ -52,6 +53,63 @@ def parse_document(content: str) -> tuple[dict[str, Any], str]:
     return metadata, content[match.end() :]
 
 
+def sanitize_front_matter(content: str) -> str:
+    """Repair common LLM YAML mistakes in front matter before parse.
+
+    Example: ``title: "Greek" Lamb with Orzo`` is invalid YAML because the
+    quoted token closes early. Re-encode the value as a safe scalar so import
+    can skip the expensive repair model when only front matter is broken.
+    """
+    stripped = content.lstrip("\n")
+    match = FRONT_MATTER_RE.match(stripped)
+    if not match:
+        return content
+
+    front = match.group(1)
+    try:
+        loaded = yaml.safe_load(front)
+        if isinstance(loaded, dict):
+            return content
+    except yaml.YAMLError:
+        pass
+
+    fixed_lines: list[str] = []
+    for line in front.splitlines():
+        line_match = FRONT_MATTER_LINE_RE.match(line)
+        if not line_match:
+            fixed_lines.append(line)
+            continue
+        key, value = line_match.group(1), line_match.group(2)
+        if value == "":
+            fixed_lines.append(line)
+            continue
+        try:
+            parsed = yaml.safe_load(f"{key}: {value}")
+            if isinstance(parsed, dict) and key in parsed:
+                fixed_lines.append(line)
+                continue
+        except yaml.YAMLError:
+            pass
+        fixed_lines.append(
+            yaml.safe_dump(
+                {key: value},
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            ).strip()
+        )
+
+    new_front = "\n".join(fixed_lines)
+    try:
+        loaded = yaml.safe_load(new_front)
+        if not isinstance(loaded, dict):
+            return content
+    except yaml.YAMLError:
+        return content
+
+    return f"---\n{new_front}\n---\n{stripped[match.end() :]}"
+
+
 def render_document(metadata: dict[str, Any], body: str) -> str:
     clean_metadata = {key: value for key, value in metadata.items() if value not in (None, "", [])}
     if not clean_metadata:
@@ -62,9 +120,7 @@ def render_document(metadata: dict[str, Any], body: str) -> str:
 
 
 def format_ingredient_markup(name: str, amount: str, note: str | None = None) -> str:
-    markup = f"@{name.strip()}"
-    if amount:
-        markup += f"{{{amount}}}"
+    markup = f"@{name.strip()}{{{amount}}}"
     if note:
         markup += f"({note})"
     return markup
@@ -74,8 +130,12 @@ def ingredient_note_from_match(match: re.Match[str]) -> str | None:
     return (match.group("preparation") or "").strip() or None
 
 
+def ingredient_name_from_match(match: re.Match[str]) -> str:
+    return (match.group("name_braced") or match.group("name") or "").strip()
+
+
 def ingredient_match_to_plain_text(match: re.Match[str]) -> str:
-    name = (match.group("name_braced") or match.group("name") or "").strip()
+    name = ingredient_name_from_match(match)
     amount = match.group("amount") or ""
     note = ingredient_note_from_match(match)
     quantity, unit, _fixed = split_amount(amount)
@@ -98,7 +158,7 @@ def parse_ingredients(
     ingredients: list[Ingredient] = []
     factor = None if scale is None else scale / servings
     for match in INGREDIENT_RE.finditer(strip_comments(body)):
-        name = (match.group("name_braced") or match.group("name")).strip()
+        name = ingredient_name_from_match(match)
         if not name:
             continue
         quantity, unit, fixed = split_amount(match.group("amount"))
@@ -217,7 +277,7 @@ def is_ref_url(value: str) -> bool:
 
 
 def is_ref_file(value: str) -> bool:
-    return value.startswith(SOURCES_PREFIX)
+    return value.startswith(RECIPES_PREFIX)
 
 
 def validate_ref_value(value: str) -> bool:
@@ -282,7 +342,7 @@ def resolve_image_url(metadata: dict[str, Any], app_base_url: str) -> str | None
         return value
     if is_ref_file(value):
         base = app_base_url.rstrip("/")
-        return f"{base}/api/sources/{value.removeprefix(SOURCES_PREFIX)}"
+        return f"{base}/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
     return value
 
 
@@ -291,14 +351,19 @@ def metadata_original_url(metadata: dict[str, Any]) -> str | None:
 
 
 def metadata_cook_time(metadata: dict[str, Any]) -> str | None:
+    prep = metadata.get("prep time") or metadata.get("time.prep")
+    cook = metadata.get("cook time") or metadata.get("time.cook")
+    if prep and cook:
+        return f"{prep} prep + {cook} cook"
+    if prep:
+        return f"{prep} prep"
+    if cook:
+        return f"{cook} cook"
     for key in ("time", "duration", "time required"):
         value = metadata.get(key)
         if value:
             return str(value)
-    prep = metadata.get("prep time") or metadata.get("time.prep")
-    cook = metadata.get("cook time") or metadata.get("time.cook")
-    parts = [str(value) for value in (prep, cook) if value]
-    return " + ".join(parts) if parts else None
+    return None
 
 
 def metadata_servings(metadata: dict[str, Any]) -> float:
@@ -384,7 +449,7 @@ def validate_document_refs(metadata: dict[str, Any]) -> None:
     for key in ("source", "image"):
         value = parse_ref_value(metadata, key)
         if value and not validate_ref_value(value):
-            raise ValueError(f"Invalid {key} value: must be http(s) URL or sources/ path")
+            raise ValueError(f"Invalid {key} value: must be http(s) URL or recipes/ path")
 
 
 def normalize_document(content: str) -> str:

@@ -68,9 +68,12 @@ export function prepareImportMapping(
 export async function finalizeImportedRecipe(
   content: string,
   suggestedSlug: string,
-  sourceFile?: File
+  sourceFile?: File,
+  options: { skipUniqueSlugCheck?: boolean } = {}
 ): Promise<RecipeDetail> {
-  const slug = await ensureUniqueSlug(suggestedSlug)
+  const slug = options.skipUniqueSlugCheck
+    ? suggestedSlug.trim() || 'new-recipe'
+    : await ensureUniqueSlug(suggestedSlug)
   let recipe = await createRecipe(slug, content)
 
   if (!sourceFile) {

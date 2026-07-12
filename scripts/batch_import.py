@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Batch-import recipe source files into Cooklang .cook files."""
+"""Batch-import recipe source files into Cooklang recipe.cook files."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from app.config import get_settings  # noqa: E402
 from app.extract import DEFAULT_EXTENSIONS, SUPPORTED_EXTENSIONS, extract_text_from_path  # noqa: E402
 from app.importer import ImportError, import_from_file, import_from_text, slugify  # noqa: E402
 from app.ingredients import IngredientRepository  # noqa: E402
-from app.sources import metadata_asset_path, recipe_assets_dir  # noqa: E402
+from app.sources import RECIPE_FILENAME, metadata_asset_path, recipe_dir  # noqa: E402
 
 
 def main() -> int:
@@ -25,13 +25,13 @@ def main() -> int:
         "--output-dir",
         type=Path,
         default=ROOT / "data" / "recipes",
-        help="Directory for .cook output (default: data/recipes)",
+        help="Directory for recipe folders (default: data/recipes)",
     )
     parser.add_argument(
         "--data-root",
         type=Path,
         default=ROOT / "data",
-        help="Data root for sources/ copies (default: data)",
+        help="Data root for ingredients.json (default: data)",
     )
     parser.add_argument(
         "--extensions",
@@ -40,11 +40,11 @@ def main() -> int:
         help="Comma-separated extensions to process (default: all supported)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview without writing files")
-    parser.add_argument("--overwrite", action="store_true", help="Replace existing .cook files")
+    parser.add_argument("--overwrite", action="store_true", help="Replace existing recipes")
     parser.add_argument(
         "--copy-source",
         action="store_true",
-        help="Copy each source file to sources/{slug}/source.{ext}",
+        help="Copy each source file to recipes/{slug}/source.{ext}",
     )
     parser.add_argument("--fail-fast", action="store_true", help="Stop on first failure")
     parser.add_argument("--model", type=str, default="", help="Override Fireworks model id")
@@ -66,7 +66,6 @@ def main() -> int:
         )
 
     ingredients = IngredientRepository(catalog_path=args.data_root / "ingredients.json")
-    sources_root = args.data_root / "sources"
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -82,22 +81,22 @@ def main() -> int:
     failures: list[str] = []
     for path in files:
         slug = slugify(path.stem)
-        destination = output_dir / f"{slug}.cook"
+        destination = output_dir / slug / RECIPE_FILENAME
         if destination.exists() and not args.overwrite:
-            print(f"skip: {path.name} -> {destination.name} (exists)")
+            print(f"skip: {path.name} -> {destination.relative_to(output_dir)} (exists)")
             continue
 
         if args.dry_run:
-            print(f"would import: {path.name} -> {destination.name}")
+            print(f"would import: {path.name} -> {destination.relative_to(output_dir)}")
             continue
 
         try:
             source_path = None
             if args.copy_source:
-                source_path = _copy_source(path, sources_root, slug)
+                source_path = _copy_source(path, output_dir, slug)
             if source_path:
                 preview = import_from_file(
-                    sources_root / slug / Path(source_path).name,
+                    output_dir / slug / Path(source_path).name,
                     settings=settings,
                     ingredients=ingredients,
                     source_path=source_path,
@@ -109,9 +108,10 @@ def main() -> int:
                     settings=settings,
                     ingredients=ingredients,
                 )
+            destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(preview.content, encoding="utf-8")
             unmatched = ", ".join(preview.unmatched_ingredients) or "none"
-            print(f"ok: {path.name} -> {destination.name} (unmatched: {unmatched})")
+            print(f"ok: {path.name} -> {destination.relative_to(output_dir)} (unmatched: {unmatched})")
         except (ImportError, OSError) as error:
             message = f"fail: {path.name}: {error}"
             print(message, file=sys.stderr)
@@ -135,8 +135,8 @@ def _parse_extensions(value: str) -> set[str]:
     return extensions
 
 
-def _copy_source(path: Path, sources_root: Path, slug: str) -> str:
-    assets_dir = recipe_assets_dir(sources_root, slug)
+def _copy_source(path: Path, recipe_root: Path, slug: str) -> str:
+    assets_dir = recipe_dir(recipe_root, slug)
     assets_dir.mkdir(parents=True, exist_ok=True)
     for existing in assets_dir.glob("source.*"):
         existing.unlink()

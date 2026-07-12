@@ -84,13 +84,14 @@ function buildIngredientCore(attrs: IngredientAttrs): string {
   const name = attrs.name.trim()
   const quantity = attrs.quantity.trim()
   const unit = attrs.unit.trim()
+  const fixed = attrs.fixed ? '=' : ''
   if (!quantity) {
-    return `@${name}`
+    return `@${name}{}`
   }
   if (!unit) {
-    return `@${name}{${attrs.fixed ? '=' : ''}${quantity}}`
+    return `@${name}{${fixed}${quantity}}`
   }
-  return `@${name}{${attrs.fixed ? '=' : ''}${quantity}%${unit}}`
+  return `@${name}{${fixed}${quantity}%${unit}}`
 }
 
 export function serializeIngredient(attrs: IngredientAttrs): string {

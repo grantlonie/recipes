@@ -6,6 +6,9 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
     assert "title: Chili" in prompt
+    assert "prep time: 15 minutes" in prompt
+    assert "cook time: 45 minutes" in prompt
+    assert "Do not collapse prep and cook" in prompt
 
 
 def test_truncate_source_text_limits_length():

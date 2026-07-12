@@ -8,7 +8,7 @@ This app is a **single-tenant personal recipe site**:
 
 | Area | Today |
 |------|-------|
-| **Storage** | `.cook` files under `/data/recipes`, shared `ingredients.json`, per-recipe assets in `/data/sources/` |
+| **Storage** | Per-recipe folders under `/data/recipes/{slug}/` (`recipe.cook` plus optional `source.*` / `image.*`), shared `ingredients.json` |
 | **Auth** | One editor account from env (`RECIPE_EDITOR_USERNAME` / `RECIPE_EDITOR_PASSWORD`) with a signed session cookie |
 | **Access** | All recipes are public; only writes require login |
 | **User data** | `bookmarked` is recipe metadata in the `.cook` file — not per user |
@@ -81,9 +81,9 @@ Move user-specific data off recipe files:
 
 Every persisted resource needs a tenant/workspace key:
 
-- Recipes (today: global slug like `weeknight/chili`)
+- Recipes (today: global slug like `chili` → `recipes/chili/recipe.cook`)
 - Ingredient catalog (today: one shared `ingredients.json`)
-- Source/image uploads (today: `sources/{slug}/`)
+- Source/image uploads (today: next to the recipe as `recipes/{slug}/source.*` / `image.*`)
 
 Slug uniqueness becomes `{workspace_id}/weeknight/chili`, or opaque IDs with slug as a display field.
 
@@ -126,9 +126,10 @@ Today all reads are public. SaaS typically needs:
 ### Option A: Stay filesystem-based
 
 ```text
-/data/{workspace_id}/recipes/weeknight/chili.cook
+/data/{workspace_id}/recipes/{slug}/recipe.cook
+/data/{workspace_id}/recipes/{slug}/source.*
+/data/{workspace_id}/recipes/{slug}/image.*
 /data/{workspace_id}/ingredients.json
-/data/{workspace_id}/sources/{slug}/...
 ```
 
 **Pros**

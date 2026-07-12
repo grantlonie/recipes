@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import tempfile
 from pathlib import Path
@@ -127,7 +128,7 @@ def import_from_file(
             ingredients=ingredients,
         )
 
-    if source_path and source_path.startswith("sources/"):
+    if source_path and source_path.startswith("recipes/"):
         metadata, body = cooklang.parse_document(preview.content)
         metadata["source"] = source_path
         if extension in image_extensions:
@@ -143,12 +144,12 @@ def import_from_slug_file(
     *,
     settings: Settings,
     ingredients: IngredientRepository,
-    sources_root: Path,
+    recipe_root: Path,
 ) -> ImportPreview:
-    path = _find_source_file(sources_root, slug)
+    path = _find_source_file(recipe_root, slug)
     if path is None:
         raise ImportError("No source file found for recipe")
-    source_path = f"sources/{slug}/{path.name}"
+    source_path = f"recipes/{slug}/{path.name}"
     return import_from_file(
         path,
         settings=settings,
@@ -177,7 +178,14 @@ async def import_from_upload(
         temp_path = Path(handle.name)
 
     try:
-        return import_from_file(temp_path, settings=settings, ingredients=ingredients)
+        # Run blocking LLM/file work off the event loop so concurrent bulk
+        # uploads can progress in parallel under a single uvicorn worker.
+        return await asyncio.to_thread(
+            import_from_file,
+            temp_path,
+            settings=settings,
+            ingredients=ingredients,
+        )
     except AssetError as error:
         raise ImportError(str(error)) from error
     finally:
@@ -221,7 +229,12 @@ def _import_image_file(
         )
     except LLMError as error:
         raise ImportError(str(error)) from error
-    return _finalize_import(raw, source_url=None, settings=settings, ingredients=ingredients)
+    return _finalize_import(
+        cooklang.sanitize_front_matter(raw),
+        source_url=None,
+        settings=settings,
+        ingredients=ingredients,
+    )
 
 
 def _import_extracted_text(
@@ -247,6 +260,7 @@ def _import_extracted_text(
     except LLMError as error:
         raise ImportError(str(error)) from error
 
+    raw = cooklang.sanitize_front_matter(raw)
     if not _is_valid_import(raw):
         try:
             raw = complete_cooklang(
@@ -261,6 +275,7 @@ def _import_extracted_text(
             )
         except LLMError as error:
             raise ImportError(str(error)) from error
+        raw = cooklang.sanitize_front_matter(raw)
 
     return _finalize_import(
         raw,
@@ -289,6 +304,12 @@ def _finalize_import(
         metadata["source"] = source_url
     if image_url and cooklang.is_ref_url(image_url):
         metadata["image"] = image_url
+    elif not _has_usable_image(metadata):
+        source = metadata.get("source")
+        if isinstance(source, str) and cooklang.is_ref_url(source):
+            scraped = _fetch_source_image_url(source)
+            if scraped:
+                metadata["image"] = scraped
 
     content = cooklang.render_document(metadata, body)
     content = cooklang.prepare_imported_content(content)
@@ -307,8 +328,32 @@ def _finalize_import(
     )
 
 
+def _has_usable_image(metadata: dict) -> bool:
+    image = metadata.get("image")
+    if not isinstance(image, str):
+        return False
+    value = image.strip()
+    return bool(value) and (cooklang.is_ref_url(value) or cooklang.is_ref_file(value))
+
+
+def _fetch_source_image_url(url: str) -> str | None:
+    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
+    try:
+        with httpx.Client(
+            follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS
+        ) as client:
+            response = client.get(url)
+            response.raise_for_status()
+            return extract_page_image_url(response.text, str(response.url))
+    except httpx.HTTPError:
+        return None
+
+
 def _is_valid_import(content: str) -> bool:
-    metadata, body = cooklang.parse_document(content.strip())
+    try:
+        metadata, body = cooklang.parse_document(content.strip())
+    except Exception:
+        return False
     if not metadata.get("title"):
         return False
     if not body.strip():
@@ -320,8 +365,8 @@ def _is_valid_import(content: str) -> bool:
     return True
 
 
-def _find_source_file(sources_root: Path, slug: str) -> Path | None:
-    assets_dir = sources_root / slug
+def _find_source_file(recipe_root: Path, slug: str) -> Path | None:
+    assets_dir = recipe_root / slug
     if not assets_dir.exists():
         return None
     matches = sorted(assets_dir.glob("source.*"))

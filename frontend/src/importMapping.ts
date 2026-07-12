@@ -125,12 +125,11 @@ export function mappingRowsAreValid(rows: MappingRow[], ingredients: CatalogIngr
   return rows.every(row => isMappingRowValid(row, ingredients))
 }
 
-export async function applyImportMapping(
-  pendingImport: PendingImport,
+export async function upsertCatalogFromMappingRows(
   mappingRows: MappingRow[],
   catalog: CatalogIngredient[],
   refreshCatalog: () => Promise<void>
-): Promise<{ body: string; catalog: CatalogIngredient[] }> {
+): Promise<CatalogIngredient[]> {
   const catalogUpdates: CatalogIngredient[] = []
   for (const row of mappingRows) {
     if (row.excluded) {
@@ -169,43 +168,56 @@ export async function applyImportMapping(
     catalogUpdates.push(ingredient)
   }
 
-  let workingCatalog = catalog
-  if (catalogUpdates.length) {
-    const nextCatalog = await getIngredientCatalog()
-    await putIngredientCatalog(nextCatalog)
-    await refreshCatalog()
-    workingCatalog = nextCatalog.ingredients
+  if (!catalogUpdates.length) {
+    return catalog
   }
 
+  const nextCatalog = await getIngredientCatalog()
+  await putIngredientCatalog(nextCatalog)
+  await refreshCatalog()
+  return nextCatalog.ingredients
+}
+
+export function applyMappingRowsToBody(
+  body: string,
+  mappingRows: MappingRow[],
+  catalog: CatalogIngredient[]
+): string {
   const lookup = new Map<string, MappingRow>()
   for (const row of mappingRows) {
     lookup.set(row.originalName.toLowerCase(), row)
   }
 
-  const body = pendingImport.body.replace(
-    INGREDIENT_TOKEN_RE,
-    (full, bracedName, _amount, bareName) => {
-      const name = (bracedName || bareName || '').trim()
-      if (!name) {
-        return full
-      }
-      const row = lookup.get(name.toLowerCase())
-      if (!row) {
-        return full
-      }
-      if (row.excluded) {
-        return ingredientToPlainText({
-          fixed: row.fixed,
-          name: row.originalName,
-          note: row.note,
-          quantity: row.quantity,
-          unit: row.unit,
-        })
-      }
-      return buildMappedIngredientMarker(row, workingCatalog)
+  return body.replace(INGREDIENT_TOKEN_RE, (full, bracedName, _amount, bareName) => {
+    const name = (bracedName || bareName || '').trim()
+    if (!name) {
+      return full
     }
-  )
+    const row = lookup.get(name.toLowerCase())
+    if (!row) {
+      return full
+    }
+    if (row.excluded) {
+      return ingredientToPlainText({
+        fixed: row.fixed,
+        name: row.originalName,
+        note: row.note,
+        quantity: row.quantity,
+        unit: row.unit,
+      })
+    }
+    return buildMappedIngredientMarker(row, catalog)
+  })
+}
 
+export async function applyImportMapping(
+  pendingImport: PendingImport,
+  mappingRows: MappingRow[],
+  catalog: CatalogIngredient[],
+  refreshCatalog: () => Promise<void>
+): Promise<{ body: string; catalog: CatalogIngredient[] }> {
+  const workingCatalog = await upsertCatalogFromMappingRows(mappingRows, catalog, refreshCatalog)
+  const body = applyMappingRowsToBody(pendingImport.body, mappingRows, workingCatalog)
   return { body, catalog: workingCatalog }
 }
 

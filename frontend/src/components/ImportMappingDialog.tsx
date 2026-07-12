@@ -11,7 +11,12 @@ import {
   mappingRowsAreValid,
   type MappingRow,
 } from '../importMapping'
-import { inputClassName } from '../themeClasses'
+import {
+  errorTextClassName,
+  inputClassName,
+  mappingCreateCardClassName,
+  mappingCreateTitleClassName,
+} from '../themeClasses'
 import type { CatalogIngredient } from '../types'
 
 interface ImportMappingDialogProps {
@@ -63,7 +68,7 @@ export function ImportMappingDialog({
                 row.excluded
                   ? 'bg-stone-100 ring-1 ring-stone-200 dark:bg-stone-900 dark:ring-stone-700'
                   : needsCreate
-                    ? 'bg-amber-100 ring-1 ring-amber-300'
+                    ? mappingCreateCardClassName
                     : 'bg-orange-50 ring-1 ring-orange-100 dark:bg-stone-800 dark:ring-stone-700'
               }`}
               key={`${row.originalName}-${index}`}
@@ -123,7 +128,9 @@ export function ImportMappingDialog({
                   {needsCreate ? (
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <p className="text-sm font-semibold text-amber-900">Create new ingredient</p>
+                        <p className={`text-sm font-semibold ${mappingCreateTitleClassName}`}>
+                          Create new ingredient
+                        </p>
                         <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
                           Provide density for volume conversions between US and metric.
                         </p>
@@ -153,7 +160,7 @@ export function ImportMappingDialog({
         })}
       </div>
       {!mappingCanApply ? (
-        <p className="mt-3 text-sm text-red-700">
+        <p className={`mt-3 text-sm ${errorTextClassName}`}>
           Enter an ingredient name for each row, or mark it as not an ingredient. New ingredients
           with volume measures (cups, ml, L, etc.) need a density.
         </p>

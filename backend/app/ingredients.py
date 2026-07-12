@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.ingredient_inflection import inflection_forms, normalize_ingredient_key
 from app.models import CatalogIngredient, IngredientCatalog
 
 SEED_PATH = Path(__file__).with_name("ingredients_seed.json")
@@ -12,10 +12,6 @@ SEED_PATH = Path(__file__).with_name("ingredients_seed.json")
 
 class IngredientStorageError(ValueError):
     pass
-
-
-def normalize_ingredient_key(value: str) -> str:
-    return re.sub(r"\s+", " ", value.strip().casefold().replace("-", " "))
 
 
 @dataclass
@@ -49,11 +45,14 @@ class IngredientRepository:
         return sorted(self.get_catalog().ingredients, key=lambda item: item.name.casefold())
 
     def find_by_name(self, name: str) -> CatalogIngredient | None:
-        key = normalize_ingredient_key(name)
+        imported_forms = set(inflection_forms(name))
         for ingredient in self.get_catalog().ingredients:
-            if normalize_ingredient_key(ingredient.name) == key:
-                return ingredient
-            if any(normalize_ingredient_key(alias) == key for alias in ingredient.aliases):
+            label_forms = {
+                form
+                for label in [ingredient.name, *ingredient.aliases]
+                for form in inflection_forms(label)
+            }
+            if imported_forms & label_forms:
                 return ingredient
         return None
 
@@ -84,7 +83,13 @@ class IngredientRepository:
         self._write(IngredientCatalog(version=catalog.version + 1, ingredients=ingredients))
 
     def _read(self) -> IngredientCatalog:
-        payload = json.loads(self.catalog_path.read_text(encoding="utf-8"))
+        raw = self.catalog_path.read_text(encoding="utf-8").strip()
+        if not raw:
+            raise IngredientStorageError("Ingredient catalog is empty")
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise IngredientStorageError("Ingredient catalog is invalid JSON") from error
         catalog = IngredientCatalog.model_validate(payload)
         self._mtime = self.catalog_path.stat().st_mtime
         return catalog
@@ -92,7 +97,9 @@ class IngredientRepository:
     def _write(self, catalog: IngredientCatalog) -> None:
         self.catalog_path.parent.mkdir(parents=True, exist_ok=True)
         payload = catalog.model_dump()
-        self.catalog_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        temp_path = self.catalog_path.with_suffix(f"{self.catalog_path.suffix}.tmp")
+        temp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        temp_path.replace(self.catalog_path)
         self.catalog = catalog
         self._mtime = self.catalog_path.stat().st_mtime
 
@@ -100,11 +107,14 @@ class IngredientRepository:
 def _clean_aliases(aliases: list[str], name: str) -> list[str]:
     seen: set[str] = set()
     cleaned: list[str] = []
-    name_key = name.casefold()
+    name_forms = set(inflection_forms(name))
     for alias in aliases:
         value = alias.strip().casefold()
-        key = value
-        if not value or key == name_key or key in seen:
+        if not value:
+            continue
+        alias_forms = set(inflection_forms(value))
+        key = normalize_ingredient_key(value)
+        if key in seen or alias_forms & name_forms:
             continue
         seen.add(key)
         cleaned.append(value)

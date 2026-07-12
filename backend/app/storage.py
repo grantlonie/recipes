@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 from app import cooklang
 from app.models import ManifestEntry, RecipeDetail, RecipeSummary, SyncManifest
-from app.sources import delete_recipe_assets, rename_recipe_assets
+from app.sources import RECIPE_FILENAME, delete_recipe_dir, rename_recipe_dir
 
 
 class StorageError(ValueError):
@@ -26,12 +26,11 @@ def summary_from_detail(recipe: RecipeDetail) -> RecipeSummary:
     )
 
 
-def safe_child(root: Path, slug: str, suffix: str) -> Path:
+def safe_recipe_dir(root: Path, slug: str) -> Path:
     if not slug or slug.startswith("/") or ".." in Path(slug).parts:
         raise StorageError("Invalid path")
-    path = (root / f"{slug}{suffix}").resolve()
-    root_resolved = root.resolve()
-    if root_resolved != path.parent:
+    path = (root / slug).resolve()
+    if path.parent != root.resolve():
         raise StorageError("Invalid path")
     return path
 
@@ -40,7 +39,6 @@ def safe_child(root: Path, slug: str, suffix: str) -> Path:
 class RecipeRepository:
     app_base_url: str
     recipe_root: Path
-    sources_root: Path | None = None
     recipes: dict[str, RecipeDetail] = field(default_factory=dict)
     _mtimes: dict[str, float] = field(default_factory=dict, repr=False)
     version: int = 0
@@ -53,8 +51,8 @@ class RecipeRepository:
         seen: set[str] = set()
         changed = False
 
-        for path in sorted(self.recipe_root.rglob("*.cook")):
-            slug = path.relative_to(self.recipe_root).with_suffix("").as_posix()
+        for path in sorted(self.recipe_root.glob(f"*/{RECIPE_FILENAME}")):
+            slug = path.parent.name
             seen.add(slug)
             mtime = path.stat().st_mtime
             if slug not in self._mtimes or self._mtimes[slug] != mtime:
@@ -62,10 +60,12 @@ class RecipeRepository:
                 self._mtimes[slug] = mtime
                 changed = True
 
-        for slug in list(self.recipes):
-            if slug not in seen:
-                del self.recipes[slug]
-                del self._mtimes[slug]
+        for slug in list(self.recipes.keys()) + list(self._mtimes.keys()):
+            if slug in seen:
+                continue
+            if slug in self.recipes or slug in self._mtimes:
+                self.recipes.pop(slug, None)
+                self._mtimes.pop(slug, None)
                 changed = True
 
         if changed:
@@ -127,8 +127,8 @@ class RecipeRepository:
     def write_recipe(
         self, slug: str, content: str, *, previous_slug: str | None = None
     ) -> RecipeDetail:
-        if previous_slug and previous_slug != slug and self.sources_root is not None:
-            rename_recipe_assets(self.sources_root, previous_slug, slug)
+        if previous_slug and previous_slug != slug:
+            rename_recipe_dir(self.recipe_root, previous_slug, slug)
             content = _rewrite_asset_paths(content, previous_slug, slug)
 
         path = self.recipe_path(slug)
@@ -142,9 +142,6 @@ class RecipeRepository:
         self.recipes[slug] = self._read_recipe(path, slug)
         self._mtimes[slug] = mtime
         if previous_slug and previous_slug != slug:
-            old_path = self.recipe_path(previous_slug)
-            if old_path.exists():
-                old_path.unlink()
             self.recipes.pop(previous_slug, None)
             self._mtimes.pop(previous_slug, None)
         self.version += 1
@@ -170,20 +167,18 @@ class RecipeRepository:
         path = self.recipe_path(slug)
         if not path.exists():
             raise StorageError("Recipe not found")
-        path.unlink()
-        if self.sources_root is not None:
-            delete_recipe_assets(self.sources_root, slug)
+        delete_recipe_dir(self.recipe_root, slug)
         self.recipes.pop(slug, None)
         self._mtimes.pop(slug, None)
         self.version += 1
 
     def recipe_path(self, slug: str) -> Path:
-        return safe_child(self.recipe_root, slug, ".cook")
+        return safe_recipe_dir(self.recipe_root, slug) / RECIPE_FILENAME
 
     def _read_recipe(self, path: Path, slug: str) -> RecipeDetail:
         content = path.read_text(encoding="utf-8")
         metadata, body = cooklang.parse_document(content)
-        title = cooklang.metadata_title(metadata, path.stem)
+        title = cooklang.metadata_title(metadata, slug)
         servings = cooklang.metadata_servings(metadata)
         return RecipeDetail(
             bookmarked=cooklang.metadata_bookmarked(metadata),
@@ -209,6 +204,6 @@ def _rewrite_asset_paths(content: str, old_slug: str, new_slug: str) -> str:
     metadata, body = cooklang.parse_document(content)
     for key in ("source", "image"):
         value = cooklang.parse_ref_value(metadata, key)
-        if value and value.startswith(f"sources/{old_slug}/"):
-            metadata[key] = value.replace(f"sources/{old_slug}/", f"sources/{new_slug}/", 1)
+        if value and value.startswith(f"recipes/{old_slug}/"):
+            metadata[key] = value.replace(f"recipes/{old_slug}/", f"recipes/{new_slug}/", 1)
     return cooklang.render_document(metadata, body)

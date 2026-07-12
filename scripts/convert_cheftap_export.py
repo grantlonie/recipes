@@ -223,6 +223,7 @@ def main() -> int:
     if not args.dry_run:
         destination.mkdir(parents=True, exist_ok=True)
         for recipe in converted:
+            recipe.destination_path.parent.mkdir(parents=True, exist_ok=True)
             recipe.destination_path.write_text(recipe.content, encoding="utf-8")
 
     for recipe in converted:
@@ -260,7 +261,7 @@ def convert_file(
     source_url = first_url(lines)
     metadata, body_start = extract_metadata(lines, title, source_url)
     slug = unique_slug(slugify(title), used_slugs)
-    destination_path = destination / f"{slug}.cook"
+    destination_path = destination / slug / "recipe.cook"
     existing_image = existing_metadata_value(destination_path, "image")
     if fetch_images and source_url:
         image_url, image_warning = scrape_image_url(canonical_source_url(source_url))

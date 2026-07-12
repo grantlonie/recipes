@@ -27,7 +27,7 @@ import {
   markImportDone,
 } from './shareImport'
 import type { ImportPreview, RecipeDetail, RecipeSummary } from './types'
-import { cardClassName, inputClassName } from './themeClasses'
+import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
 
 type ImportResult =
   | { kind: 'existing'; recipe: RecipeSummary }
@@ -262,7 +262,7 @@ export function ImportPage() {
         <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
           Couldn't import recipe
         </h1>
-        <p className="mt-2 text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
+        <p className={`mt-2 text-sm ${errorTextClassName}`}>{errorMessage}</p>
         {sharedUrl ? (
           <p className="mt-2 break-all text-sm text-stone-600 dark:text-stone-400">{sharedUrl}</p>
         ) : null}

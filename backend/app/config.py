@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     fireworks_api_key: str = ""
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
     frontend_dist: Path = Path("frontend/dist")
-    import_cache_affinity_key: str = "recipes-import"
     import_max_output_tokens: int = 4096
     import_max_source_chars: int = 6000
     import_model_bulk: str = "accounts/fireworks/models/deepseek-v4-flash"
@@ -32,10 +31,6 @@ class Settings(BaseSettings):
     @property
     def ingredients_path(self) -> Path:
         return self.data_root / "ingredients.json"
-
-    @property
-    def sources_root(self) -> Path:
-        return self.data_root / "sources"
 
 
 @lru_cache

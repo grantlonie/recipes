@@ -8,6 +8,7 @@ SYSTEM_PROMPT = """You convert recipes into Cooklang for a personal recipe app.
 Output rules:
 - Return ONLY a complete .cook document with YAML front matter between --- lines,
   then the recipe body.
+- Do not wrap the document in markdown fences (no ```yaml or ```cooklang).
 - Use imperative step prose. Blank lines separate steps.
 - Ingredients must appear inline in steps as @name{{quantity%unit}} or @name{{quantity%unit}}(note).
 - Multi-word ingredient names MUST use braces: @olive oil{{30%ml}}, @all-purpose flour{{240%g}}.
@@ -19,7 +20,17 @@ Output rules:
 - Use Tbsp with capital T for tablespoons.
 - Do not invent ingredients or steps that are not supported by the source text.
 - Omit tags from front matter.
-- Front matter may include: title, source, image, servings, time, description.
+- Front matter may include: title, source, image, servings, prep time, cook time,
+  time, description.
+- When the source lists prep and cook times separately, store BOTH as separate keys:
+  prep time: 20 minutes
+  cook time: 1 hour 30 minutes
+  Do not collapse prep and cook into a single `time` total unless the source only
+  gives one overall duration.
+- Use `time` only for a single overall duration when prep/cook are not listed separately.
+- Prefer plain English durations (20 minutes, 1 hour 30 minutes).
+- YAML-quote the entire title when it contains quotes or punctuation
+  (example: title: '"Greek" Lamb with Orzo'), never title: "Greek" Lamb....
 - source and image must be flat strings: either an http(s) URL or omitted if unknown.
 
 Language: {output_language}
@@ -31,12 +42,14 @@ title: Chili
 source: https://example.com/chili
 image: https://example.com/chili.jpg
 servings: 6
+prep time: 15 minutes
+cook time: 45 minutes
 ---
 Brown @beef{454%g} in #large pot{}.
 
 Add @onion{1}(diced) and @garlic{3%cloves}(minced). Cook until softened.
 
-Stir in @tomatoes{800%g}(crushed) and @kidney beans{400%g}. Simmer 30 minutes.
+Stir in @tomatoes{800%g}(crushed) and @kidney beans{400%g}. Simmer ~{30%minutes}.
 """
 
 
