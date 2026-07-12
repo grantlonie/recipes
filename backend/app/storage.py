@@ -189,7 +189,7 @@ class RecipeRepository:
             ingredients=cooklang.parse_ingredients(body, servings=servings),
             metadata=metadata,
             notes=cooklang.parse_notes(metadata, body),
-            original_url=cooklang.metadata_original_url(metadata),
+            original_url=cooklang.resolve_source_url(metadata, self.app_base_url),
             public_url=f"{self.app_base_url.rstrip('/')}/recipes/{quote(slug)}",
             servings=servings,
             slug=slug,

@@ -4,8 +4,8 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
-  ArrowTopRightOnSquareIcon,
   ChevronDownIcon,
+  DocumentTextIcon,
   EllipsisVerticalIcon,
   PencilSquareIcon,
   ShareIcon,
@@ -214,6 +214,7 @@ export function RecipePage() {
   }
 
   const blocks = getRecipeBlocks(recipe)
+  const sourceHref = resolveSourceHref(recipe)
 
   return (
     <article className="space-y-8 pb-8">
@@ -227,15 +228,15 @@ export function RecipePage() {
               src={recipe.image}
             />
             <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-full bg-black/55 p-1 backdrop-blur-sm">
-              {recipe.original_url ? (
+              {sourceHref ? (
                 <a
                   aria-label="View source"
                   className={IMAGE_ACTION_BUTTON_CLASS}
-                  href={recipe.original_url}
+                  href={sourceHref}
                   rel="noreferrer"
                   target="_blank"
                 >
-                  <ArrowTopRightOnSquareIcon aria-hidden="true" className={ICON_CLASS} />
+                  <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
                 </a>
               ) : null}
               <button
@@ -259,15 +260,15 @@ export function RecipePage() {
           </div>
         ) : (
           <div className="flex justify-end gap-1 p-4 pb-0">
-            {recipe.original_url ? (
+            {sourceHref ? (
               <a
                 aria-label="View source"
                 className={OVERFLOW_BUTTON_CLASS}
-                href={recipe.original_url}
+                href={sourceHref}
                 rel="noreferrer"
                 target="_blank"
               >
-                <ArrowTopRightOnSquareIcon aria-hidden="true" className={ICON_CLASS} />
+                <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
               </a>
             ) : null}
             <button
@@ -728,6 +729,21 @@ function formatServings(value: number) {
     return String(value)
   }
   return String(value)
+}
+
+function resolveSourceHref(recipe: {
+  metadata?: Record<string, unknown>
+  original_url?: string | null
+}): string | null {
+  const raw = recipe.metadata?.source
+  const source = typeof raw === 'string' ? raw.trim() : ''
+  if (source.startsWith('recipes/')) {
+    return `/api/sources/${source.slice('recipes/'.length)}`
+  }
+  if (source.startsWith('http://') || source.startsWith('https://')) {
+    return source
+  }
+  return recipe.original_url?.trim() || null
 }
 
 function formatIngredientListAmount(

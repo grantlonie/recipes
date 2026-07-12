@@ -341,9 +341,19 @@ def resolve_image_url(metadata: dict[str, Any], app_base_url: str) -> str | None
     if is_ref_url(value):
         return value
     if is_ref_file(value):
-        base = app_base_url.rstrip("/")
-        return f"{base}/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
+        return f"/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
     return value
+
+
+def resolve_source_url(metadata: dict[str, Any], app_base_url: str) -> str | None:
+    value = metadata_source_value(metadata)
+    if not value:
+        return None
+    if is_ref_url(value):
+        return value
+    if is_ref_file(value):
+        return f"/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
+    return None
 
 
 def metadata_original_url(metadata: dict[str, Any]) -> str | None:

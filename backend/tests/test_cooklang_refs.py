@@ -9,6 +9,7 @@ from app.cooklang import (
     metadata_source_url,
     normalize_document,
     resolve_image_url,
+    resolve_source_url,
     validate_ref_value,
 )
 
@@ -33,10 +34,17 @@ def test_metadata_helpers_extract_flat_refs():
 
 def test_resolve_image_url_maps_file_paths_to_api_route():
     metadata = {"image": "recipes/chili/image.jpg"}
-    assert (
-        resolve_image_url(metadata, "http://localhost:8000")
-        == "http://localhost:8000/api/sources/chili/image.jpg"
-    )
+    assert resolve_image_url(metadata, "http://localhost:8000") == "/api/sources/chili/image.jpg"
+
+
+def test_resolve_source_url_maps_file_paths_to_api_route():
+    metadata = {"source": "recipes/chili/source.txt"}
+    assert resolve_source_url(metadata, "http://localhost:8000") == "/api/sources/chili/source.txt"
+
+
+def test_resolve_source_url_keeps_http_urls():
+    metadata = {"source": "https://example.com/chili"}
+    assert resolve_source_url(metadata, "http://localhost:8000") == "https://example.com/chili"
 
 
 def test_validate_ref_value_rejects_unknown_formats():

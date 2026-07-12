@@ -271,7 +271,12 @@ def get_recipe_asset(
         file_path = resolve_asset_file(settings.recipe_root, relative_path)
     except AssetError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
-    return FileResponse(file_path, media_type=guess_media_type(file_path))
+    return FileResponse(
+        file_path,
+        media_type=guess_media_type(file_path),
+        filename=file_path.name,
+        content_disposition_type="inline",
+    )
 
 
 @app.post("/api/recipes", dependencies=[Depends(auth.require_editor)])
