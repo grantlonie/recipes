@@ -81,6 +81,7 @@ class ImportPreview(BaseModel):
     content: str
     suggested_slug: str
     unmatched_ingredients: list[str] = Field(default_factory=list)
+    validation_warnings: list[str] = Field(default_factory=list)
 
 
 class ImportFileRequest(BaseModel):

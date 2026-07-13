@@ -85,3 +85,72 @@ def test_upsert_drops_singular_alias_of_plural_name(tmp_path):
     repository = IngredientRepository(catalog_path=tmp_path / "ingredients.json")
     saved = repository.upsert(CatalogIngredient(name="shallots", aliases=["shallot", "eschalot"]))
     assert saved.aliases == ["eschalot"]
+
+
+def test_match_rejects_substance_changing_partial_hits():
+    catalog = [
+        CatalogIngredient(
+            name="black pepper",
+            aliases=["pepper", "ground black pepper"],
+        ),
+        CatalogIngredient(name="green bell pepper", aliases=["bell pepper", "green pepper"]),
+        CatalogIngredient(name="vanilla extract", aliases=["vanilla"]),
+        CatalogIngredient(name="vanilla bean", aliases=["vanilla pod"]),
+        CatalogIngredient(name="milk", aliases=["whole milk"]),
+        CatalogIngredient(name="sweetened condensed milk", aliases=["condensed milk"]),
+        CatalogIngredient(name="apricots", aliases=[]),
+        CatalogIngredient(name="apricot jam", aliases=["apricot preserves"]),
+        CatalogIngredient(name="instant vanilla pudding mix", aliases=["vanilla pudding mix"]),
+    ]
+
+    bell = match_catalog_ingredient("green bell pepper", catalog)
+    assert bell.catalog is not None
+    assert bell.catalog.name == "green bell pepper"
+
+    assert match_catalog_ingredient("vanilla bean", catalog).catalog.name == "vanilla bean"
+    assert (
+        match_catalog_ingredient("sweetened condensed milk", catalog).catalog.name
+        == "sweetened condensed milk"
+    )
+    assert match_catalog_ingredient("apricot jam", catalog).catalog.name == "apricot jam"
+    assert (
+        match_catalog_ingredient("instant vanilla pudding mix", catalog).catalog.name
+        == "instant vanilla pudding mix"
+    )
+
+
+def test_match_still_allows_safe_head_noun_notes():
+    catalog = [
+        CatalogIngredient(name="lemons", aliases=[]),
+        CatalogIngredient(name="zest", aliases=[]),
+        CatalogIngredient(name="onions", aliases=[]),
+        CatalogIngredient(name="eggs", aliases=[]),
+    ]
+    zest = match_catalog_ingredient("lemon zest", catalog)
+    assert zest.catalog is not None
+    assert zest.catalog.name == "zest"
+    assert zest.note == "lemon"
+
+    onion = match_catalog_ingredient("yellow onion", catalog)
+    assert onion.catalog is not None
+    assert onion.catalog.name == "onions"
+    assert onion.note == "yellow"
+
+    egg = match_catalog_ingredient("large egg", catalog)
+    assert egg.catalog is not None
+    assert egg.note == "large"
+
+
+def test_apply_catalog_mapping_does_not_corrupt_bell_pepper(tmp_path):
+    repository = IngredientRepository(catalog_path=tmp_path / "ingredients.json")
+    repository.upsert(
+        CatalogIngredient(name="black pepper", aliases=["pepper", "ground black pepper"])
+    )
+    repository.upsert(
+        CatalogIngredient(name="green bell pepper", aliases=["bell pepper", "green pepper"])
+    )
+
+    body = "Add @green bell pepper{1}(diced)."
+    mapped, unmatched = apply_catalog_mapping(body, repository)
+    assert "@green bell pepper{1}(diced)" in mapped
+    assert unmatched == []

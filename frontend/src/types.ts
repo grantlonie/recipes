@@ -59,6 +59,7 @@ export interface ImportPreview {
   content: string
   suggested_slug: string
   unmatched_ingredients?: string[]
+  validation_warnings?: string[]
 }
 
 export interface AssetUploadResponse {

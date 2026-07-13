@@ -445,6 +445,26 @@ export function BulkImportDialog({
         </div>
       ) : null}
 
+      {items.some(item => item.validationWarnings.length > 0) ? (
+        <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-900">
+          <p className="font-semibold">Import validation warnings</p>
+          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
+            {items
+              .filter(item => item.validationWarnings.length > 0)
+              .map(item => (
+                <li key={item.id}>
+                  <span className="font-medium">{item.suggestedSlug || item.fileName}</span>
+                  <ul className="ml-4 list-disc">
+                    {item.validationWarnings.map(warning => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="mt-6 flex flex-wrap justify-end gap-2">
         <Button disabled={saving || applying} onClick={handleClose} type="button" variant="ghost">
           {allSettled ? 'Close' : 'Cancel'}

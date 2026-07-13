@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.import_validate import clean_source_text
+
 OUTPUT_LANGUAGE = "concise imperative English"
 DEFAULT_MAX_SOURCE_CHARS = 6000
 
@@ -15,12 +17,43 @@ Output rules:
 - Put preparation words in (notes) after the amount, not in the ingredient name.
 - Use ==Section Title== for sections (not markdown headings).
 - Use #cookware{{}} markers when relevant and ~timer{{10%minutes}} for timers.
+  Never put counts on cookware (#pan{{}}, not pan{{1}} or baking pan{{1}}).
 - Prefer decimal quantities in amounts, not fractions.
 - Preserve the source's measurement units (cups, Tbsp, tsp, ml, L, g, oz, lb, counts).
   Do not convert between volume and mass (no cups/Tbsp/tsp/ml to grams or vice versa).
   A later step converts volumes to grams using catalog densities.
-- Prefer simple canonical ingredient names when possible.
-- Use Tbsp with capital T for tablespoons.
+- Tablespoon vs teaspoon is size, not casing: 1 tablespoon ≠ 1 teaspoon.
+  Treat source spellings tbsp / tbs / tablespoon(s) (any case) as tablespoon → emit Tbsp.
+  Treat source spellings tsp / teaspoon(s) (any case) as teaspoon → emit tsp.
+  Never shrink a tablespoon amount down to a teaspoon (or vice versa), even when
+  the source writes lowercase "tbsp" (example: "1 tbsp fennel seeds" → @fennel seeds{{1%Tbsp}}).
+- When the source gives BOTH volume and weight, prefer the weight (use g/oz/lb).
+- When the source says "X plus Y" (example: 3/4 cup plus 2 tablespoons), include the FULL amount.
+- Ingredients marked "divided" or "separated" must use separate @ markers with the correct
+  split amounts (example: 1 1/2 cups sugar separated → @granulated sugar{{1%cup}} in the
+  batter and @granulated sugar{{0.5%cup}} in the syrup).
+- Prefer simple canonical ingredient names when possible, but NEVER substitute a different substance:
+  green bell pepper ≠ black pepper, vanilla bean ≠ vanilla extract,
+  sweetened condensed milk ≠ milk, apricot jam ≠ apricots,
+  instant vanilla pudding mix ≠ vanilla extract,
+  confectioners' / powdered / icing sugar ≠ granulated sugar (use @powdered sugar{{}}).
+- Prefer specific ingredient names from the source when they exist in common catalogs:
+  orzo → @orzo{{}}, green onion/scallion → @scallions{{}}, mozzarella → @mozzarella{{}}.
+- Every ingredient from the source Ingredients list MUST appear with an @ marker,
+  including aromatics like garlic and scallions/green onions when listed.
+  Do not leave measured amounts as plain text (wrong: 1 Tbsp sambal oelek;
+  right: @sambal oelek{{1%Tbsp}}).
+- Reserved cooking liquids that are measured in the steps should be tagged when useful,
+  e.g. @pasta water{{0.5%cup}}(reserved). Leftover fat can stay plain text
+  ("drain all but 2 tablespoons of the fat").
+- For "to taste", "as needed", "a pinch", or "a splash": use @name{{}}(to taste) or
+  @name{{}}(as needed) with an EMPTY amount. Never write {{0%g}}, {{0}}, {{pinch}},
+  {{splash}}, {{to taste}}, or {{as needed}}.
+- Compound tools/equipment stay plain text or #cookware: "4 (12-inch) skewers",
+  not "4 pieces skewer" or "4 skewer".
+- Preserve optional and make-ahead steps from the source (overnight chill, rest times,
+  "do not serve warm", hold overnight before baking).
+- Always write tablespoon amounts as Tbsp (capital T). Source casing does not matter.
 - Do not invent ingredients or steps that are not supported by the source text.
 - Omit tags from front matter.
 - Front matter may include: title, source, image, servings, prep time, cook time,
@@ -55,6 +88,19 @@ Add @onion{1}(diced) and @garlic{3%cloves}(minced). Cook until softened.
 Stir in @tomatoes{28%oz}(crushed) and @kidney beans{2%cup}. Simmer ~{30%minutes}.
 """
 
+NEGATIVE_EXAMPLE = """Wrong (do not do this):
+Add @black pepper{1}(green bell, diced) and @vanilla extract{1}(bean).
+Season with @salt{0%g}(to taste). Oil the baking pan{1}.
+Add @fennel seeds{1%tsp} when the source says 1 tbsp fennel seeds.
+Use @granulated sugar{}(confectioners') for powdered sugar.
+
+Right:
+Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
+Season with @salt{}(to taste). Oil the #baking pan{}.
+Add @fennel seeds{1%Tbsp} when the source says 1 tbsp fennel seeds.
+Dust with @powdered sugar{}(as needed).
+"""
+
 
 def build_system_prompt() -> str:
     return "\n".join(
@@ -63,6 +109,9 @@ def build_system_prompt() -> str:
             "",
             "Example:",
             FEW_SHOT_EXAMPLE,
+            "",
+            "Avoid these mistakes:",
+            NEGATIVE_EXAMPLE,
         ]
     )
 
@@ -80,8 +129,34 @@ def build_user_message(
     source_url: str | None = None,
     max_chars: int = DEFAULT_MAX_SOURCE_CHARS,
 ) -> str:
+    cleaned = clean_source_text(extracted_text)
     parts = ["Convert this recipe source into Cooklang.", ""]
     if source_url:
         parts.extend([f"Original source URL: {source_url}", ""])
-    parts.extend(["Source text:", truncate_source_text(extracted_text, max_chars=max_chars)])
+    parts.extend(["Source text:", truncate_source_text(cleaned, max_chars=max_chars)])
     return "\n".join(parts)
+
+
+def build_quality_repair_message(
+    *,
+    source_text: str,
+    previous_cooklang: str,
+    warnings: list[str],
+    max_chars: int = DEFAULT_MAX_SOURCE_CHARS,
+) -> str:
+    warning_lines = "\n".join(f"- {warning}" for warning in warnings)
+    return "\n".join(
+        [
+            "Repair this Cooklang recipe. Keep the same structure and meaning,",
+            "but fix ONLY the listed problems. Return ONLY the corrected .cook document.",
+            "",
+            "Problems to fix:",
+            warning_lines,
+            "",
+            "Original source text:",
+            truncate_source_text(clean_source_text(source_text), max_chars=max_chars),
+            "",
+            "Previous Cooklang output:",
+            previous_cooklang.strip(),
+        ]
+    )

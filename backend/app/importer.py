@@ -19,7 +19,12 @@ from app.extract import (
     extract_text_from_path,
 )
 from app.fireworks_llm import LLMError, complete_cooklang
-from app.import_context import build_system_prompt, build_user_message
+from app.import_context import (
+    build_quality_repair_message,
+    build_system_prompt,
+    build_user_message,
+)
+from app.import_validate import validate_imported_cooklang
 from app.ingredients import IngredientRepository
 from app.models import ImportPreview
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
@@ -234,6 +239,7 @@ def _import_image_file(
         source_url=None,
         settings=settings,
         ingredients=ingredients,
+        source_text=None,
     )
 
 
@@ -277,12 +283,22 @@ def _import_extracted_text(
             raise ImportError(str(error)) from error
         raw = cooklang.sanitize_front_matter(raw)
 
-    return _finalize_import(
+    preview = _finalize_import(
         raw,
         source_url=source_url,
         image_url=image_url,
         settings=settings,
         ingredients=ingredients,
+        source_text=extracted_text,
+    )
+    return _maybe_quality_repair(
+        preview,
+        extracted_text=extracted_text,
+        source_url=source_url,
+        image_url=image_url,
+        settings=settings,
+        ingredients=ingredients,
+        system_prompt=system_prompt,
     )
 
 
@@ -293,6 +309,7 @@ def _finalize_import(
     image_url: str | None = None,
     settings: Settings,
     ingredients: IngredientRepository,
+    source_text: str | None = None,
 ) -> ImportPreview:
     if not _is_valid_import(raw):
         raise ImportError("Imported content is not valid Cooklang")
@@ -316,6 +333,7 @@ def _finalize_import(
     metadata, body = cooklang.parse_document(content)
     mapped_body, unmatched = apply_catalog_mapping(body, ingredients)
     content = cooklang.prepare_imported_content(cooklang.render_document(metadata, mapped_body))
+    validation = validate_imported_cooklang(content, source_text=source_text)
 
     slug_source = source_url or metadata.get("title", "imported-recipe")
     if isinstance(slug_source, str) and cooklang.is_ref_file(slug_source):
@@ -325,7 +343,53 @@ def _finalize_import(
         content=content + "\n",
         suggested_slug=suggested_slug,
         unmatched_ingredients=sorted(set(unmatched), key=str.casefold),
+        validation_warnings=validation.warnings,
     )
+
+
+def _maybe_quality_repair(
+    preview: ImportPreview,
+    *,
+    extracted_text: str,
+    source_url: str | None,
+    image_url: str | None,
+    settings: Settings,
+    ingredients: IngredientRepository,
+    system_prompt: str,
+) -> ImportPreview:
+    validation = validate_imported_cooklang(preview.content, source_text=extracted_text)
+    if not validation.needs_repair:
+        return preview.model_copy(update={"validation_warnings": validation.warnings})
+
+    try:
+        repaired = complete_cooklang(
+            settings=settings,
+            system_prompt=system_prompt,
+            user_message=build_quality_repair_message(
+                source_text=extracted_text,
+                previous_cooklang=preview.content,
+                warnings=validation.warnings,
+                max_chars=settings.import_max_source_chars,
+            ),
+            model=settings.import_model_repair,
+        )
+    except LLMError:
+        return preview.model_copy(update={"validation_warnings": validation.warnings})
+
+    repaired = cooklang.sanitize_front_matter(repaired)
+    if not _is_valid_import(repaired):
+        return preview.model_copy(update={"validation_warnings": validation.warnings})
+
+    repaired_preview = _finalize_import(
+        repaired,
+        source_url=source_url,
+        image_url=image_url,
+        settings=settings,
+        ingredients=ingredients,
+        source_text=extracted_text,
+    )
+    # Prefer the repaired result even if some soft warnings remain.
+    return repaired_preview
 
 
 def _has_usable_image(metadata: dict) -> bool:

@@ -36,6 +36,7 @@ export interface BulkImportItem {
   status: BulkItemStatus
   suggestedSlug: string
   unmatchedNames: string[]
+  validationWarnings: string[]
 }
 
 export interface BulkUnmatchedRow extends MappingRow {
@@ -62,6 +63,7 @@ export function createBulkImportItems(files: File[]): BulkImportItem[] {
     status: 'queued',
     suggestedSlug: '',
     unmatchedNames: [],
+    validationWarnings: [],
   }))
 }
 
@@ -126,6 +128,7 @@ export function skipIfExistingRecipe(
     skipReason: `Already imported as ${match.title}`,
     status: 'skipped',
     unmatchedNames: [],
+    validationWarnings: [],
   }
 }
 
@@ -146,6 +149,7 @@ export function mergePreviewIntoItem(
     status: 'pending',
     suggestedSlug: preview.suggested_slug,
     unmatchedNames: (preview.unmatched_ingredients ?? []).map(name => name.toLowerCase()),
+    validationWarnings: preview.validation_warnings ?? [],
   }
 
   if (existing) {

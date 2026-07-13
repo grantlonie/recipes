@@ -10,6 +10,108 @@ from app.models import CatalogIngredient
 from app.non_ingredients import is_non_ingredient
 from app.units import format_grams_value, is_volume_unit, to_grams
 
+# Words allowed in leftover notes for partial catalog matches.
+_MODIFIER_WORDS = frozenset(
+    {
+        "black",
+        "brown",
+        "cayenne",
+        "chopped",
+        "coarse",
+        "coarsely",
+        "cold",
+        "cooked",
+        "cracked",
+        "crushed",
+        "dark",
+        "diced",
+        "dried",
+        "dry",
+        "extra",
+        "fine",
+        "finely",
+        "firmly",
+        "fresh",
+        "freshly",
+        "frozen",
+        "green",
+        "ground",
+        "halved",
+        "hot",
+        "jumbo",
+        "kosher",
+        "large",
+        "light",
+        "lightly",
+        "medium",
+        "minced",
+        "organic",
+        "packed",
+        "pure",
+        "raw",
+        "red",
+        "roasted",
+        "room",
+        "salted",
+        "sea",
+        "sliced",
+        "small",
+        "smoked",
+        "softened",
+        "sour",
+        "sweet",
+        "toasted",
+        "unsalted",
+        "virgin",
+        "white",
+        "whole",
+        "yellow",
+    }
+)
+
+# Leftover tokens that mean the matched catalog item is the wrong substance.
+_SUBSTANCE_CHANGE_TOKENS = frozenset(
+    {
+        "aperitivo",
+        "bean",
+        "beans",
+        "bell",
+        "broth",
+        "butter",
+        "cheese",
+        "chips",
+        "chutney",
+        "condensed",
+        "cream",
+        "extract",
+        "flour",
+        "jam",
+        "jelly",
+        "juice",
+        "liqueur",
+        "meal",
+        "milk",
+        "mix",
+        "nectar",
+        "oil",
+        "paste",
+        "powder",
+        "preserves",
+        "pudding",
+        "puree",
+        "relish",
+        "rind",
+        "sauce",
+        "stock",
+        "sweetened",
+        "syrup",
+        "vinegar",
+        "wine",
+        "yogurt",
+        "zest",
+    }
+)
+
 
 @dataclass(frozen=True)
 class CatalogMatch:
@@ -43,7 +145,10 @@ def match_catalog_ingredient(imported_name: str, catalog: list[CatalogIngredient
         return CatalogMatch(catalog=None, note="")
 
     item, _label, matched_form, _score = best
-    return CatalogMatch(catalog=item, note=_extract_unmatched_note(trimmed, matched_form))
+    note = _extract_unmatched_note(trimmed, matched_form)
+    if not _partial_match_is_safe(trimmed, matched_form, note):
+        return CatalogMatch(catalog=None, note="")
+    return CatalogMatch(catalog=item, note=note)
 
 
 def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[str, list[str]]:
@@ -120,6 +225,36 @@ def _extract_unmatched_note(imported_name: str, matched_label: str) -> str:
     before = imported[: match.start()].strip()
     after = imported[match.end() :].strip()
     return ", ".join(part for part in (before, after) if part)
+
+
+def _partial_match_is_safe(imported_name: str, matched_form: str, note: str) -> bool:
+    """Reject partial matches that rewrite a different substance into a catalog item.
+
+    Culinary names are usually head-noun-last (\"lemon zest\", \"yellow onion\").
+    Leftover tokens that change substance (\"bell\", \"bean\", \"jam\", \"condensed\")
+    mean the short catalog hit was wrong.
+    """
+    if not note.strip():
+        return True
+
+    tokens = [token for token in normalize_ingredient_key(note).split() if token]
+    if not tokens:
+        return True
+    if all(token in _MODIFIER_WORDS for token in tokens):
+        return True
+    if any(token in _SUBSTANCE_CHANGE_TOKENS for token in tokens):
+        return False
+    if _matched_phrase_is_suffix(imported_name, matched_form):
+        return True
+    return False
+
+
+def _matched_phrase_is_suffix(imported_name: str, matched_form: str) -> bool:
+    match = _flexible_phrase_pattern(matched_form).search(imported_name.strip())
+    if match is None:
+        return False
+    after = imported_name[match.end() :].strip(" ,.")
+    return not after
 
 
 def _flexible_phrase_pattern(phrase: str) -> re.Pattern[str]:

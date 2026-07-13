@@ -56,6 +56,47 @@ def test_import_from_text_maps_catalog_ingredients(
     assert "@chicken" in preview.content
     assert "@bacon" in preview.content
     assert preview.unmatched_ingredients == []
+    assert preview.validation_warnings == []
+
+
+def test_import_from_text_reports_validation_warnings(
+    settings: Settings, ingredients: IngredientRepository
+):
+    cooklang = """---
+title: Kebabs
+---
+
+Season with @salt{0%g}(to taste). Add 1 Tbsp oil.
+"""
+    repaired = """---
+title: Kebabs
+---
+
+Season with @salt{}(to taste). Add @olive oil{1%Tbsp}.
+"""
+    with patch(
+        "app.importer.complete_cooklang", side_effect=[cooklang, repaired]
+    ) as mock_complete:
+        preview = import_from_text(
+            "Ingredients\n1/2 teaspoon salt\n1 tablespoon olive oil\n\nDirections\nSeason.",
+            settings=settings,
+            ingredients=ingredients,
+        )
+
+    assert mock_complete.call_count == 2
+    assert mock_complete.call_args.kwargs["model"] == settings.import_model_repair
+    assert "@salt{}(to taste)" in preview.content
+    assert "Invalid amount for @salt" not in "\n".join(preview.validation_warnings)
+
+
+def test_import_from_text_skips_quality_repair_when_clean(
+    settings: Settings, ingredients: IngredientRepository
+):
+    with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG) as mock_complete:
+        preview = import_from_text("Recipe text", settings=settings, ingredients=ingredients)
+
+    assert mock_complete.call_count == 1
+    assert preview.validation_warnings == []
 
 
 def test_import_from_text_reports_unmatched_ingredients(
