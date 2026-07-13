@@ -33,6 +33,7 @@ import {
   type MappingRow,
   type PendingImport,
 } from './importMapping'
+import { scheduleMappingDensityAutofill } from './importRecipeFlow'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { parseQuantity } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
@@ -580,16 +581,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setServings(clampServings(getNumber(metadata.servings) || getNumber(metadata.serves) || 1))
     setImage(getString(metadata.image) || getString(metadata.picture))
     setSource(getString(metadata.source))
-    const nextPrep =
-      getString(metadata['prep time']) || getString(metadata['time.prep']) || ''
-    const nextCook =
-      getString(metadata['cook time']) || getString(metadata['time.cook']) || ''
+    const nextPrep = getString(metadata['prep time']) || getString(metadata['time.prep']) || ''
+    const nextCook = getString(metadata['cook time']) || getString(metadata['time.cook']) || ''
     setPrepTime(nextPrep)
     setCookTime(nextCook)
     setTime(
-      nextPrep || nextCook
-        ? ''
-        : getString(metadata.time) || getString(metadata.duration) || ''
+      nextPrep || nextCook ? '' : getString(metadata.time) || getString(metadata.duration) || ''
     )
     setDescription(getString(metadata.description) || getString(metadata.introduction))
     setBookmarked(getBoolean(metadata.bookmarked))
@@ -701,6 +698,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setPendingImport({ body: nextBody, metadata, ...options })
     setMappingRows(rows)
     setMappingOpen(true)
+    scheduleMappingDensityAutofill(rows, catalog, setMappingRows)
   }
 
   function updateMappingRow(index: number, patch: Partial<MappingRow>) {

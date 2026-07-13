@@ -80,3 +80,58 @@ def test_ingredient_catalog_seed_and_crud(tmp_path, monkeypatch):
 
         deleted = client.delete("/api/ingredients/rye%20flour")
         assert deleted.status_code == 204
+
+
+def test_estimate_density_requires_auth(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_BASE_URL", "http://testserver")
+    monkeypatch.setenv("COOKIE_SECURE", "false")
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("RECIPE_EDITOR_PASSWORD", "secret")
+    monkeypatch.setenv("RECIPE_EDITOR_USERNAME", "editor")
+    monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
+
+    from app.config import get_settings
+    from app.main import app
+
+    get_settings.cache_clear()
+
+    with TestClient(app) as client:
+        denied = client.post(
+            "/api/ingredients/estimate-density",
+            json={"names": ["rye flour"]},
+        )
+        assert denied.status_code == 401
+
+
+def test_estimate_density_returns_estimates(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_BASE_URL", "http://testserver")
+    monkeypatch.setenv("COOKIE_SECURE", "false")
+    monkeypatch.setenv("DATA_ROOT", str(tmp_path))
+    monkeypatch.setenv("RECIPE_EDITOR_PASSWORD", "secret")
+    monkeypatch.setenv("RECIPE_EDITOR_USERNAME", "editor")
+    monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
+
+    from app.config import get_settings
+    from app.main import app
+    from app.models import DensityEstimate
+
+    get_settings.cache_clear()
+
+    def fake_estimate(*, settings, names):
+        assert names == ["rye flour"]
+        return [DensityEstimate(name="rye flour", density_kg_m3=500)]
+
+    monkeypatch.setattr("app.main.estimate_ingredient_densities", fake_estimate)
+
+    with TestClient(app) as client:
+        login = client.post("/api/auth/login", json={"password": "secret", "username": "editor"})
+        assert login.status_code == 200
+
+        response = client.post(
+            "/api/ingredients/estimate-density",
+            json={"names": ["rye flour"]},
+        )
+        assert response.status_code == 200
+        assert response.json() == {
+            "estimates": [{"name": "rye flour", "density_kg_m3": 500.0}]
+        }

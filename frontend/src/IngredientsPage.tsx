@@ -4,7 +4,12 @@ import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { deleteIngredient, getIngredientCatalog, upsertIngredient } from './api'
+import {
+  deleteIngredient,
+  estimateIngredientDensities,
+  getIngredientCatalog,
+  upsertIngredient,
+} from './api'
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
 import { DensitySearchLink } from './components/DensitySearchLink'
@@ -204,6 +209,9 @@ export function IngredientsPage() {
             <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Name</span>
             <input
               className={`${inputClassName} mt-1`}
+              onBlur={() => {
+                void estimateDensityFromName()
+              }}
               onChange={event => setName(event.target.value)}
               required
               value={name}
@@ -293,6 +301,26 @@ export function IngredientsPage() {
   function closeDialog() {
     setDialogOpen(false)
     setEditing(null)
+  }
+
+  async function estimateDensityFromName() {
+    if (editing || density.trim()) {
+      return
+    }
+    const ingredientName = name.trim()
+    if (!ingredientName) {
+      return
+    }
+    try {
+      const [estimate] = await estimateIngredientDensities([ingredientName])
+      const value = estimate?.density_kg_m3
+      if (value == null || value <= 0) {
+        return
+      }
+      setDensity(current => (current.trim() ? current : String(Math.round(value))))
+    } catch {
+      // Leave blank; search icon still available.
+    }
   }
 
   function handleDelete() {

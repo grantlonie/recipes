@@ -6,9 +6,11 @@ import {
   uploadRecipeSource,
 } from './api'
 import {
+  autofillMappingDensities,
   buildMappingRows,
   parseImportedDocument,
   renderImportDocument,
+  type MappingRow,
   type PendingImport,
 } from './importMapping'
 import { ensureUniqueSlug, findRecipeBySourceUrl, formatImportError } from './shareImport'
@@ -20,7 +22,7 @@ export type RecipeImportResult =
   | { kind: 'preview'; preview: ImportPreview; sourceFile?: File }
 
 export interface PreparedImportMapping {
-  mappingRows: ReturnType<typeof buildMappingRows>
+  mappingRows: MappingRow[]
   pendingImport: PendingImport
   preview: ImportPreview
   sourceFile?: File
@@ -63,6 +65,36 @@ export function prepareImportMapping(
     },
     preview,
   }
+}
+
+export function scheduleMappingDensityAutofill(
+  rows: MappingRow[],
+  catalog: CatalogIngredient[],
+  setRows: (updater: (current: MappingRow[]) => MappingRow[]) => void
+) {
+  void autofillMappingDensities(rows, catalog).then(filled => {
+    const byKey = new Map(
+      filled.map(row => [
+        `${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`,
+        row.createDensity,
+      ])
+    )
+    setRows(current => {
+      let changed = false
+      const next = current.map(row => {
+        if (row.createDensity.trim()) {
+          return row
+        }
+        const density = byKey.get(`${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`)
+        if (!density?.trim()) {
+          return row
+        }
+        changed = true
+        return { ...row, createDensity: density }
+      })
+      return changed ? next : current
+    })
+  })
 }
 
 export async function finalizeImportedRecipe(

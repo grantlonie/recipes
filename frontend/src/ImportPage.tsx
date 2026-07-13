@@ -14,6 +14,7 @@ import {
   finalizeImportedRecipe,
   persistImportedRecipe,
   prepareImportMapping,
+  scheduleMappingDensityAutofill,
 } from './importRecipeFlow'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
@@ -144,6 +145,7 @@ export function ImportPage() {
       setPendingImport(prepared.pendingImport)
       setMappingRows(prepared.mappingRows)
       setMappingOpen(true)
+      scheduleMappingDensityAutofill(prepared.mappingRows, catalog, setMappingRows)
     },
   })
 

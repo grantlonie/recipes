@@ -18,6 +18,7 @@ import {
   type BulkUnmatchedRow,
 } from '../bulkImport'
 import {
+  autofillMappingDensities,
   isMappingRowValid,
   mappingRowDensityValid,
   mappingRowNeedsCreate,
@@ -66,6 +67,7 @@ export function BulkImportDialog({
   const existingIndexRef = useRef<BulkExistingIndex | null>(null)
   const usedSlugsRef = useRef(new Set<string>())
   const syncNeededRef = useRef(false)
+  const densityAttemptedRef = useRef(new Set<string>())
 
   useEffect(() => {
     catalogRef.current = catalog
@@ -85,6 +87,7 @@ export function BulkImportDialog({
       existingIndexRef.current = null
       usedSlugsRef.current = new Set()
       syncNeededRef.current = false
+      densityAttemptedRef.current = new Set()
     }
     return () => {
       activeRef.current = false
@@ -143,6 +146,38 @@ export function BulkImportDialog({
   useEffect(() => {
     setQueueRows(current => mergeUnmatchedQueue(current, buildBulkUnmatchedQueue(items, catalog)))
   }, [items, catalog])
+
+  useEffect(() => {
+    if (!open || queueRows.length === 0) {
+      return
+    }
+    let cancelled = false
+    void autofillMappingDensities(queueRows, catalog, {
+      attempted: densityAttemptedRef.current,
+    }).then(filled => {
+      if (cancelled) {
+        return
+      }
+      setQueueRows(current => {
+        let changed = false
+        const next = current.map(row => {
+          const key = `${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`
+          const match = filled.find(
+            item => `${item.originalName.toLowerCase()}|${item.unit.toLowerCase()}` === key
+          )
+          if (!match || row.createDensity.trim() || !match.createDensity.trim()) {
+            return row
+          }
+          changed = true
+          return { ...row, createDensity: match.createDensity }
+        })
+        return changed ? next : current
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [catalog, open, queueRows])
 
   useEffect(() => {
     if (!open || savingRef.current) {

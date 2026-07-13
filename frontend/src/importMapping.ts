@@ -1,4 +1,4 @@
-import { getIngredientCatalog, upsertIngredient } from './api'
+import { estimateIngredientDensities, getIngredientCatalog, upsertIngredient } from './api'
 import {
   extractTokens,
   ingredientToPlainText,
@@ -86,6 +86,60 @@ export function buildMappingRows(
         unit: normalizeUnit(token.unit) ?? token.unit,
       }
     })
+}
+
+export async function autofillMappingDensities<T extends MappingRow>(
+  rows: T[],
+  catalog: CatalogIngredient[],
+  options: { attempted?: Set<string> } = {}
+): Promise<T[]> {
+  const attempted = options.attempted
+  const names: string[] = []
+  for (const row of rows) {
+    if (row.excluded || row.createDensity.trim() || !mappingRowNeedsCreate(row, catalog)) {
+      continue
+    }
+    const name = row.catalogName.trim() || row.originalName
+    const key = name.toLowerCase()
+    if (!name || attempted?.has(key)) {
+      continue
+    }
+    names.push(name)
+    attempted?.add(key)
+  }
+  if (!names.length) {
+    return rows
+  }
+
+  try {
+    const estimates = await estimateIngredientDensities(names)
+    return applyDensityEstimates(rows, estimates)
+  } catch {
+    return rows
+  }
+}
+
+export function applyDensityEstimates<T extends MappingRow>(
+  rows: T[],
+  estimates: Array<{ name: string; density_kg_m3?: number | null }>
+): T[] {
+  if (!estimates.length) {
+    return rows
+  }
+  const byName = new Map(
+    estimates.map(estimate => [estimate.name.toLowerCase(), estimate.density_kg_m3])
+  )
+  return rows.map(row => {
+    if (row.excluded || row.createDensity.trim()) {
+      return row
+    }
+    const name = (row.catalogName.trim() || row.originalName).toLowerCase()
+    const density = byName.get(name)
+    if (density == null || Number.isNaN(density) || density <= 0) {
+      return row
+    }
+    return { ...row, createDensity: String(Math.round(density)) }
+  })
 }
 
 export function mappingRowNeedsCreate(row: MappingRow, ingredients: CatalogIngredient[]): boolean {

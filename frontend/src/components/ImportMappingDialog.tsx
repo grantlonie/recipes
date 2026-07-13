@@ -55,7 +55,8 @@ export function ImportMappingDialog({
       </h2>
       <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
         Ingredients not in your catalog are highlighted and will be created on apply. Match others
-        to existing entries; extra wording is saved as details.
+        to existing entries; extra wording is saved as details. Densities for new ingredients are
+        estimated automatically when possible.
       </p>
       <div className="mt-4 max-h-96 space-y-4 overflow-y-auto">
         {rows.map((row, index) => {

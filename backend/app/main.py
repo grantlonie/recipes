@@ -17,6 +17,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app import auth
 from app.config import Settings, get_settings
+from app.density_estimate import estimate_ingredient_densities
+from app.fireworks_llm import LLMError
 from app.importer import ImportError, import_from_slug_file, import_from_upload, import_from_url
 from app.ingredients import IngredientRepository, IngredientStorageError
 from app.manifest import build_web_manifest
@@ -24,6 +26,8 @@ from app.models import (
     AssetUploadResponse,
     AuthState,
     CatalogIngredient,
+    DensityEstimateRequest,
+    DensityEstimateResponse,
     ImportFileRequest,
     ImportPreview,
     ImportRequest,
@@ -157,6 +161,18 @@ def upsert_ingredient(
         return ingredients.upsert(payload)
     except IngredientStorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@app.post("/api/ingredients/estimate-density", dependencies=[Depends(auth.require_editor)])
+def estimate_ingredient_density(
+    payload: DensityEstimateRequest,
+    settings: Settings = Depends(get_settings_dep),
+) -> DensityEstimateResponse:
+    try:
+        estimates = estimate_ingredient_densities(settings=settings, names=payload.names)
+    except LLMError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    return DensityEstimateResponse(estimates=estimates)
 
 
 @app.delete(

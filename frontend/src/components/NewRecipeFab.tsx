@@ -28,6 +28,7 @@ import {
   importRecipeFromUrl,
   persistImportedRecipe,
   prepareImportMapping,
+  scheduleMappingDensityAutofill,
   type RecipeImportResult,
 } from '../importRecipeFlow'
 import { buildLoginUrl } from '../shareImport'
@@ -146,6 +147,7 @@ export function NewRecipeFab() {
     setPendingImport(prepared.pendingImport)
     setMappingRows(prepared.mappingRows)
     setMappingOpen(true)
+    scheduleMappingDensityAutofill(prepared.mappingRows, catalog, setMappingRows)
   }
 
   async function applyMapping() {

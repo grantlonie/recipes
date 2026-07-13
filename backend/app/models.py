@@ -23,6 +23,19 @@ class IngredientCatalog(BaseModel):
     ingredients: list[CatalogIngredient] = Field(default_factory=list)
 
 
+class DensityEstimateRequest(BaseModel):
+    names: list[str] = Field(default_factory=list)
+
+
+class DensityEstimate(BaseModel):
+    name: str
+    density_kg_m3: float | None = None
+
+
+class DensityEstimateResponse(BaseModel):
+    estimates: list[DensityEstimate] = Field(default_factory=list)
+
+
 class RecipeSection(BaseModel):
     kind: str = "section"
     title: str

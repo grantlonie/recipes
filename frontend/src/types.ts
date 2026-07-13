@@ -25,6 +25,11 @@ export interface IngredientCatalog {
   ingredients: CatalogIngredient[]
 }
 
+export interface DensityEstimate {
+  name: string
+  density_kg_m3?: number | null
+}
+
 export interface RecipeSummary {
   bookmarked: boolean
   cook_time?: string | null

@@ -2,6 +2,7 @@ import type {
   AssetUploadResponse,
   AuthState,
   CatalogIngredient,
+  DensityEstimate,
   ImportPreview,
   IngredientCatalog,
   RecipeDetail,
@@ -68,6 +69,21 @@ export async function upsertIngredient(ingredient: CatalogIngredient): Promise<C
     body: JSON.stringify(ingredient),
     method: 'PUT',
   })
+}
+
+export async function estimateIngredientDensities(names: string[]): Promise<DensityEstimate[]> {
+  const cleaned = [...new Set(names.map(name => name.trim()).filter(Boolean))]
+  if (!cleaned.length) {
+    return []
+  }
+  const response = await request<{ estimates: DensityEstimate[] }>(
+    '/api/ingredients/estimate-density',
+    {
+      body: JSON.stringify({ names: cleaned }),
+      method: 'POST',
+    }
+  )
+  return response.estimates ?? []
 }
 
 export async function deleteIngredient(name: string): Promise<void> {
