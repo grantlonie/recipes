@@ -214,6 +214,7 @@ export function RecipePage() {
   }
 
   const blocks = getRecipeBlocks(recipe)
+  const introNotes = descriptionNotes(recipe)
   const sourceHref = resolveSourceHref(recipe)
 
   return (
@@ -420,11 +421,11 @@ export function RecipePage() {
         </aside>
 
         <div className="space-y-6">
-          {recipe.notes.length ? (
+          {introNotes.length ? (
             <section className={panelClassName}>
               <h2 className="text-lg font-semibold">Notes</h2>
               <div className="mt-3 space-y-3 text-stone-700 dark:text-stone-300">
-                {recipe.notes.map(note => (
+                {introNotes.map(note => (
                   <ExpandableNote key={note} text={note} />
                 ))}
               </div>
@@ -443,6 +444,17 @@ export function RecipePage() {
                     >
                       {block.title}
                     </h3>
+                  )
+                }
+
+                if (block.kind === 'note') {
+                  return (
+                    <p
+                      className="px-1 text-sm italic text-stone-600 dark:text-stone-400"
+                      key={`note-${index}`}
+                    >
+                      {block.text}
+                    </p>
                   )
                 }
 
@@ -598,6 +610,17 @@ function ScalePopover({ onChange, value }: ScalePopoverProps) {
 
 interface ExpandableNoteProps {
   text: string
+}
+
+function descriptionNotes(recipe: { metadata?: Record<string, unknown> }): string[] {
+  const notes: string[] = []
+  for (const key of ['description', 'introduction'] as const) {
+    const value = recipe.metadata?.[key]
+    if (typeof value === 'string' && value.trim()) {
+      notes.push(value.trim())
+    }
+  }
+  return notes
 }
 
 function ExpandableNote({ text }: ExpandableNoteProps) {

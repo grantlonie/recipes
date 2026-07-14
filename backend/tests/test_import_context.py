@@ -29,6 +29,14 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "divided" in prompt
     assert "@powdered sugar{}" in prompt
     assert "when the source says 1 tbsp fennel seeds" in prompt
+    assert "Author tips, variants, omit-if advice" in prompt
+    assert "Cooklang note lines" in prompt
+    assert "Use front-matter `description` for introductory blurb" in prompt
+    assert "description: Hearty weeknight chili with kidney beans." in prompt
+    assert "> If using juice instead of beer, add a packet of active dry yeast." in prompt
+    assert "> Soft crust: mix melted butter into the batter instead of pouring it over the top." in prompt
+    assert "> Leftovers keep 3 days refrigerated." in prompt
+    assert "@pecans{0.5%cup}(optional)" in prompt
 
 
 def test_truncate_source_text_limits_length():
@@ -103,12 +111,13 @@ Add 1 Tbsp sambal oelek and oil the baking pan{1}.
     assert result.needs_repair
 
 
-def test_validate_allows_plain_fat_and_pasta_water_amounts():
+def test_validate_allows_plain_byproduct_amounts():
     content = """---
 title: Test
 ---
 
 Drain all but 2 tablespoons of the fat. Reserve 0.5 cup of pasta water.
+Ladle about 0.25 cup of gravy over the roast.
 """
     result = validate_imported_cooklang(content)
     assert result.warnings == []

@@ -15,6 +15,7 @@ export interface RecipeBodyEditorHandle {
   deleteIngredient: (pos: number) => void
   focus: () => void
   insertIngredient: (attrs: IngredientAttrs) => void
+  insertNote: () => void
   insertSection: (title: string) => void
   updateIngredient: (pos: number, attrs: IngredientAttrs) => void
   updateSection: (pos: number, title: string) => void
@@ -147,6 +148,16 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
               { type: 'ingredient', attrs },
               { type: 'text', text: ' ' },
             ])
+            .run()
+        },
+        insertNote() {
+          if (!editor) {
+            return
+          }
+          editor
+            .chain()
+            .focus()
+            .insertContent({ type: 'cookNote', content: [{ type: 'text', text: '' }] })
             .run()
         },
         insertSection(title) {

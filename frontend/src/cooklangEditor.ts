@@ -23,11 +23,17 @@ export function serializeCooklangBody(doc: JSONContent): string {
 export function parseRecipeBlocks(body: string): RecipeBlock[] {
   const blocks: RecipeBlock[] = []
   for (const block of body.trim().split(/\n\s*\n/)) {
-    const lines = block.split('\n').filter(line => !line.trimStart().startsWith('>'))
+    const lines = block.split('\n')
     let index = 0
     while (index < lines.length) {
       const stripped = lines[index].trim()
       if (!stripped) {
+        index += 1
+        continue
+      }
+      const noteMatch = stripped.match(NOTE_LINE_RE)
+      if (noteMatch) {
+        blocks.push({ kind: 'note', text: noteMatch[1].trim() })
         index += 1
         continue
       }
@@ -44,7 +50,7 @@ export function parseRecipeBlocks(body: string): RecipeBlock[] {
           index += 1
           continue
         }
-        if (SECTION_LINE_RE.test(line)) {
+        if (SECTION_LINE_RE.test(line) || NOTE_LINE_RE.test(line)) {
           break
         }
         stepLines.push(lines[index])

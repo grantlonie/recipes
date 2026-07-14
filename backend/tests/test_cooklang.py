@@ -86,6 +86,22 @@ def test_parse_blocks_section_and_step_in_same_paragraph():
     assert blocks[1].text == "Simmer @tomatoes{2%cup}."
 
 
+def test_parse_blocks_keeps_inline_notes():
+    blocks = parse_blocks(
+        """Pour butter over the batter.
+
+> Soft crust: mix butter into the batter.
+> If not using beer, add yeast.
+
+Bake for ~{1%hour}."""
+    )
+
+    assert [block.kind for block in blocks] == ["step", "note", "note", "step"]
+    assert blocks[1].text == "Soft crust: mix butter into the batter."
+    assert blocks[2].text == "If not using beer, add yeast."
+    assert blocks[3].text == "Bake for ~{1%hour}."
+
+
 def test_parse_ingredients_keeps_braced_multi_word_names_together():
     ingredients = parse_ingredients(
         "Heat @olive oil{1%Tbsp}. Add @ground lamb{1%lb} and @salt and pepper{}."

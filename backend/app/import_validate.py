@@ -34,8 +34,9 @@ _SKIP_SOURCE_LINE_RE = re.compile(
     r"nutrition|related|per serving)\b|^\*"
 )
 _PLAIN_AMOUNT_ALLOW_RE = re.compile(
-    r"(?i)\b(?:of the fat|of fat|pasta water|of (?:this|the) (?:mixture|liquid|dough|"
-    r"sauce|batter|syrup|water)|all but)\b"
+    r"(?i)\b(?:of the fat|of fat|pasta water|of gravy|drippings?|pan juices?|"
+    r"cooking (?:liquid|juices?)|of (?:this|the) (?:mixture|liquid|dough|"
+    r"sauce|batter|syrup|water|gravy)|all but)\b"
 )
 _UNIT_WORDS = frozenset(
     {

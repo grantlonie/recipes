@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from app.models import Ingredient, RecipeSection, RecipeStep
+from app.models import Ingredient, RecipeNote, RecipeSection, RecipeStep
 from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
@@ -202,14 +202,19 @@ def parse_notes(metadata: dict[str, Any], body: str) -> list[str]:
     return notes
 
 
-def parse_blocks(body: str) -> list[RecipeSection | RecipeStep]:
-    blocks: list[RecipeSection | RecipeStep] = []
+def parse_blocks(body: str) -> list[RecipeNote | RecipeSection | RecipeStep]:
+    blocks: list[RecipeNote | RecipeSection | RecipeStep] = []
     for block in re.split(r"\n\s*\n", body.strip()):
-        lines = [line for line in block.splitlines() if not line.lstrip().startswith(">")]
+        lines = block.splitlines()
         index = 0
         while index < len(lines):
             stripped = lines[index].strip()
             if not stripped:
+                index += 1
+                continue
+            note_match = NOTE_RE.match(stripped)
+            if note_match:
+                blocks.append(RecipeNote(text=note_match.group("note").strip()))
                 index += 1
                 continue
             section_match = SECTION_LINE_RE.match(stripped)
@@ -223,7 +228,7 @@ def parse_blocks(body: str) -> list[RecipeSection | RecipeStep]:
                 if not line:
                     index += 1
                     continue
-                if SECTION_LINE_RE.match(line):
+                if SECTION_LINE_RE.match(line) or NOTE_RE.match(line):
                     break
                 step_lines.append(lines[index])
                 index += 1
@@ -540,16 +545,16 @@ def rebuild_amount(
 
 
 def scale_blocks(
-    blocks: list[RecipeSection | RecipeStep],
+    blocks: list[RecipeNote | RecipeSection | RecipeStep],
     scale: float | None = None,
     servings: float = 1,
-) -> list[RecipeSection | RecipeStep]:
+) -> list[RecipeNote | RecipeSection | RecipeStep]:
     if scale is None:
         return blocks
     factor = scale / servings
-    scaled: list[RecipeSection | RecipeStep] = []
+    scaled: list[RecipeNote | RecipeSection | RecipeStep] = []
     for block in blocks:
-        if isinstance(block, RecipeSection):
+        if isinstance(block, (RecipeNote, RecipeSection)):
             scaled.append(block)
         else:
             scaled.append(RecipeStep(text=scale_step_ingredients(block.text, factor)))

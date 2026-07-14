@@ -11,6 +11,43 @@ def test_match_catalog_ingredient_matches_aliases():
     match = match_catalog_ingredient("extra virgin olive oil", catalog)
     assert match.catalog is not None
     assert match.catalog.name == "olive oil"
+    assert match.note == "extra virgin"
+
+
+def test_match_catalog_ingredient_preserves_alias_variety_as_note():
+    catalog = [
+        CatalogIngredient(
+            name="vinegar",
+            aliases=[
+                "white vinegar",
+                "apple cider vinegar",
+                "red wine vinegar",
+                "balsamic vinegar",
+            ],
+        ),
+        CatalogIngredient(name="black pepper", aliases=["pepper", "ground black pepper"]),
+        CatalogIngredient(name="olive oil", aliases=["extra virgin olive oil", "evoo"]),
+    ]
+    balsamic = match_catalog_ingredient("balsamic vinegar", catalog)
+    assert balsamic.catalog is not None
+    assert balsamic.catalog.name == "vinegar"
+    assert balsamic.note == "balsamic"
+
+    cider = match_catalog_ingredient("apple cider vinegar", catalog)
+    assert cider.catalog is not None
+    assert cider.catalog.name == "vinegar"
+    assert cider.note == "apple cider"
+
+    # Short alias expands to canonical name — no leftover note.
+    pepper = match_catalog_ingredient("pepper", catalog)
+    assert pepper.catalog is not None
+    assert pepper.catalog.name == "black pepper"
+    assert pepper.note == ""
+
+    evoo = match_catalog_ingredient("evoo", catalog)
+    assert evoo.catalog is not None
+    assert evoo.catalog.name == "olive oil"
+    assert evoo.note == ""
 
 
 def test_match_catalog_ingredient_matches_singular_and_plural():
@@ -93,7 +130,16 @@ def test_match_rejects_substance_changing_partial_hits():
             name="black pepper",
             aliases=["pepper", "ground black pepper"],
         ),
-        CatalogIngredient(name="green bell pepper", aliases=["bell pepper", "green pepper"]),
+        CatalogIngredient(
+            name="green bell pepper",
+            aliases=[
+                "bell pepper",
+                "green pepper",
+                "italian frying pepper",
+                "cubanelle pepper",
+            ],
+        ),
+        CatalogIngredient(name="ground beef", aliases=["beef", "minced beef"]),
         CatalogIngredient(name="vanilla extract", aliases=["vanilla"]),
         CatalogIngredient(name="vanilla bean", aliases=["vanilla pod"]),
         CatalogIngredient(name="milk", aliases=["whole milk"]),
@@ -106,6 +152,15 @@ def test_match_rejects_substance_changing_partial_hits():
     bell = match_catalog_ingredient("green bell pepper", catalog)
     assert bell.catalog is not None
     assert bell.catalog.name == "green bell pepper"
+
+    frying = match_catalog_ingredient("italian frying pepper", catalog)
+    assert frying.catalog is not None
+    assert frying.catalog.name == "green bell pepper"
+
+    # Expanding short aliases must not swallow vegetable/cut varieties.
+    assert match_catalog_ingredient("cubanelle pepper", catalog).catalog.name == "green bell pepper"
+    assert match_catalog_ingredient("anaheim pepper", catalog).catalog is None
+    assert match_catalog_ingredient("roast beef", catalog).catalog is None
 
     assert match_catalog_ingredient("vanilla bean", catalog).catalog.name == "vanilla bean"
     assert (
@@ -147,10 +202,18 @@ def test_apply_catalog_mapping_does_not_corrupt_bell_pepper(tmp_path):
         CatalogIngredient(name="black pepper", aliases=["pepper", "ground black pepper"])
     )
     repository.upsert(
-        CatalogIngredient(name="green bell pepper", aliases=["bell pepper", "green pepper"])
+        CatalogIngredient(
+            name="green bell pepper",
+            aliases=["bell pepper", "green pepper", "italian frying pepper"],
+        )
     )
 
     body = "Add @green bell pepper{1}(diced)."
     mapped, unmatched = apply_catalog_mapping(body, repository)
     assert "@green bell pepper{1}(diced)" in mapped
     assert unmatched == []
+
+    frying_body = "Add @italian frying pepper{1}(cored and seeded)."
+    frying_mapped, frying_unmatched = apply_catalog_mapping(frying_body, repository)
+    assert "@green bell pepper{1}(italian frying, cored and seeded)" in frying_mapped
+    assert frying_unmatched == []

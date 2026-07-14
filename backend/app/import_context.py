@@ -43,16 +43,30 @@ Output rules:
   including aromatics like garlic and scallions/green onions when listed.
   Do not leave measured amounts as plain text (wrong: 1 Tbsp sambal oelek;
   right: @sambal oelek{{1%Tbsp}}).
-- Reserved cooking liquids that are measured in the steps should be tagged when useful,
-  e.g. @pasta water{{0.5%cup}}(reserved). Leftover fat can stay plain text
-  ("drain all but 2 tablespoons of the fat").
+- Do not tag cooking byproducts as ingredients. Pan gravy, drippings, pasta water,
+  reserved cooking liquid, and leftover fat are process notes, not shopping items —
+  leave measured amounts as plain text (e.g. "ladle 1/4–1/2 cup of gravy",
+  "reserve 1/2 cup pasta water", "drain all but 2 tablespoons of the fat").
+- Author tips, variants, omit-if advice, and "UPDATED NOTES" go on Cooklang note lines
+  starting with `>` (not as numbered/cook steps). Keep each note concise (1-2 sentences).
+  Place each `>` note next to the steps it relates to (inline with the body).
+  Do not copy thank-yous, review replies, or filler commentary.
+  Example: `> Soft crust: mix melted butter into the batter instead of pouring it over.`
+- Use front-matter `description` for introductory blurb/notes that should appear before
+  the steps (recipe summary). Do not put those in a leading `>` note; use `description`.
+  Detailed or step-local tips stay as `>` body notes.
+- Substitution tips and "only if you change X" add-ons are `>` notes with plain text
+  (no @ markers) when they are not on the source Ingredients list
+  (e.g. `> If not using beer, add a packet of active dry yeast.`).
+  Do tag optional ingredients that ARE listed (e.g. "1/2 cup pecans, optional" →
+  @pecans{{}}(optional)).
 - For "to taste", "as needed", "a pinch", or "a splash": use @name{{}}(to taste) or
   @name{{}}(as needed) with an EMPTY amount. Never write {{0%g}}, {{0}}, {{pinch}},
   {{splash}}, {{to taste}}, or {{as needed}}.
 - Compound tools/equipment stay plain text or #cookware: "4 (12-inch) skewers",
   not "4 pieces skewer" or "4 skewer".
-- Preserve optional and make-ahead steps from the source (overnight chill, rest times,
-  "do not serve warm", hold overnight before baking).
+- Preserve make-ahead timing from the source as steps when it is part of the cook flow
+  (overnight chill, rest times, hold overnight before baking); phrasing tips stay as `>` notes.
 - Always write tablespoon amounts as Tbsp (capital T). Source casing does not matter.
 - Do not invent ingredients or steps that are not supported by the source text.
 - Omit tags from front matter.
@@ -80,12 +94,15 @@ image: https://example.com/chili.jpg
 servings: 6
 prep time: 15 minutes
 cook time: 45 minutes
+description: Hearty weeknight chili with kidney beans.
 ---
 Brown @beef{1%lb} in #large pot{}.
 
 Add @onion{1}(diced) and @garlic{3%cloves}(minced). Cook until softened.
 
 Stir in @tomatoes{28%oz}(crushed) and @kidney beans{2%cup}. Simmer ~{30%minutes}.
+
+> Leftovers keep 3 days refrigerated.
 """
 
 NEGATIVE_EXAMPLE = """Wrong (do not do this):
@@ -93,12 +110,17 @@ Add @black pepper{1}(green bell, diced) and @vanilla extract{1}(bean).
 Season with @salt{0%g}(to taste). Oil the baking pan{1}.
 Add @fennel seeds{1%tsp} when the source says 1 tbsp fennel seeds.
 Use @granulated sugar{}(confectioners') for powdered sugar.
+If using juice instead of beer, add @instant yeast{}(dry active).
+If you prefer a softer crust, mix the butter into the batter.
 
 Right:
 Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
 Season with @salt{}(to taste). Oil the #baking pan{}.
 Add @fennel seeds{1%Tbsp} when the source says 1 tbsp fennel seeds.
 Dust with @powdered sugar{}(as needed).
+> If using juice instead of beer, add a packet of active dry yeast.
+> Soft crust: mix melted butter into the batter instead of pouring it over the top.
+Stir in @pecans{0.5%cup}(optional) when pecans are on the Ingredients list.
 """
 
 

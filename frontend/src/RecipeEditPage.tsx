@@ -392,6 +392,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
           <TabPanel active={activeTab} id="recipe">
             <div className="mb-3 flex flex-wrap justify-end gap-2">
+              <Button onClick={openAddNote} variant="secondary">
+                Add note
+              </Button>
               <Button onClick={openAddSection} variant="secondary">
                 Add section
               </Button>
@@ -736,6 +739,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setMappingOpen(false)
     setPendingImport(null)
     setActiveTab('recipe')
+  }
+
+  function openAddNote() {
+    bodyEditorRef.current?.insertNote()
   }
 
   function openAddSection() {

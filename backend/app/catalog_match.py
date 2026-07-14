@@ -126,7 +126,11 @@ def match_catalog_ingredient(imported_name: str, catalog: list[CatalogIngredient
 
     exact = _find_catalog_ingredient(trimmed, catalog)
     if exact:
-        return CatalogMatch(catalog=exact, note="")
+        item, matched_label = exact
+        return CatalogMatch(
+            catalog=item,
+            note=_note_for_exact_match(trimmed, item.name, matched_label),
+        )
 
     best: tuple[CatalogIngredient, str, str, tuple[int, int, int]] | None = None
     for item in catalog:
@@ -146,7 +150,7 @@ def match_catalog_ingredient(imported_name: str, catalog: list[CatalogIngredient
 
     item, _label, matched_form, _score = best
     note = _extract_unmatched_note(trimmed, matched_form)
-    if not _partial_match_is_safe(trimmed, matched_form, note):
+    if not _partial_match_is_safe(trimmed, matched_form, note, catalog_name=item.name):
         return CatalogMatch(catalog=None, note="")
     return CatalogMatch(catalog=item, note=note)
 
@@ -189,13 +193,58 @@ def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[
 
 def _find_catalog_ingredient(
     name: str, catalog: list[CatalogIngredient]
-) -> CatalogIngredient | None:
+) -> tuple[CatalogIngredient, str] | None:
     imported_forms = set(inflection_forms(name))
     for item in catalog:
-        label_forms = {form for label in [item.name, *item.aliases] for form in inflection_forms(label)}
-        if imported_forms & label_forms:
-            return item
+        for label in [item.name, *item.aliases]:
+            label_forms = set(inflection_forms(label))
+            if imported_forms & label_forms:
+                return item, label
     return None
+
+
+def _note_for_exact_match(imported_name: str, canonical_name: str, matched_label: str) -> str:
+    """Keep variety/modifiers when an alias collapses to a shorter catalog name.
+
+    Example: \"balsamic vinegar\" matches vinegar via alias → note \"balsamic\".
+    Pure inflections (\"egg\" → \"eggs\") and short aliases that expand
+    (\"pepper\" → \"black pepper\", \"evoo\" → \"olive oil\") stay note-free.
+    Alternate full names (\"italian frying pepper\" → \"green bell pepper\") keep
+    the variety as a note relative to the shared head noun.
+    """
+    if set(inflection_forms(imported_name)) & set(inflection_forms(canonical_name)):
+        return ""
+
+    matched_form = _matched_phrase_form(imported_name, canonical_name)
+    if matched_form is not None:
+        return _extract_unmatched_note(imported_name, matched_form)
+
+    # pepper → black pepper; ground pepper → black pepper (modifier + expanding head)
+    if _is_expanding_alias(matched_label, canonical_name):
+        return ""
+    if _is_modifier_qualified_head(matched_label, canonical_name):
+        return ""
+
+    head = normalize_ingredient_key(canonical_name).split()[-1]
+    if not head:
+        return ""
+    head_form = _matched_phrase_form(imported_name, head)
+    if head_form is None:
+        return ""
+    return _extract_unmatched_note(imported_name, head_form)
+
+
+def _is_modifier_qualified_head(matched_label: str, catalog_name: str) -> bool:
+    """True for aliases like \"ground pepper\" under \"black pepper\"."""
+    head = normalize_ingredient_key(catalog_name).split()[-1]
+    if not head:
+        return False
+    label_tokens = normalize_ingredient_key(matched_label).split()
+    if len(label_tokens) < 2:
+        return False
+    if label_tokens[-1] not in set(inflection_forms(head)):
+        return False
+    return all(token in _MODIFIER_WORDS for token in label_tokens[:-1])
 
 
 def _matched_phrase_form(haystack: str, phrase: str) -> str | None:
@@ -227,12 +276,21 @@ def _extract_unmatched_note(imported_name: str, matched_label: str) -> str:
     return ", ".join(part for part in (before, after) if part)
 
 
-def _partial_match_is_safe(imported_name: str, matched_form: str, note: str) -> bool:
+def _partial_match_is_safe(
+    imported_name: str,
+    matched_form: str,
+    note: str,
+    *,
+    catalog_name: str,
+) -> bool:
     """Reject partial matches that rewrite a different substance into a catalog item.
 
     Culinary names are usually head-noun-last (\"lemon zest\", \"yellow onion\").
     Leftover tokens that change substance (\"bell\", \"bean\", \"jam\", \"condensed\")
     mean the short catalog hit was wrong.
+
+    Expanding short aliases (\"pepper\" → \"black pepper\", \"beef\" → \"ground beef\")
+    must not absorb variety names (\"italian frying pepper\", \"roast beef\").
     """
     if not note.strip():
         return True
@@ -244,9 +302,24 @@ def _partial_match_is_safe(imported_name: str, matched_form: str, note: str) -> 
         return True
     if any(token in _SUBSTANCE_CHANGE_TOKENS for token in tokens):
         return False
+    if _is_expanding_alias(matched_form, catalog_name):
+        return False
     if _matched_phrase_is_suffix(imported_name, matched_form):
         return True
     return False
+
+
+def _is_expanding_alias(matched_form: str, catalog_name: str) -> bool:
+    """True when the matched label is a shorter alias that adds meaning.
+
+    Examples: pepper → black pepper, beef → ground beef.
+    Inflection-only pairs (onion → onions) are not expanding.
+    """
+    if set(inflection_forms(matched_form)) & set(inflection_forms(catalog_name)):
+        return False
+    matched_tokens = set(normalize_ingredient_key(matched_form).split())
+    catalog_tokens = set(normalize_ingredient_key(catalog_name).split())
+    return bool(matched_tokens) and matched_tokens < catalog_tokens
 
 
 def _matched_phrase_is_suffix(imported_name: str, matched_form: str) -> bool:

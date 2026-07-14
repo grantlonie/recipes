@@ -36,6 +36,11 @@ class DensityEstimateResponse(BaseModel):
     estimates: list[DensityEstimate] = Field(default_factory=list)
 
 
+class RecipeNote(BaseModel):
+    kind: str = "note"
+    text: str
+
+
 class RecipeSection(BaseModel):
     kind: str = "section"
     title: str
@@ -64,7 +69,7 @@ class RecipeDetail(RecipeSummary):
     ingredients: list[Ingredient] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     public_url: str
-    blocks: list[RecipeSection | RecipeStep] = Field(default_factory=list)
+    blocks: list[RecipeNote | RecipeSection | RecipeStep] = Field(default_factory=list)
     timers: list[str] = Field(default_factory=list)
 
 

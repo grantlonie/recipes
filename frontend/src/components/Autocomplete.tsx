@@ -117,17 +117,10 @@ export function Autocomplete({
             onChange(next)
           }
         }}
-        onFocus={event => {
+        onFocus={() => {
           setOpen(true)
-          event.currentTarget.select()
         }}
         onKeyDown={handleKeyDown}
-        onMouseDown={event => {
-          if (document.activeElement === event.currentTarget) {
-            event.preventDefault()
-            event.currentTarget.select()
-          }
-        }}
         placeholder={placeholder}
         ref={inputRef}
         role="combobox"
