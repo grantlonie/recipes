@@ -11,7 +11,7 @@ export function SectionChip({ getPos, node, selected }: NodeViewProps) {
   return (
     <NodeViewWrapper as="div">
       <button
-        className={`inline cursor-pointer border-0 bg-transparent p-0 text-sm font-bold uppercase tracking-wide text-orange-800 hover:underline ${
+        className={`inline cursor-pointer border-0 bg-transparent p-0 text-sm font-bold uppercase tracking-wide text-orange-800 hover:underline dark:text-orange-300 ${
           selected ? 'underline decoration-orange-400 decoration-2' : ''
         }`}
         contentEditable={false}

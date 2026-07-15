@@ -164,7 +164,7 @@ function AppShell() {
 function HomeSearchBar() {
   const { activeTags, bookmarkedOnly, query, setActiveTags, setBookmarkedOnly, setQuery } =
     useRecipeListState()
-  const { revision } = useRecipeSync()
+  const { localRevision } = useRecipeSync()
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState(query)
   const [tagsOpen, setTagsOpen] = useState(false)
@@ -192,7 +192,7 @@ function HomeSearchBar() {
     return () => {
       cancelled = true
     }
-  }, [revision])
+  }, [localRevision])
 
   return (
     <div className="mt-2">

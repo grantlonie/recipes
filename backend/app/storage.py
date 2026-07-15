@@ -197,6 +197,7 @@ class RecipeRepository:
             tags=cooklang.metadata_tags(metadata),
             timers=cooklang.parse_timers(body),
             title=title,
+            updated_at=datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat(),
         )
 
 

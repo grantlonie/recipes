@@ -89,7 +89,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { revision, sync } = useRecipeSync()
+  const { localRevision, sync } = useRecipeSync()
   const { addRecentRecipe } = useRecipeListState()
   const { unitSystem } = useUnitSystem()
   const { ingredients: catalog, refresh: refreshCatalog } = useIngredientCatalog()
@@ -161,7 +161,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       return
     }
     getLocalTags().then(setAvailableTags)
-  }, [auth.authenticated, revision])
+  }, [auth.authenticated, localRevision])
 
   const saveMutation = useMutation({
     mutationFn: async () => {

@@ -39,7 +39,7 @@ interface CompactRecipeTileProps {
 }
 
 export function HomePage({ isVisible }: HomePageProps) {
-  const { revision, status, sync } = useRecipeSync()
+  const { localRevision, notifyLocalChange, status, sync } = useRecipeSync()
   const { activeTags, bookmarkedOnly, query, recentRecipes, scrollTop, setScrollTop } =
     useRecipeListState()
   const scrollRestoringRef = useRef(false)
@@ -53,7 +53,7 @@ export function HomePage({ isVisible }: HomePageProps) {
       updateRecipeMetadata(slug, { bookmarked: !bookmarked }),
     onSuccess: async recipe => {
       await storeRecipe(recipe)
-      await sync()
+      notifyLocalChange()
       setSummaries(current =>
         current.map(summary => (summary.slug === recipe.slug ? summaryFromDetail(recipe) : summary))
       )
@@ -107,7 +107,7 @@ export function HomePage({ isVisible }: HomePageProps) {
     return () => {
       cancelled = true
     }
-  }, [revision])
+  }, [localRevision])
 
   useLayoutEffect(() => {
     if (!isVisible) {

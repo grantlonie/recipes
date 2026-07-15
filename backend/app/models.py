@@ -71,6 +71,7 @@ class RecipeDetail(RecipeSummary):
     public_url: str
     blocks: list[RecipeNote | RecipeSection | RecipeStep] = Field(default_factory=list)
     timers: list[str] = Field(default_factory=list)
+    updated_at: str | None = None
 
 
 class RecipeWrite(BaseModel):

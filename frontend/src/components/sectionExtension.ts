@@ -37,7 +37,7 @@ export const SectionExtension = Node.create({
       'div',
       mergeAttributes(
         {
-          class: 'text-sm font-bold uppercase tracking-wide text-orange-800',
+          class: 'text-sm font-bold uppercase tracking-wide text-orange-800 dark:text-orange-300',
           'data-cooklang-section': '',
         },
         HTMLAttributes

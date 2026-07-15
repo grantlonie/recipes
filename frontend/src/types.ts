@@ -55,6 +55,7 @@ export interface RecipeDetail extends RecipeSummary {
   public_url: string
   blocks?: RecipeBlock[]
   timers: string[]
+  updated_at?: string | null
 }
 
 export interface SearchResult {

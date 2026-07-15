@@ -79,7 +79,7 @@ export function RecipePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { addRecentRecipe, removeRecentRecipe } = useRecipeListState()
-  const { revision, sync } = useRecipeSync()
+  const { notifyLocalChange, revision, sync } = useRecipeSync()
   const { unitSystem } = useUnitSystem()
   const { ingredients: catalog } = useIngredientCatalog()
   const { setTitle, setTitleInHeader } = useRecipeDetailHeader()
@@ -108,7 +108,7 @@ export function RecipePage() {
     onSuccess: async recipe => {
       queryClient.setQueryData(['recipe', slug], recipe)
       await storeRecipe(recipe)
-      await sync()
+      notifyLocalChange()
     },
   })
   const deleteMutation = useMutation({
@@ -434,7 +434,7 @@ export function RecipePage() {
                 if (block.kind === 'section') {
                   return (
                     <h3
-                      className="pt-1 text-sm font-bold uppercase tracking-wide text-orange-800"
+                      className="pt-1 text-sm font-bold uppercase tracking-wide text-orange-800 dark:text-orange-300"
                       key={`section-${index}`}
                     >
                       {block.title}
@@ -465,7 +465,7 @@ export function RecipePage() {
                     key={`step-${index}`}
                   >
                     <label
-                      className={`flex cursor-pointer items-center gap-3 text-sm font-semibold text-orange-700 ${
+                      className={`flex cursor-pointer items-center gap-3 text-sm font-semibold text-orange-700 dark:text-orange-300 ${
                         completed ? '' : 'mb-2'
                       }`}
                       htmlFor={checkboxId}
