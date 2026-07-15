@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { isEqual } from 'lodash-es'
 import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { isEqual } from 'lodash-es'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import {
@@ -24,8 +24,9 @@ import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/Reci
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { VolumeQuantitySelect } from './components/VolumeQuantitySelect'
+import type { CookwareAttrs } from './cooklangCookware'
+import { timerUnitSelectValue, type TimerAttrs, type TimerUnit } from './cooklangTimers'
 import type { IngredientAttrs } from './cooklangTokens'
-import { type TimerAttrs, type TimerUnit, timerUnitSelectValue } from './cooklangTimers'
 import { deleteRecipes, getLocalRecipe, getLocalTags } from './db'
 import {
   applyImportMapping,
@@ -73,6 +74,10 @@ interface TimerFormState {
   unit: TimerUnit
 }
 
+interface CookwareFormState {
+  name: string
+}
+
 interface RecipeEditPageProps {
   mode: 'edit' | 'new'
 }
@@ -108,6 +113,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [editingTimerPos, setEditingTimerPos] = useState<number | null>(null)
   const [timerInitial, setTimerInitial] = useState<TimerFormState>(emptyTimerForm)
   const [timerDraft, setTimerDraft] = useState<TimerFormState>(emptyTimerForm)
+  const [cookwareDialogOpen, setCookwareDialogOpen] = useState(false)
+  const [editingCookwarePos, setEditingCookwarePos] = useState<number | null>(null)
+  const [cookwareInitial, setCookwareInitial] = useState<CookwareFormState>(emptyCookwareForm)
+  const [cookwareDraft, setCookwareDraft] = useState<CookwareFormState>(emptyCookwareForm)
   const [mappingOpen, setMappingOpen] = useState(false)
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -145,6 +154,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   )
   const ingredientDirty = editingPos !== null && !isEqual(ingredientInitial, ingredientDraft)
   const timerDirty = editingTimerPos !== null && !isEqual(timerInitial, timerDraft)
+  const cookwareDirty = editingCookwarePos !== null && !isEqual(cookwareInitial, cookwareDraft)
 
   useEffect(() => {
     if (!auth.authenticated) {
@@ -246,6 +256,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setTimerDialogOpen(true)
   }, [])
 
+  const handleEditCookware = useCallback((pos: number, attrs: CookwareAttrs) => {
+    const snapshot = cookwareFormFromAttrs(attrs)
+    setEditingCookwarePos(pos)
+    setCookwareInitial(snapshot)
+    setCookwareDraft(snapshot)
+    setCookwareDialogOpen(true)
+  }, [])
+
   if (!auth.authenticated) {
     return (
       <section className={`mx-auto max-w-md ${cardClassName}`}>
@@ -281,7 +299,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
   return (
     <section className="space-y-6">
-      <div className={cardClassName}>
+      <div className={`${cardClassName} p-3! sm:p-6!`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wide text-orange-700">
@@ -413,23 +431,24 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </TabPanel>
 
           <TabPanel active={activeTab} id="recipe">
-            <div className="mb-3 flex flex-wrap justify-end gap-2">
-              <Button onClick={openAddNote} variant="secondary">
-                Add note
-              </Button>
-              <Button onClick={openAddTimer} variant="secondary">
-                Add time
-              </Button>
-              <Button onClick={openAddSection} variant="secondary">
-                Add section
-              </Button>
-              <Button onClick={openAddIngredient} variant="secondary">
-                Add ingredient
-              </Button>
+            <div className="mb-3 flex items-center justify-end gap-2">
+              <div
+                className="inline-flex overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-800 ring-1 ring-orange-200 dark:bg-stone-700 dark:text-orange-200 dark:ring-stone-600"
+                role="group"
+              >
+                <InsertSegmentButton first onClick={openAddIngredient}>
+                  ingredient
+                </InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddNote}>note</InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddTimer}>time</InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddSection}>header</InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddCookware}>cookware</InsertSegmentButton>
+              </div>
             </div>
             <RecipeBodyEditor
               catalog={catalog}
               onChange={setBody}
+              onEditCookware={handleEditCookware}
               onEditIngredient={handleEditIngredient}
               onEditSection={handleEditSection}
               onEditTimer={handleEditTimer}
@@ -635,6 +654,46 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               onClick={confirmTimerDialog}
             >
               {editingTimerPos !== null ? (timerDirty ? 'Update' : 'Done') : 'Add time'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog labelledBy="cookware-dialog-title" open={cookwareDialogOpen}>
+        <h2 className="text-xl font-bold" id="cookware-dialog-title">
+          {editingCookwarePos !== null ? 'Edit cookware' : 'Add cookware'}
+        </h2>
+        <Field className="mt-4" label="Cookware">
+          <input
+            autoFocus
+            className={inputClassName}
+            onChange={event =>
+              setCookwareDraft(current => ({ ...current, name: event.target.value }))
+            }
+            placeholder="large bowl, skillet, baking sheet…"
+            value={cookwareDraft.name}
+          />
+        </Field>
+        <div className="mt-6 flex justify-between gap-2">
+          {editingCookwarePos !== null ? (
+            <Button onClick={deleteCookwareToken} variant="danger">
+              Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            {editingCookwarePos === null || cookwareDirty ? (
+              <Button onClick={closeCookwareDialog} variant="ghost">
+                Cancel
+              </Button>
+            ) : null}
+            <Button
+              className={editingCookwarePos !== null ? 'w-[80px] justify-center' : undefined}
+              disabled={!cookwareDraft.name.trim()}
+              onClick={confirmCookwareDialog}
+            >
+              {editingCookwarePos !== null ? (cookwareDirty ? 'Update' : 'Done') : 'Add cookware'}
             </Button>
           </div>
         </div>
@@ -857,6 +916,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setSectionDialogOpen(true)
   }
 
+  function openAddCookware() {
+    const snapshot = emptyCookwareForm()
+    setEditingCookwarePos(null)
+    setCookwareInitial(snapshot)
+    setCookwareDraft(snapshot)
+    setCookwareDialogOpen(true)
+  }
+
   function openAddIngredient() {
     const snapshot = newIngredientForm(unitSystem)
     setEditingPos(null)
@@ -994,12 +1061,70 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     bodyEditorRef.current?.deleteTimer(editingTimerPos)
     closeTimerDialog()
   }
+
+  function closeCookwareDialog() {
+    setCookwareDialogOpen(false)
+    setEditingCookwarePos(null)
+    const snapshot = emptyCookwareForm()
+    setCookwareInitial(snapshot)
+    setCookwareDraft(snapshot)
+  }
+
+  function confirmCookwareDialog() {
+    if (editingCookwarePos !== null && !cookwareDirty) {
+      closeCookwareDialog()
+      return
+    }
+    saveCookwareToken()
+  }
+
+  function saveCookwareToken() {
+    const name = cookwareDraft.name.trim()
+    if (!name) {
+      return
+    }
+    const attrs: CookwareAttrs = { name }
+    if (editingCookwarePos !== null) {
+      bodyEditorRef.current?.updateCookware(editingCookwarePos, attrs)
+    } else {
+      bodyEditorRef.current?.insertCookware(attrs)
+    }
+    closeCookwareDialog()
+  }
+
+  function deleteCookwareToken() {
+    if (editingCookwarePos === null) {
+      return
+    }
+    bodyEditorRef.current?.deleteCookware(editingCookwarePos)
+    closeCookwareDialog()
+  }
 }
 
 interface FieldProps {
   children: ReactNode
   className?: string
   label: string
+}
+
+interface InsertSegmentButtonProps {
+  children: ReactNode
+  first?: boolean
+  onClick: () => void
+}
+
+function InsertSegmentButton({ children, first = false, onClick }: InsertSegmentButtonProps) {
+  return (
+    <button
+      className={`px-3 py-1.5 transition hover:bg-orange-200 dark:hover:bg-stone-600 ${
+        first ? '' : 'border-l border-orange-200 dark:border-stone-600'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  )
 }
 
 function Field({ children, className = '', label }: FieldProps) {
@@ -1150,6 +1275,14 @@ function emptyIngredientForm(): IngredientFormState {
 
 function emptyTimerForm(): TimerFormState {
   return { name: '', quantity: '', unit: 'minutes' }
+}
+
+function emptyCookwareForm(): CookwareFormState {
+  return { name: '' }
+}
+
+function cookwareFormFromAttrs(attrs: CookwareAttrs): CookwareFormState {
+  return { name: attrs.name }
 }
 
 function timerFormFromAttrs(attrs: TimerAttrs): TimerFormState {

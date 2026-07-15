@@ -3,11 +3,14 @@ import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 
+import type { CookwareAttrs } from '../cooklangCookware'
 import { parseCooklangBody, serializeCooklangBody } from '../cooklangEditor'
 import type { IngredientAttrs } from '../cooklangTokens'
 import type { TimerAttrs } from '../cooklangTimers'
 import type { CatalogIngredient, UnitSystem } from '../types'
 import { CookNoteExtension } from './cookNoteExtension'
+import { CookwareExtension } from './cookwareExtension'
+import { setCookwareDisplayState } from './cookwareDisplayStore'
 import { IngredientExtension } from './ingredientExtension'
 import { setIngredientDisplayState } from './ingredientDisplayStore'
 import { setSectionDisplayState } from './sectionDisplayStore'
@@ -16,13 +19,16 @@ import { setTimerDisplayState } from './timerDisplayStore'
 import { TimerExtension } from './timerExtension'
 
 export interface RecipeBodyEditorHandle {
+  deleteCookware: (pos: number) => void
   deleteIngredient: (pos: number) => void
   deleteTimer: (pos: number) => void
   focus: () => void
+  insertCookware: (attrs: CookwareAttrs) => void
   insertIngredient: (attrs: IngredientAttrs) => void
   insertNote: () => void
   insertSection: (title: string) => void
   insertTimer: (attrs: TimerAttrs) => void
+  updateCookware: (pos: number, attrs: CookwareAttrs) => void
   updateIngredient: (pos: number, attrs: IngredientAttrs) => void
   updateSection: (pos: number, title: string) => void
   updateTimer: (pos: number, attrs: TimerAttrs) => void
@@ -31,6 +37,7 @@ export interface RecipeBodyEditorHandle {
 interface RecipeBodyEditorProps {
   catalog: CatalogIngredient[]
   onChange: (body: string) => void
+  onEditCookware: (pos: number, attrs: CookwareAttrs) => void
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
   onEditSection: (pos: number, title: string) => void
   onEditTimer: (pos: number, attrs: TimerAttrs) => void
@@ -40,7 +47,16 @@ interface RecipeBodyEditorProps {
 
 export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEditorProps>(
   function RecipeBodyEditor(
-    { catalog, onChange, onEditIngredient, onEditSection, onEditTimer, unitSystem, value },
+    {
+      catalog,
+      onChange,
+      onEditCookware,
+      onEditIngredient,
+      onEditSection,
+      onEditTimer,
+      unitSystem,
+      value,
+    },
     ref
   ) {
     const onChangeRef = useRef(onChange)
@@ -67,6 +83,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           underline: false,
         }),
         IngredientExtension,
+        CookwareExtension,
         TimerExtension,
         SectionExtension,
         CookNoteExtension,
@@ -90,6 +107,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           }
           if (
             !text.includes('@') &&
+            !text.includes('#') &&
             !text.includes('~') &&
             !text.includes('>') &&
             !/^=+\s*.+\s*=+\s*$/m.test(text)
@@ -118,6 +136,10 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
     }, [catalog, onEditIngredient, unitSystem])
 
     useEffect(() => {
+      setCookwareDisplayState({ onEditCookware })
+    }, [onEditCookware])
+
+    useEffect(() => {
       setSectionDisplayState({ onEditSection })
     }, [onEditSection])
 
@@ -141,11 +163,27 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
         focus() {
           editor?.commands.focus()
         },
+        deleteCookware(pos) {
+          deleteInlineNode(editor, pos, 'cookware')
+        },
         deleteIngredient(pos) {
           deleteInlineNode(editor, pos, 'ingredient')
         },
         deleteTimer(pos) {
           deleteInlineNode(editor, pos, 'timer')
+        },
+        insertCookware(attrs) {
+          if (!editor) {
+            return
+          }
+          editor
+            .chain()
+            .focus()
+            .insertContent([
+              { type: 'cookware', attrs },
+              { type: 'text', text: ' ' },
+            ])
+            .run()
         },
         insertIngredient(attrs) {
           if (!editor) {
@@ -188,6 +226,9 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
               { type: 'text', text: ' ' },
             ])
             .run()
+        },
+        updateCookware(pos, attrs) {
+          updateInlineNode(editor, pos, 'cookware', attrs)
         },
         updateIngredient(pos, attrs) {
           updateInlineNode(editor, pos, 'ingredient', attrs)
@@ -239,7 +280,7 @@ function updateInlineNode(
   editor: Editor | null,
   pos: number,
   typeName: string,
-  attrs: IngredientAttrs | TimerAttrs
+  attrs: CookwareAttrs | IngredientAttrs | TimerAttrs
 ) {
   if (!editor) {
     return

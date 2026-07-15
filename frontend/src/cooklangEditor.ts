@@ -1,5 +1,10 @@
 import type { JSONContent } from '@tiptap/core'
 
+import {
+  extractCookwareTokens,
+  serializeCookware,
+  type CookwareAttrs,
+} from './cooklangCookware'
 import { extractTokens, serializeIngredient, type IngredientAttrs } from './cooklangTokens'
 import { extractTimerTokens, serializeTimer, type TimerAttrs } from './cooklangTimers'
 import type { RecipeBlock, RecipeDetail } from './types'
@@ -95,6 +100,7 @@ function parseCooklangLine(line: string): JSONContent {
 }
 
 type InlineMarker =
+  | { end: number; kind: 'cookware'; start: number; attrs: CookwareAttrs }
   | { end: number; kind: 'ingredient'; start: number; attrs: IngredientAttrs }
   | { end: number; kind: 'timer'; start: number; attrs: TimerAttrs }
 
@@ -115,8 +121,10 @@ function parseLineContent(line: string): JSONContent[] | undefined {
     }
     if (marker.kind === 'ingredient') {
       content.push({ type: 'ingredient', attrs: marker.attrs })
-    } else {
+    } else if (marker.kind === 'timer') {
       content.push({ type: 'timer', attrs: marker.attrs })
+    } else {
+      content.push({ type: 'cookware', attrs: marker.attrs })
     }
     cursor = marker.end
   }
@@ -151,6 +159,14 @@ function collectInlineMarkers(line: string): InlineMarker[] {
       },
       end: token.end,
       kind: 'timer',
+      start: token.start,
+    })
+  }
+  for (const token of extractCookwareTokens(line)) {
+    markers.push({
+      attrs: { name: token.name },
+      end: token.end,
+      kind: 'cookware',
       start: token.start,
     })
   }
@@ -210,6 +226,11 @@ function serializeParagraph(paragraph: JSONContent): string {
           name: String(node.attrs?.name ?? ''),
           quantity: String(node.attrs?.quantity ?? ''),
           unit: String(node.attrs?.unit ?? ''),
+        })
+      }
+      if (node.type === 'cookware') {
+        return serializeCookware({
+          name: String(node.attrs?.name ?? ''),
         })
       }
       if (node.type === 'hardBreak') {
