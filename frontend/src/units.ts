@@ -271,7 +271,13 @@ export function formatIngredientAmount(
 }
 
 export function normalizeIngredientKey(value: string): string {
-  return value.trim().toLowerCase().replace(/-/g, ' ').replace(/\s+/g, ' ')
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 const UNINFLECTED = new Set([

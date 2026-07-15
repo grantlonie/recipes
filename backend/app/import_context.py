@@ -47,26 +47,28 @@ Output rules:
   reserved cooking liquid, and leftover fat are process notes, not shopping items —
   leave measured amounts as plain text (e.g. "ladle 1/4–1/2 cup of gravy",
   "reserve 1/2 cup pasta water", "drain all but 2 tablespoons of the fat").
-- Author tips, variants, omit-if advice, and "UPDATED NOTES" go on Cooklang note lines
-  starting with `>` (not as numbered/cook steps). Keep each note concise (1-2 sentences).
-  Place each `>` note next to the steps it relates to (inline with the body).
-  Do not copy thank-yous, review replies, or filler commentary.
+- Use front-matter `description` for general recipe-level notes that apply to the whole
+  dish (blurb, overall technique tips, main-ingredient substitutions, author "UPDATED NOTES"
+  that are not tied to one step). Keep description concise; multiple tips may be separate
+  sentences. Do not put general tips in trailing `>` notes.
+  Example description: Hearty beer bread. Sift the flour (or spoon into the cup). If not
+  using beer, add a packet of active dry yeast.
+- Step-specific tips stay as Cooklang `>` note lines placed next to the related step
+  (omit-if for that ingredient line, "instead of pouring" for that pour step). Keep each
+  note concise (1-2 sentences). Do not copy thank-yous, review replies, or filler.
   Example: `> Soft crust: mix melted butter into the batter instead of pouring it over.`
-- Use front-matter `description` for introductory blurb/notes that should appear before
-  the steps (recipe summary). Do not put those in a leading `>` note; use `description`.
-  Detailed or step-local tips stay as `>` body notes.
-- Substitution tips and "only if you change X" add-ons are `>` notes with plain text
-  (no @ markers) when they are not on the source Ingredients list
-  (e.g. `> If not using beer, add a packet of active dry yeast.`).
-  Do tag optional ingredients that ARE listed (e.g. "1/2 cup pecans, optional" →
-  @pecans{{}}(optional)).
+- Substitution add-ons not on the Ingredients list: put general substitutions in
+  `description` (plain text, no @ markers). Put substitutions that only apply to one
+  step as a `>` note next to that step. Do tag optional ingredients that ARE listed
+  (e.g. "1/2 cup pecans, optional" → @pecans{{}}(optional)).
 - For "to taste", "as needed", "a pinch", or "a splash": use @name{{}}(to taste) or
   @name{{}}(as needed) with an EMPTY amount. Never write {{0%g}}, {{0}}, {{pinch}},
   {{splash}}, {{to taste}}, or {{as needed}}.
 - Compound tools/equipment stay plain text or #cookware: "4 (12-inch) skewers",
   not "4 pieces skewer" or "4 skewer".
 - Preserve make-ahead timing from the source as steps when it is part of the cook flow
-  (overnight chill, rest times, hold overnight before baking); phrasing tips stay as `>` notes.
+  (overnight chill, rest times, hold overnight before baking); phrasing tips that are
+  step-local stay as `>` notes, and general make-ahead advice may go in `description`.
 - Always write tablespoon amounts as Tbsp (capital T). Source casing does not matter.
 - Do not invent ingredients or steps that are not supported by the source text.
 - Omit tags from front matter.
@@ -81,6 +83,9 @@ Output rules:
 - Prefer plain English durations (20 minutes, 1 hour 30 minutes).
 - YAML-quote the entire title when it contains quotes or punctuation
   (example: title: '"Greek" Lamb with Orzo'), never title: "Greek" Lamb....
+  Descriptions should stay plain unquoted text
+  (description: Hearty chili with kidney beans.). Do not wrap description in the
+  title quote pattern ('"...').
 - source and image must be flat strings: either an http(s) URL or omitted if unknown.
 
 Language: {output_language}
@@ -94,7 +99,7 @@ image: https://example.com/chili.jpg
 servings: 6
 prep time: 15 minutes
 cook time: 45 minutes
-description: Hearty weeknight chili with kidney beans.
+description: Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated.
 ---
 Brown @beef{1%lb} in #large pot{}.
 
@@ -102,7 +107,7 @@ Add @onion{1}(diced) and @garlic{3%cloves}(minced). Cook until softened.
 
 Stir in @tomatoes{28%oz}(crushed) and @kidney beans{2%cup}. Simmer ~{30%minutes}.
 
-> Leftovers keep 3 days refrigerated.
+> If the mixture looks dry, add a splash of water before simmering.
 """
 
 NEGATIVE_EXAMPLE = """Wrong (do not do this):
@@ -112,13 +117,15 @@ Add @fennel seeds{1%tsp} when the source says 1 tbsp fennel seeds.
 Use @granulated sugar{}(confectioners') for powdered sugar.
 If using juice instead of beer, add @instant yeast{}(dry active).
 If you prefer a softer crust, mix the butter into the batter.
+> Sifting flour is essential.
+> If using a non-alcoholic beverage instead of beer, add yeast.
 
 Right:
+description: Hearty beer bread. Sift the flour (or spoon into the cup). If not using beer, add a packet of active dry yeast.
 Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
 Season with @salt{}(to taste). Oil the #baking pan{}.
 Add @fennel seeds{1%Tbsp} when the source says 1 tbsp fennel seeds.
 Dust with @powdered sugar{}(as needed).
-> If using juice instead of beer, add a packet of active dry yeast.
 > Soft crust: mix melted butter into the batter instead of pouring it over the top.
 Stir in @pecans{0.5%cup}(optional) when pecans are on the Ingredients list.
 """

@@ -35,8 +35,21 @@ export interface PendingImport {
   body: string
   metadata: Record<string, unknown>
   preserveBookmarked?: boolean
+  /** Keep file images; keep URL/empty only when import has no image. */
+  preserveImage?: boolean
+  preserveSource?: boolean
   preserveTags?: boolean
   suggestedSlug?: string
+}
+
+/** Reimport: never replace a local image file with a web URL; otherwise prefer imported. */
+export function mergePreservedImage(current: string, imported: string): string {
+  const existing = current.trim()
+  const next = imported.trim()
+  if (existing.startsWith('recipes/')) {
+    return existing
+  }
+  return next || existing
 }
 
 export function parseImportedDocument(content: string) {
@@ -336,6 +349,7 @@ function parseSimpleMetadata(frontMatter: string) {
     }
     metadata[key] = list
   }
+  cleanMetadataNotes(metadata)
   return metadata
 }
 
@@ -388,18 +402,63 @@ function parseScalar(value: string) {
   if (value === 'false') {
     return false
   }
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
+  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
     try {
       return JSON.parse(value) as string
     } catch {
-      return value.slice(1, -1)
+      return cleanNoteText(value.slice(1, -1))
     }
+  }
+  if (value.startsWith("'") && value.endsWith("'") && value.length >= 2) {
+    return cleanNoteText(value.slice(1, -1).replaceAll("''", "'"))
   }
   const numeric = Number(value)
   return Number.isNaN(numeric) ? value : numeric
+}
+
+function cleanMetadataNotes(metadata: Record<string, unknown>) {
+  for (const key of ['description', 'introduction'] as const) {
+    const value = metadata[key]
+    if (typeof value === 'string') {
+      const cleaned = cleanNoteText(value)
+      if (cleaned) {
+        metadata[key] = cleaned
+      } else {
+        delete metadata[key]
+      }
+    }
+  }
+}
+
+function cleanNoteText(value: string) {
+  let text = value.trim()
+  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+    text = text.slice(1, -1).trimEnd()
+  }
+  if (
+    text.length >= 2 &&
+    text[0] === text[text.length - 1] &&
+    (text[0] === '"' || text[0] === "'")
+  ) {
+    const inner = text.slice(1, -1)
+    if (text[0] === "'" || !inner.includes('"')) {
+      text = inner.trim()
+    }
+  }
+  if (text.startsWith('"') && text.split('"').length === 2) {
+    text = text.slice(1)
+  }
+  if (text.startsWith("'") && text.split("'").length === 2) {
+    text = text.slice(1)
+  }
+  text = text.replace(/\\+$/, '').trim()
+  return decodeUnicodeEscapes(text).trim()
+}
+
+function decodeUnicodeEscapes(value: string) {
+  return value.replace(/\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})/g, (_, short, long) =>
+    String.fromCodePoint(Number.parseInt(short || long, 16))
+  )
 }
 
 function isEmptyArray(value: unknown) {

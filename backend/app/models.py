@@ -100,6 +100,7 @@ class ImportPreview(BaseModel):
     suggested_slug: str
     unmatched_ingredients: list[str] = Field(default_factory=list)
     validation_warnings: list[str] = Field(default_factory=list)
+    image_url: str | None = None
 
 
 class ImportFileRequest(BaseModel):

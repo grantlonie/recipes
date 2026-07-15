@@ -10,7 +10,6 @@ import {
   importRecipeFile,
   updateRecipe,
   uploadRecipeImage,
-  uploadRecipeSource,
 } from './api'
 import { useAuth } from './AuthContext'
 import { Autocomplete } from './components/Autocomplete'
@@ -32,6 +31,7 @@ import {
   applyImportMapping,
   buildMappingRows,
   mappingRowsAreValid,
+  mergePreservedImage,
   parseImportedDocument,
   type MappingRow,
   type PendingImport,
@@ -210,6 +210,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     onSuccess: preview => {
       handleImportPreview(preview, {
         preserveBookmarked: true,
+        preserveImage: true,
+        preserveSource: true,
         preserveTags: true,
       })
     },
@@ -384,39 +386,18 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                   />
                 </Field>
               ) : null}
-              <RefField
-                accept="image/*"
-                capture
+              <ImageField
                 className="lg:col-span-2"
-                label="Image"
                 onUpload={handleImageUpload}
                 onValueChange={setImage}
                 slug={isNew ? recipeSlug : slug}
                 value={image}
-              />
-              <RefField
-                accept="image/*,.pdf,.docx,.txt,.html,.htm,.md,.markdown"
-                className="lg:col-span-2"
-                label="Source"
-                onUpload={handleSourceUpload}
-                onValueChange={setSource}
-                slug={isNew ? recipeSlug : slug}
-                value={source}
               />
               {!isNew && reimportMutation.error ? (
                 <p className={`lg:col-span-2 text-sm ${errorTextClassName}`}>
                   {reimportMutation.error.message}
                 </p>
               ) : null}
-              <label className="flex items-center gap-3 rounded-xl bg-orange-50 px-3 py-2 text-sm font-semibold text-stone-700 dark:bg-stone-800 dark:text-stone-200">
-                <input
-                  checked={bookmarked}
-                  className="h-4 w-4 accent-orange-600"
-                  onChange={event => setBookmarked(event.target.checked)}
-                  type="checkbox"
-                />
-                Bookmarked
-              </label>
               <Field className="lg:col-span-2" label="Description">
                 <textarea
                   className={`${inputClassName} min-h-24`}
@@ -753,7 +734,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setTime(
       nextPrep || nextCook ? '' : getString(metadata.time) || getString(metadata.duration) || ''
     )
-    setDescription(getString(metadata.description) || getString(metadata.introduction))
+    setDescription(
+      cleanNoteText(getString(metadata.description) || getString(metadata.introduction))
+    )
     setBookmarked(getBoolean(metadata.bookmarked))
     setBody(nextBody || emptyBody)
   }
@@ -817,36 +800,42 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setImage(path)
   }
 
-  async function handleSourceUpload(file: File) {
-    const path = await uploadRecipeSource(recipeSlug, file)
-    setSource(path)
-    if (file.type.startsWith('image/')) {
-      setImage(path)
-    }
-  }
-
   function handleImportPreview(
     preview: ImportPreview,
     options: Omit<PendingImport, 'body' | 'metadata'> = {}
   ) {
     const parsed = parseImportedDocument(preview.content)
     const unmatched = preview.unmatched_ingredients ?? []
+    const importedImage =
+      preview.image_url?.trim() ||
+      getString(parsed.metadata.image) ||
+      getString(parsed.metadata.picture)
+    let metadata = options.preserveImage
+      ? withPreservedImage(parsed.metadata, image, importedImage)
+      : withImportedImage(parsed.metadata, importedImage)
+    if (options.preserveSource) {
+      metadata = { ...metadata, source: source.trim() || undefined }
+    }
     if (unmatched.length === 0) {
       const currentBookmarked = bookmarked
       const currentTags = tags
-      applyDocumentState(parsed.metadata, parsed.body, { skipTags: Boolean(options.preserveTags) })
+      const currentSource = source
+      applyDocumentState(metadata, parsed.body, { skipTags: Boolean(options.preserveTags) })
       if (options.preserveBookmarked) {
         setBookmarked(currentBookmarked)
       }
       if (options.preserveTags) {
         setTags(currentTags)
       }
+      if (options.preserveSource) {
+        setSource(currentSource)
+      }
       if (options.suggestedSlug) {
         setRecipeSlug(options.suggestedSlug)
       }
       return
     }
-    openMapping(parsed.metadata, parsed.body, { ...options, unmatchedIngredients: unmatched })
+    openMapping(metadata, parsed.body, { ...options, unmatchedIngredients: unmatched })
   }
 
   function openMapping(
@@ -881,6 +870,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
     const currentBookmarked = bookmarked
     const currentTags = tags
+    const currentSource = source
     applyDocumentState(pendingImport.metadata, nextBody, { skipTags: true })
     if (pendingImport.preserveBookmarked) {
       setBookmarked(currentBookmarked)
@@ -889,6 +879,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       setTags(currentTags)
     } else {
       setTags(getTagsFromMetadata(pendingImport.metadata.tags))
+    }
+    if (pendingImport.preserveSource) {
+      setSource(currentSource)
     }
     if (pendingImport.suggestedSlug) {
       setRecipeSlug(pendingImport.suggestedSlug)
@@ -1136,32 +1129,27 @@ function Field({ children, className = '', label }: FieldProps) {
   )
 }
 
-interface RefFieldProps {
-  accept: string
-  capture?: boolean
+interface ImageFieldProps {
   className?: string
-  label: string
   onUpload: (file: File) => Promise<void>
   onValueChange: (value: string) => void
   slug: string
   value: string
 }
 
-function RefField({
-  accept,
-  capture = false,
-  className = '',
-  label,
-  onUpload,
-  onValueChange,
-  slug,
-  value,
-}: RefFieldProps) {
+function ImageField({ className = '', onUpload, onValueChange, slug, value }: ImageFieldProps) {
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [cameraOpen, setCameraOpen] = useState(false)
   const cameraFallbackRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadDisabled = !slug.trim() || uploading
+  const hasFile = isRefFile(value)
+  const previewUrl = hasFile
+    ? resolveRefDisplay(value)
+    : value.startsWith('http')
+      ? value
+      : ''
 
   async function uploadFile(file: File) {
     setUploading(true)
@@ -1184,6 +1172,13 @@ function RefField({
     await uploadFile(file)
   }
 
+  function openFilePicker() {
+    if (uploadDisabled) {
+      return
+    }
+    fileInputRef.current?.click()
+  }
+
   function openCamera() {
     if (uploadDisabled) {
       return
@@ -1195,67 +1190,95 @@ function RefField({
     cameraFallbackRef.current?.click()
   }
 
-  const previewUrl = isRefFile(value) ? resolveRefDisplay(value) : value
-
   return (
-    <Field className={className} label={label}>
-      <input
-        className={inputClassName}
-        onChange={event => onValueChange(event.target.value)}
-        placeholder="https://example.com/photo.jpg or recipes/slug/image.jpg"
-        value={isRefFile(value) ? '' : value}
-      />
-      <div className="mt-2 flex flex-wrap gap-2">
-        <label className="inline-flex cursor-pointer items-center rounded-full border border-stone-300 px-3 py-1.5 text-sm font-semibold text-stone-700 dark:border-stone-600 dark:text-stone-200">
-          <input
-            accept={accept}
-            className="hidden"
-            disabled={uploadDisabled}
-            onChange={handleFileChange}
-            type="file"
-          />
-          {uploading ? 'Uploading...' : 'Attach file'}
-        </label>
-        {capture ? (
-          <>
-            <input
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-              ref={cameraFallbackRef}
-              type="file"
-            />
-            <button
-              className="inline-flex items-center rounded-full border border-stone-300 px-3 py-1.5 text-sm font-semibold text-stone-700 disabled:opacity-60 dark:border-stone-600 dark:text-stone-200"
-              disabled={uploadDisabled}
-              onClick={openCamera}
-              type="button"
-            >
-              Take photo
-            </button>
-          </>
+    <div className={`block ${className}`}>
+      <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Image</span>
+      <div className="mt-1 space-y-2">
+        {previewUrl ? (
+          <a
+            className="inline-block"
+            href={previewUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <img alt="" className="max-h-40 rounded-xl object-cover" src={previewUrl} />
+          </a>
         ) : null}
+        {!hasFile ? (
+          <input
+            className={inputClassName}
+            onChange={event => onValueChange(event.target.value)}
+            placeholder="https://example.com/photo.jpg"
+            value={value}
+          />
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={uploadDisabled} onClick={openFilePicker} variant="ghost">
+            {uploading ? 'Uploading...' : hasFile || previewUrl ? 'Replace File' : 'Attach file'}
+          </Button>
+          {hasFile ? (
+            <Button onClick={() => onValueChange('')} variant="ghost">
+              Use Web
+            </Button>
+          ) : null}
+          <Button disabled={uploadDisabled} onClick={openCamera} variant="ghost">
+            Take Photo
+          </Button>
+        </div>
+        <input
+          accept="image/*"
+          className="hidden"
+          disabled={uploadDisabled}
+          onChange={handleFileChange}
+          ref={fileInputRef}
+          type="file"
+        />
+        <input
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+          ref={cameraFallbackRef}
+          type="file"
+        />
+        <CameraCaptureDialog
+          onCapture={file => {
+            setCameraOpen(false)
+            void uploadFile(file)
+          }}
+          onClose={() => setCameraOpen(false)}
+          open={cameraOpen}
+          title="Photograph image"
+        />
+        {error ? <p className={`text-sm ${errorTextClassName}`}>{error}</p> : null}
       </div>
-      <CameraCaptureDialog
-        onCapture={file => {
-          setCameraOpen(false)
-          void uploadFile(file)
-        }}
-        onClose={() => setCameraOpen(false)}
-        open={cameraOpen}
-        title={`Photograph ${label.toLowerCase()}`}
-      />
-      {isRefFile(value) ? (
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
-          File: <a href={resolveRefDisplay(value)}>{value}</a>
-        </p>
-      ) : null}
-      {previewUrl && (isRefFile(value) || value.startsWith('http')) && accept.includes('image') ? (
-        <img alt="" className="mt-3 max-h-40 rounded-xl object-cover" src={previewUrl} />
-      ) : null}
-      {error ? <p className={`mt-2 text-sm ${errorTextClassName}`}>{error}</p> : null}
-    </Field>
+    </div>
   )
+}
+
+function withImportedImage(
+  metadata: Record<string, unknown>,
+  importedImage: string
+): Record<string, unknown> {
+  const next = importedImage.trim()
+  if (!next) {
+    return metadata
+  }
+  return { ...metadata, image: next }
+}
+
+function withPreservedImage(
+  metadata: Record<string, unknown>,
+  currentImage: string,
+  importedImage: string
+): Record<string, unknown> {
+  const merged = mergePreservedImage(currentImage, importedImage)
+  if (!merged) {
+    const next = { ...metadata }
+    delete next.image
+    delete next.picture
+    return next
+  }
+  return { ...metadata, image: merged }
 }
 
 function isRefFile(value: string): boolean {
@@ -1387,6 +1410,35 @@ function yamlScalarNeedsQuotes(value: string): boolean {
 
 function getString(value: unknown) {
   return typeof value === 'string' ? value : ''
+}
+
+function cleanNoteText(value: string) {
+  let text = value.trim()
+  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+    text = text.slice(1, -1).trimEnd()
+  }
+  if (
+    text.length >= 2 &&
+    text[0] === text[text.length - 1] &&
+    (text[0] === '"' || text[0] === "'")
+  ) {
+    const inner = text.slice(1, -1)
+    if (text[0] === "'" || !inner.includes('"')) {
+      text = inner.trim()
+    }
+  }
+  if (text.startsWith('"') && text.split('"').length === 2) {
+    text = text.slice(1)
+  }
+  if (text.startsWith("'") && text.split("'").length === 2) {
+    text = text.slice(1)
+  }
+  text = text.replace(/\\+$/, '').trim()
+  return text
+    .replace(/\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})/g, (_, short, long) =>
+      String.fromCodePoint(Number.parseInt(short || long, 16))
+    )
+    .trim()
 }
 
 function getNumber(value: unknown) {

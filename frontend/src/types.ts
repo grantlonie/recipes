@@ -68,6 +68,7 @@ export interface ImportPreview {
   suggested_slug: string
   unmatched_ingredients?: string[]
   validation_warnings?: string[]
+  image_url?: string | null
 }
 
 export interface AssetUploadResponse {

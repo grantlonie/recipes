@@ -46,6 +46,48 @@ Brown @beef{454%g}.
     assert sanitize_front_matter(raw) == raw
 
 
+def test_normalize_document_strips_mangled_description_quotes():
+    content = """---
+title: Brownies
+description: '"Fudgy cocoa brownies made by melting butter with sugar and cocoa over\\'
+---
+
+Bake @batter{}.
+"""
+    normalized = normalize_document(content)
+    metadata, _body = parse_document(normalized)
+    assert metadata["description"] == (
+        "Fudgy cocoa brownies made by melting butter with sugar and cocoa over"
+    )
+
+
+def test_normalize_document_decodes_description_unicode_escapes():
+    content = r"""---
+title: Brownies
+description: '"Classic fudgy brownies. Use natural or Dutch\u2011\\'
+---
+
+Bake @batter{}.
+"""
+    normalized = normalize_document(content)
+    metadata, _body = parse_document(normalized)
+    assert metadata["description"] == "Classic fudgy brownies. Use natural or Dutch‑"
+    assert "\\u2011" not in normalized
+    assert '"' not in metadata["description"]
+
+
+def test_sanitize_front_matter_repairs_truncated_description_escapes():
+    raw = """---
+title: Brownies
+description: "Classic fudgy brownies. Use natural or Dutch\\u2011\\
+---
+
+Bake @batter{}.
+"""
+    fixed = sanitize_front_matter(raw)
+    metadata, _body = parse_document(fixed)
+    assert metadata["description"] == "Classic fudgy brownies. Use natural or Dutch‑"
+
 
 def test_prepare_imported_content_normalizes_volume_units():
     content = """---

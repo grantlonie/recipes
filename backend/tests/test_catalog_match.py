@@ -14,6 +14,21 @@ def test_match_catalog_ingredient_matches_aliases():
     assert match.note == "extra virgin"
 
 
+def test_match_catalog_ingredient_ignores_apostrophes_and_punctuation():
+    catalog = [
+        CatalogIngredient(
+            name="powdered sugar",
+            aliases=["confectioners sugar", "icing sugar"],
+        ),
+    ]
+    match = match_catalog_ingredient("confectioners' sugar", catalog)
+    assert match.catalog is not None
+    assert match.catalog.name == "powdered sugar"
+
+    assert "confectioners sugar" in inflection_forms("confectioners' sugar")
+    assert inflection_forms("confectioners' sugar") == inflection_forms("confectioners sugar")
+
+
 def test_match_catalog_ingredient_preserves_alias_variety_as_note():
     catalog = [
         CatalogIngredient(

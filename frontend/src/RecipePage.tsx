@@ -612,10 +612,39 @@ function descriptionNotes(recipe: { metadata?: Record<string, unknown> }): strin
   for (const key of ['description', 'introduction'] as const) {
     const value = recipe.metadata?.[key]
     if (typeof value === 'string' && value.trim()) {
-      notes.push(value.trim())
+      const cleaned = cleanDescriptionText(value)
+      if (cleaned) {
+        notes.push(cleaned)
+      }
     }
   }
   return notes
+}
+
+function cleanDescriptionText(value: string) {
+  let text = value.trim()
+  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+    text = text.slice(1, -1).trimEnd()
+  }
+  if (
+    text.length >= 2 &&
+    text[0] === text[text.length - 1] &&
+    (text[0] === '"' || text[0] === "'")
+  ) {
+    const inner = text.slice(1, -1)
+    if (text[0] === "'" || !inner.includes('"')) {
+      text = inner.trim()
+    }
+  }
+  if (text.startsWith('"') && text.split('"').length === 2) {
+    text = text.slice(1)
+  }
+  text = text.replace(/\\+$/, '').trim()
+  return text
+    .replace(/\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})/g, (_, short, long) =>
+      String.fromCodePoint(Number.parseInt(short || long, 16))
+    )
+    .trim()
 }
 
 function ExpandableNote({ text }: ExpandableNoteProps) {

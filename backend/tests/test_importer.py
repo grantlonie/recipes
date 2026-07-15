@@ -172,6 +172,7 @@ def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: In
     assert preview.suggested_slug == "chicken-bacon-pasta"
     assert "source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta" in preview.content
     assert "image: https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg" in preview.content
+    assert preview.image_url == "https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg"
 
 
 def test_import_from_url_raises_on_fetch_failure(
@@ -280,6 +281,118 @@ Add @chicken{} and @bacon{}.
 
     mock_fetch.assert_not_called()
     assert "image: https://cdn.example.com/existing.jpg" in preview.content
+    assert preview.image_url == "https://cdn.example.com/existing.jpg"
+
+
+def test_import_from_url_keeps_existing_image_file(
+    settings: Settings, ingredients: IngredientRepository
+):
+    cooklang = """---
+title: Chicken & bacon pasta
+source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta
+image: recipes/chicken-bacon-pasta/image.jpg
+---
+
+Add @chicken{} and @bacon{}.
+"""
+    page_url = "https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta"
+    scraped_image = "https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == page_url:
+            return httpx.Response(
+                200,
+                text=(
+                    f'<html><head><meta property="og:image" content="{scraped_image}" />'
+                    "</head><body>Pasta recipe with chicken and bacon</body></html>"
+                ),
+            )
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    with patch("app.importer.complete_cooklang", return_value=cooklang):
+        with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+            preview = import_from_url(page_url, settings=settings, ingredients=ingredients)
+
+    assert "image: recipes/chicken-bacon-pasta/image.jpg" in preview.content
+    assert scraped_image not in preview.content
+    assert preview.image_url is None
+
+
+def test_import_from_html_file_extracts_page_image(
+    settings: Settings,
+    ingredients: IngredientRepository,
+    tmp_path: Path,
+):
+    image_url = "https://example.com/chili.jpg"
+    source_dir = tmp_path / "chili"
+    source_dir.mkdir()
+    source_file = source_dir / "source.html"
+    source_file.write_text(
+        f'<html><head><meta property="og:image" content="{image_url}" /></head>'
+        "<body><article>Chili recipe with beans</article></body></html>",
+        encoding="utf-8",
+    )
+
+    with patch(
+        "app.importer.complete_cooklang",
+        return_value="---\ntitle: Chili\n---\n\nBrown @beef{}.\n",
+    ):
+        preview = import_from_file(
+            source_file,
+            settings=settings,
+            ingredients=ingredients,
+            source_path="recipes/chili/source.html",
+        )
+
+    assert f"image: {image_url}" in preview.content
+    assert preview.image_url == image_url
+    assert "source: recipes/chili/source.html" in preview.content
+
+
+def test_import_from_text_file_scrapes_embedded_website_url(
+    settings: Settings,
+    ingredients: IngredientRepository,
+    tmp_path: Path,
+):
+    page_url = "https://food52.com/recipes/21007-alice-medrich-s-best-cocoa-brownies"
+    image_url = "https://images.food52.com/brownies.jpg"
+    source_dir = tmp_path / "alice-medrich-s-best-cocoa-brownies"
+    source_dir.mkdir()
+    source_file = source_dir / "source.txt"
+    source_file.write_text(
+        f"Alice Medrich's Best Cocoa Brownies\n\n{page_url}\n\nPrep time 25 minutes\n",
+        encoding="utf-8",
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == page_url:
+            return httpx.Response(
+                200,
+                text=(
+                    f'<html><head><meta property="og:image" content="{image_url}" />'
+                    "</head><body>Brownies</body></html>"
+                ),
+            )
+        raise AssertionError(f"Unexpected request: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    with patch(
+        "app.importer.complete_cooklang",
+        return_value="---\ntitle: Brownies\n---\n\nBake @batter{}.\n",
+    ):
+        with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+            preview = import_from_file(
+                source_file,
+                settings=settings,
+                ingredients=ingredients,
+                source_path="recipes/alice-medrich-s-best-cocoa-brownies/source.txt",
+            )
+
+    assert f"image: {image_url}" in preview.content
+    assert preview.image_url == image_url
+    assert "source: recipes/alice-medrich-s-best-cocoa-brownies/source.txt" in preview.content
+    assert page_url not in preview.content.split("---")[1]
 
 
 def test_import_from_file_sets_source_path_for_assets(

@@ -50,6 +50,7 @@ def parse_document(content: str) -> tuple[dict[str, Any], str]:
     metadata = yaml.safe_load(match.group(1)) or {}
     if not isinstance(metadata, dict):
         metadata = {}
+    clean_metadata_notes(metadata)
     return metadata, content[match.end() :]
 
 
@@ -90,9 +91,10 @@ def sanitize_front_matter(content: str) -> str:
                 continue
         except yaml.YAMLError:
             pass
+        repaired = repair_broken_scalar(value)
         fixed_lines.append(
             yaml.safe_dump(
-                {key: value},
+                {key: repaired},
                 allow_unicode=True,
                 default_flow_style=False,
                 sort_keys=False,
@@ -115,7 +117,7 @@ def render_document(metadata: dict[str, Any], body: str) -> str:
     if not clean_metadata:
         return body.lstrip("\n")
 
-    front_matter = yaml.safe_dump(clean_metadata, sort_keys=False, allow_unicode=False).strip()
+    front_matter = yaml.safe_dump(clean_metadata, sort_keys=False, allow_unicode=True).strip()
     return f"---\n{front_matter}\n---\n\n{body.lstrip()}"
 
 
@@ -478,6 +480,51 @@ def prepare_imported_content(content: str) -> str:
     metadata.pop("tags", None)
     body = normalize_ingredient_amounts(body)
     return normalize_document(render_document(metadata, body))
+
+
+def clean_metadata_notes(metadata: dict[str, Any]) -> None:
+    """Strip LLM quote/escape artifacts from description-like fields."""
+    for key in ("description", "introduction"):
+        value = metadata.get(key)
+        if isinstance(value, str):
+            cleaned = clean_note_text(value)
+            if cleaned:
+                metadata[key] = cleaned
+            else:
+                metadata.pop(key, None)
+
+
+def clean_note_text(value: str) -> str:
+    text = repair_broken_scalar(value)
+    return text
+
+
+def repair_broken_scalar(value: str) -> str:
+    """Unwrap truncated/misquoted YAML scalars and decode leftover escapes."""
+    text = value.strip()
+    while len(text) >= 2 and text[0] in "\"'" and text.endswith("\\"):
+        text = text[1:-1].rstrip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        inner = text[1:-1]
+        if text[0] == "'" or ('"' not in inner):
+            text = inner.strip()
+    if text.startswith('"') and text.count('"') == 1:
+        text = text[1:]
+    if text.startswith("'") and text.count("'") == 1:
+        text = text[1:]
+    text = text.rstrip("\\").strip()
+    return decode_unicode_escapes(text).strip()
+
+
+_UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})")
+
+
+def decode_unicode_escapes(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        hex_value = match.group(1) or match.group(2)
+        return chr(int(hex_value, 16))
+
+    return _UNICODE_ESCAPE_RE.sub(replace, value)
 
 
 def normalize_ingredient_amounts(body: str) -> str:

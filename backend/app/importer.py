@@ -30,6 +30,7 @@ from app.models import ImportPreview
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
+SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 BROWSER_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
@@ -119,16 +120,25 @@ def import_from_file(
 
     extension = path.suffix.lower()
     image_extensions = {".heic", ".jpeg", ".jpg", ".png", ".webp"}
+    page_image_url: str | None = None
     if extension in image_extensions:
         preview = _import_image_file(path, settings=settings, ingredients=ingredients)
     else:
         try:
-            extracted = extract_text_from_path(path)
+            if extension in {".html", ".htm"}:
+                html = path.read_text(encoding="utf-8", errors="replace")
+                extracted = extract_html_text(html)
+                page_image_url = extract_page_image_url(html, source_path or path.name)
+            else:
+                extracted = extract_text_from_path(path)
         except ExtractError as error:
             raise ImportError(str(error)) from error
+        if not page_image_url:
+            page_image_url = _image_url_from_source_text(extracted)
         preview = _import_extracted_text(
             extracted,
             source_url=source_path,
+            image_url=page_image_url,
             settings=settings,
             ingredients=ingredients,
         )
@@ -138,8 +148,12 @@ def import_from_file(
         metadata["source"] = source_path
         if extension in image_extensions:
             metadata.setdefault("image", source_path)
+        content = cooklang.render_document(metadata, body) + "\n"
         preview = preview.model_copy(
-            update={"content": cooklang.render_document(metadata, body) + "\n"}
+            update={
+                "content": content,
+                "image_url": cooklang.metadata_image_url(metadata) or preview.image_url,
+            }
         )
     return preview
 
@@ -319,20 +333,17 @@ def _finalize_import(
         metadata["source"] = source_url
     elif source_url and cooklang.is_ref_file(source_url):
         metadata["source"] = source_url
-    if image_url and cooklang.is_ref_url(image_url):
-        metadata["image"] = image_url
-    elif not _has_usable_image(metadata):
-        source = metadata.get("source")
-        if isinstance(source, str) and cooklang.is_ref_url(source):
-            scraped = _fetch_source_image_url(source)
-            if scraped:
-                metadata["image"] = scraped
+    _apply_import_image(metadata, image_url=image_url)
 
     content = cooklang.render_document(metadata, body)
     content = cooklang.prepare_imported_content(content)
     metadata, body = cooklang.parse_document(content)
     mapped_body, unmatched = apply_catalog_mapping(body, ingredients)
     content = cooklang.prepare_imported_content(cooklang.render_document(metadata, mapped_body))
+    metadata, body = cooklang.parse_document(content)
+    # Re-apply after normalize in case front-matter repair dropped image.
+    _apply_import_image(metadata, image_url=image_url)
+    content = cooklang.render_document(metadata, body)
     validation = validate_imported_cooklang(content, source_text=source_text)
 
     slug_source = source_url or metadata.get("title", "imported-recipe")
@@ -344,6 +355,7 @@ def _finalize_import(
         suggested_slug=suggested_slug,
         unmatched_ingredients=sorted(set(unmatched), key=str.casefold),
         validation_warnings=validation.warnings,
+        image_url=cooklang.metadata_image_url(metadata),
     )
 
 
@@ -390,6 +402,37 @@ def _maybe_quality_repair(
     )
     # Prefer the repaired result even if some soft warnings remain.
     return repaired_preview
+
+
+def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:
+    """Set image from scrape unless a local recipes/ file path is already present."""
+    if cooklang.metadata_image_file(metadata):
+        return
+    if image_url and cooklang.is_ref_url(image_url):
+        metadata["image"] = image_url
+        return
+    if _has_usable_image(metadata):
+        return
+    source = metadata.get("source")
+    if isinstance(source, str) and cooklang.is_ref_url(source):
+        scraped = _fetch_source_image_url(source)
+        if scraped:
+            metadata["image"] = scraped
+
+
+def _image_url_from_source_text(text: str) -> str | None:
+    """Scrape og:image from the first website URL embedded in source text."""
+    web_url = first_http_url(text)
+    if not web_url:
+        return None
+    return _fetch_source_image_url(web_url)
+
+
+def first_http_url(text: str) -> str | None:
+    match = SOURCE_HTTP_URL_RE.search(text)
+    if not match:
+        return None
+    return match.group(0).rstrip(".,);]>\"'")
 
 
 def _has_usable_image(metadata: dict) -> bool:

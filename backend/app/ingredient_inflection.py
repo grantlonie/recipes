@@ -36,7 +36,9 @@ _IRREGULAR_SINGULARS = {plural: singular for singular, plural in _IRREGULAR_PLUR
 
 
 def normalize_ingredient_key(value: str) -> str:
-    return re.sub(r"\s+", " ", value.strip().casefold().replace("-", " "))
+    text = value.strip().casefold().replace("-", " ")
+    text = re.sub(r"[^\w\s]+", "", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def singularize_token(token: str) -> str:
