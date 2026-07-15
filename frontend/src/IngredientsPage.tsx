@@ -9,6 +9,7 @@ import {
   deleteIngredient,
   estimateIngredientDensities,
   getIngredientCatalog,
+  renameIngredient,
   upsertIngredient,
 } from './api'
 import { useAuth } from './AuthContext'
@@ -19,6 +20,7 @@ import { Dialog } from './components/Dialog'
 import { putIngredientCatalog } from './db'
 import { titleCaseIngredient } from './ingredientDisplay'
 import { useIngredientCatalog } from './IngredientCatalogContext'
+import { runSync } from './sync'
 import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
 import type { CatalogIngredient } from './types'
 
@@ -84,15 +86,20 @@ export function IngredientsPage() {
   const saveMutation = useMutation({
     mutationFn: async ({ ingredient, originalName }: SaveIngredientInput) => {
       if (originalName && originalName !== ingredient.name) {
-        await deleteIngredient(originalName)
+        return renameIngredient(originalName, ingredient)
       }
-      return upsertIngredient(ingredient)
+      await upsertIngredient(ingredient)
+      return { ingredient, updated_recipes: [] as string[] }
     },
-    onSuccess: async () => {
+    onSuccess: async result => {
       const catalog = await getIngredientCatalog()
       await putIngredientCatalog(catalog)
       queryClient.setQueryData(['ingredients'], catalog)
       await refresh()
+      if (result.updated_recipes.length) {
+        await runSync()
+        await queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      }
       closeDialog()
     },
   })

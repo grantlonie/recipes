@@ -4,6 +4,7 @@ from typing import Any
 
 import yaml
 
+from app.ingredient_inflection import inflection_forms
 from app.models import Ingredient, RecipeNote, RecipeSection, RecipeStep
 from app.units import normalize_unit, split_glued_amount
 
@@ -360,6 +361,29 @@ def ingredient_note_from_match(match: re.Match[str]) -> str | None:
 
 def ingredient_name_from_match(match: re.Match[str]) -> str:
     return (match.group("name_braced") or match.group("name") or "").strip()
+
+
+def rename_ingredient_markers(body: str, old_name: str, new_name: str) -> str:
+    """Rewrite @ingredient markers that match old_name (incl. inflection) to new_name."""
+    old_forms = set(inflection_forms(old_name))
+    if not old_forms:
+        return body
+    target = new_name.strip()
+    if not target:
+        return body
+
+    def replacer(match: re.Match[str]) -> str:
+        name = ingredient_name_from_match(match)
+        if not name or not (set(inflection_forms(name)) & old_forms):
+            return match.group(0)
+        amount = match.group("amount")
+        if amount is None and match.group("name_braced") is None:
+            amount = ""
+        else:
+            amount = amount or ""
+        return format_ingredient_markup(target, amount, ingredient_note_from_match(match))
+
+    return INGREDIENT_RE.sub(replacer, body)
 
 
 def ingredient_match_to_plain_text(match: re.Match[str]) -> str:

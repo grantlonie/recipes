@@ -178,6 +178,20 @@ class RecipeRepository:
         self._mtimes.pop(slug, None)
         self.version += 1
 
+    def rewrite_ingredient_name(self, old_name: str, new_name: str) -> list[str]:
+        """Rewrite @ingredient markers across recipes. Returns updated slugs."""
+        self.sync_index()
+        updated: list[str] = []
+        for slug in sorted(self.recipes):
+            recipe = self.recipes[slug]
+            metadata, body = cooklang.parse_document(recipe.content)
+            rewritten = cooklang.rename_ingredient_markers(body, old_name, new_name)
+            if rewritten == body:
+                continue
+            self.write_recipe(slug, cooklang.render_document(metadata, rewritten))
+            updated.append(slug)
+        return updated
+
     def recipe_path(self, slug: str) -> Path:
         return safe_recipe_dir(self.recipe_root, slug) / RECIPE_FILENAME
 

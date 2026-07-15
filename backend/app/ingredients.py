@@ -14,6 +14,10 @@ class IngredientStorageError(ValueError):
     pass
 
 
+class IngredientConflictError(IngredientStorageError):
+    pass
+
+
 @dataclass
 class IngredientRepository:
     catalog_path: Path
@@ -69,6 +73,41 @@ class IngredientRepository:
         )
         ingredients = [
             item for item in catalog.ingredients if item.name.casefold() != name.casefold()
+        ]
+        ingredients.append(cleaned)
+        self._write(IngredientCatalog(version=catalog.version + 1, ingredients=ingredients))
+        return cleaned
+
+    def rename(self, old_name: str, ingredient: CatalogIngredient) -> CatalogIngredient:
+        old_key = old_name.strip().casefold()
+        new_key = ingredient.name.strip().casefold()
+        if not old_key:
+            raise IngredientStorageError("Original ingredient name is required")
+        if not new_key:
+            raise IngredientStorageError("Ingredient name is required")
+
+        catalog = self.get_catalog()
+        existing = next(
+            (item for item in catalog.ingredients if item.name.casefold() == old_key),
+            None,
+        )
+        if existing is None:
+            raise IngredientStorageError("Ingredient not found")
+
+        if old_key != new_key:
+            collision = self.find_by_name(new_key)
+            if collision is not None and collision.name.casefold() != old_key:
+                raise IngredientConflictError(
+                    f"Ingredient name conflicts with existing entry '{collision.name}'"
+                )
+
+        cleaned = CatalogIngredient(
+            name=new_key,
+            density_kg_m3=ingredient.density_kg_m3,
+            aliases=_clean_aliases(ingredient.aliases, new_key),
+        )
+        ingredients = [
+            item for item in catalog.ingredients if item.name.casefold() != old_key
         ]
         ingredients.append(cleaned)
         self._write(IngredientCatalog(version=catalog.version + 1, ingredients=ingredients))

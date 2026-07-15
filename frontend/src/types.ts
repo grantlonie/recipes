@@ -25,6 +25,11 @@ export interface IngredientCatalog {
   ingredients: CatalogIngredient[]
 }
 
+export interface IngredientRenameResult {
+  ingredient: CatalogIngredient
+  updated_recipes: string[]
+}
+
 export interface DensityEstimate {
   name: string
   density_kg_m3?: number | null

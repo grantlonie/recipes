@@ -23,6 +23,16 @@ class IngredientCatalog(BaseModel):
     ingredients: list[CatalogIngredient] = Field(default_factory=list)
 
 
+class IngredientRenameRequest(BaseModel):
+    old_name: str
+    ingredient: CatalogIngredient
+
+
+class IngredientRenameResponse(BaseModel):
+    ingredient: CatalogIngredient
+    updated_recipes: list[str] = Field(default_factory=list)
+
+
 class DensityEstimateRequest(BaseModel):
     names: list[str] = Field(default_factory=list)
 

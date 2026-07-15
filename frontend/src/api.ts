@@ -5,6 +5,7 @@ import type {
   DensityEstimate,
   ImportPreview,
   IngredientCatalog,
+  IngredientRenameResult,
   RecipeDetail,
   RecipeMetadataInput,
   RecipeSummary,
@@ -68,6 +69,16 @@ export async function upsertIngredient(ingredient: CatalogIngredient): Promise<C
   return request('/api/ingredients', {
     body: JSON.stringify(ingredient),
     method: 'PUT',
+  })
+}
+
+export async function renameIngredient(
+  oldName: string,
+  ingredient: CatalogIngredient
+): Promise<IngredientRenameResult> {
+  return request('/api/ingredients/rename', {
+    body: JSON.stringify({ ingredient, old_name: oldName }),
+    method: 'POST',
   })
 }
 

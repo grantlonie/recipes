@@ -20,7 +20,11 @@ from app.config import Settings, get_settings
 from app.density_estimate import estimate_ingredient_densities
 from app.fireworks_llm import LLMError
 from app.importer import ImportError, import_from_slug_file, import_from_upload, import_from_url
-from app.ingredients import IngredientRepository, IngredientStorageError
+from app.ingredients import (
+    IngredientConflictError,
+    IngredientRepository,
+    IngredientStorageError,
+)
 from app.manifest import build_web_manifest
 from app.models import (
     AssetUploadResponse,
@@ -32,6 +36,8 @@ from app.models import (
     ImportPreview,
     ImportRequest,
     IngredientCatalog,
+    IngredientRenameRequest,
+    IngredientRenameResponse,
     LoginRequest,
     MetadataUpdate,
     RecipeDetail,
@@ -161,6 +167,32 @@ def upsert_ingredient(
         return ingredients.upsert(payload)
     except IngredientStorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@app.post("/api/ingredients/rename", dependencies=[Depends(auth.require_editor)])
+def rename_ingredient(
+    payload: IngredientRenameRequest,
+    ingredients: IngredientRepository = Depends(get_ingredients),
+    repository: RecipeRepository = Depends(get_repository),
+) -> IngredientRenameResponse:
+    old_name = payload.old_name.strip()
+    try:
+        renamed = ingredients.rename(old_name, payload.ingredient)
+    except IngredientConflictError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    except IngredientStorageError as error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if str(error) == "Ingredient not found"
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=str(error)) from error
+
+    updated_recipes: list[str] = []
+    if old_name.casefold() != renamed.name.casefold():
+        updated_recipes = repository.rewrite_ingredient_name(old_name, renamed.name)
+
+    return IngredientRenameResponse(ingredient=renamed, updated_recipes=updated_recipes)
 
 
 @app.post("/api/ingredients/estimate-density", dependencies=[Depends(auth.require_editor)])
