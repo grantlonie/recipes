@@ -10,7 +10,8 @@ from app.units import normalize_unit, split_glued_amount
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 FRONT_MATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
 RECIPES_PREFIX = "recipes/"
-TOKEN_CHARS = r"A-Za-z0-9_./' -"
+# Latin letters with diacritics (excl. ×÷) so names like jalapeño parse fully.
+TOKEN_CHARS = r"A-Za-z0-9_./' \-" + "\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F"
 INGREDIENT_RE = re.compile(
     rf"@(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{(?P<amount>[^}}]*)\}}|"
     rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|\(|$))"
@@ -20,7 +21,7 @@ COOKWARE_RE = re.compile(
     rf"#(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{\}}|"
     rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|$))"
 )
-TIMER_RE = re.compile(r"~(?P<name>[A-Za-z0-9_./' -]*?)?\{(?P<amount>[^}]*)\}")
+TIMER_RE = re.compile(rf"~(?P<name>[{TOKEN_CHARS}]*?)?\{{(?P<amount>[^}}]*)\}}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
 SECTION_LINE_RE = re.compile(r"^=+\s*(.+?)\s*=+\s*$")
 UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"

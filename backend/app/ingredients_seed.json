@@ -1077,9 +1077,7 @@
     {
       "name": "jalapenos",
       "density_kg_m3": null,
-      "aliases": [
-        "jalapeños"
-      ]
+      "aliases": []
     },
     {
       "name": "juniper berries",

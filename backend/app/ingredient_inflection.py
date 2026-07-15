@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # Last-token forms that look plural/singular-sensitive but should not be inflected.
 _UNINFLECTED = frozenset(
@@ -36,9 +37,20 @@ _IRREGULAR_SINGULARS = {plural: singular for singular, plural in _IRREGULAR_PLUR
 
 
 def normalize_ingredient_key(value: str) -> str:
-    text = value.strip().casefold().replace("-", " ")
+    text = fold_accents(value.strip().casefold().replace("-", " "))
     text = re.sub(r"[^\w\s]+", "", text, flags=re.UNICODE)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def fold_accents(value: str) -> str:
+    """Strip combining marks so jalapeño and jalapeno compare equal."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def token_match_forms(token: str) -> set[str]:
+    """Inflection forms for accent-insensitive matching (normalize already folds)."""
+    return {token, *inflection_forms(token)}
 
 
 def singularize_token(token: str) -> str:

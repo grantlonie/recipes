@@ -1,6 +1,10 @@
+import { COOKLANG_TOKEN_CHARS } from './cooklangTokens'
 import { splitGluedAmount } from './units'
 
-export const TIMER_TOKEN_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
+export const TIMER_TOKEN_RE = new RegExp(
+  `~([${COOKLANG_TOKEN_CHARS}]*?)\\{([^}]*)\\}`,
+  'g',
+)
 
 export type TimerUnit = 'hours' | 'minutes'
 

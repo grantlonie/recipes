@@ -270,8 +270,12 @@ export function formatIngredientAmount(
   return formatAmount(quantity, unit, options)
 }
 
+export function foldAccents(value: string): string {
+  return value.normalize('NFKD').replace(/\p{M}/gu, '')
+}
+
 export function normalizeIngredientKey(value: string): string {
-  return value
+  return foldAccents(value)
     .trim()
     .toLowerCase()
     .replace(/-/g, ' ')
@@ -442,6 +446,105 @@ export interface CatalogMatch {
   note: string
 }
 
+/** Words allowed in leftover notes for partial catalog matches. */
+const MODIFIER_WORDS = new Set([
+  'black',
+  'brown',
+  'cayenne',
+  'chopped',
+  'coarse',
+  'coarsely',
+  'cold',
+  'cooked',
+  'cracked',
+  'crushed',
+  'dark',
+  'diced',
+  'dried',
+  'dry',
+  'extra',
+  'fine',
+  'finely',
+  'firmly',
+  'fresh',
+  'freshly',
+  'frozen',
+  'green',
+  'ground',
+  'halved',
+  'hot',
+  'jumbo',
+  'kosher',
+  'large',
+  'light',
+  'lightly',
+  'medium',
+  'minced',
+  'organic',
+  'packed',
+  'pure',
+  'raw',
+  'red',
+  'roasted',
+  'room',
+  'salted',
+  'sea',
+  'sliced',
+  'small',
+  'smoked',
+  'softened',
+  'sour',
+  'sweet',
+  'toasted',
+  'unsalted',
+  'virgin',
+  'white',
+  'whole',
+  'yellow',
+])
+
+/** Leftover tokens that mean the matched catalog item is the wrong substance. */
+const SUBSTANCE_CHANGE_TOKENS = new Set([
+  'aperitivo',
+  'bean',
+  'beans',
+  'bell',
+  'brine',
+  'broth',
+  'butter',
+  'cheese',
+  'chips',
+  'chutney',
+  'condensed',
+  'cream',
+  'extract',
+  'flour',
+  'jam',
+  'jelly',
+  'juice',
+  'liqueur',
+  'meal',
+  'milk',
+  'mix',
+  'nectar',
+  'oil',
+  'paste',
+  'powder',
+  'preserves',
+  'pudding',
+  'puree',
+  'relish',
+  'rind',
+  'sauce',
+  'stock',
+  'sweetened',
+  'syrup',
+  'vinegar',
+  'wine',
+  'yogurt',
+  'zest',
+])
+
 export function matchCatalogIngredient(
   importedName: string,
   catalog: CatalogIngredient[]
@@ -453,11 +556,16 @@ export function matchCatalogIngredient(
 
   const exact = findCatalogIngredient(trimmed, catalog)
   if (exact) {
-    return { catalog: exact, note: '' }
+    return { catalog: exact, note: noteForExactMatch(trimmed, exact) }
   }
 
   let best:
-    | { item: CatalogIngredient; label: string; matchedForm: string; score: [number, number, number] }
+    | {
+        item: CatalogIngredient
+        label: string
+        matchedForm: string
+        score: [number, number, number]
+      }
     | undefined
   for (const item of catalog) {
     for (const label of [item.name, ...item.aliases]) {
@@ -480,17 +588,62 @@ export function matchCatalogIngredient(
     return { note: '' }
   }
 
+  const note = extractUnmatchedNote(trimmed, best.matchedForm)
+  if (!partialMatchIsSafe(trimmed, best.matchedForm, note, best.item.name)) {
+    return { note: '' }
+  }
   return {
     catalog: best.item,
-    note: extractUnmatchedNote(trimmed, best.matchedForm),
+    note,
   }
+}
+
+function noteForExactMatch(importedName: string, item: CatalogIngredient): string {
+  if (setsIntersect(inflectionForms(importedName), inflectionForms(item.name))) {
+    return ''
+  }
+
+  const matchedCanonical = matchedPhraseForm(importedName, item.name)
+  if (matchedCanonical) {
+    // Only pre-head leftovers become notes (balsamic vinegar → balsamic).
+    // Synonym aliases like corn kernels → corn stay note-free.
+    if (!matchedPhraseIsSuffix(importedName, matchedCanonical)) {
+      return ''
+    }
+    return extractUnmatchedNote(importedName, matchedCanonical)
+  }
+
+  const matchedLabel =
+    [item.name, ...item.aliases].find(label =>
+      setsIntersect(inflectionForms(importedName), inflectionForms(label))
+    ) ?? item.name
+
+  if (isExpandingAlias(matchedLabel, item.name)) {
+    return ''
+  }
+  if (isModifierQualifiedHead(matchedLabel, item.name)) {
+    return ''
+  }
+
+  const head = normalizeIngredientKey(item.name).split(' ').filter(Boolean).at(-1)
+  if (!head) {
+    return ''
+  }
+  const headForm = matchedPhraseForm(importedName, head)
+  if (!headForm) {
+    return ''
+  }
+  if (!matchedPhraseIsSuffix(importedName, headForm)) {
+    return ''
+  }
+  return extractUnmatchedNote(importedName, headForm)
 }
 
 function matchedPhraseForm(haystack: string, phrase: string): string | undefined {
   const trimmed = haystack.trim()
   let best: string | undefined
   for (const form of inflectionForms(phrase)) {
-    if (!flexiblePhrasePattern(form).test(trimmed)) {
+    if (!phraseHit(trimmed, form)) {
       continue
     }
     if (!best || form.length > best.length) {
@@ -505,9 +658,9 @@ function phraseMatchScore(
   candidate: string,
   matchedForm: string
 ): [number, number, number] {
-  const match = flexiblePhrasePattern(matchedForm).exec(haystack.trim())
+  const hit = phraseHit(haystack.trim(), matchedForm)
   const wordCount = normalizeIngredientKey(candidate).split(' ').filter(Boolean).length
-  const end = match ? match.index + match[0].length : -1
+  const end = hit ? hit.end : -1
   return [wordCount, end, candidate.length]
 }
 
@@ -523,13 +676,112 @@ function compareScore(left: [number, number, number], right: [number, number, nu
 
 function extractUnmatchedNote(importedName: string, matchedLabel: string): string {
   const imported = importedName.trim()
-  const match = flexiblePhrasePattern(matchedLabel).exec(imported)
-  if (!match) {
+  const hit = phraseHit(imported, matchedLabel)
+  if (!hit) {
     return imported
   }
-  const before = imported.slice(0, match.index).trim()
-  const after = imported.slice(match.index + match[0].length).trim()
-  return [before, after].filter(Boolean).join(' ')
+  const before = hit.source.slice(0, hit.start).trim()
+  const after = hit.source.slice(hit.end).trim()
+  return [before, after].filter(Boolean).join(', ')
+}
+
+function partialMatchIsSafe(
+  importedName: string,
+  matchedForm: string,
+  note: string,
+  catalogName: string
+): boolean {
+  if (!note.trim()) {
+    return true
+  }
+
+  const tokens = normalizeIngredientKey(note).split(' ').filter(Boolean)
+  if (!tokens.length) {
+    return true
+  }
+  if (tokens.every(token => MODIFIER_WORDS.has(token))) {
+    return true
+  }
+  if (tokens.some(token => SUBSTANCE_CHANGE_TOKENS.has(token))) {
+    return false
+  }
+  if (isExpandingAlias(matchedForm, catalogName)) {
+    return false
+  }
+  if (matchedPhraseIsSuffix(importedName, matchedForm)) {
+    return true
+  }
+  return false
+}
+
+function isExpandingAlias(matchedForm: string, catalogName: string): boolean {
+  if (setsIntersect(inflectionForms(matchedForm), inflectionForms(catalogName))) {
+    return false
+  }
+  const matchedTokens = new Set(normalizeIngredientKey(matchedForm).split(' ').filter(Boolean))
+  const catalogTokens = new Set(normalizeIngredientKey(catalogName).split(' ').filter(Boolean))
+  if (!matchedTokens.size) {
+    return false
+  }
+  for (const token of matchedTokens) {
+    if (!catalogTokens.has(token)) {
+      return false
+    }
+  }
+  return matchedTokens.size < catalogTokens.size
+}
+
+function isModifierQualifiedHead(matchedLabel: string, catalogName: string): boolean {
+  const head = normalizeIngredientKey(catalogName).split(' ').filter(Boolean).at(-1)
+  if (!head) {
+    return false
+  }
+  const labelTokens = normalizeIngredientKey(matchedLabel).split(' ').filter(Boolean)
+  if (labelTokens.length < 2) {
+    return false
+  }
+  const last = labelTokens[labelTokens.length - 1] ?? ''
+  if (!inflectionForms(head).includes(last)) {
+    return false
+  }
+  return labelTokens.slice(0, -1).every(token => MODIFIER_WORDS.has(token))
+}
+
+function matchedPhraseIsSuffix(importedName: string, matchedForm: string): boolean {
+  const hit = phraseHit(importedName.trim(), matchedForm)
+  if (!hit) {
+    return false
+  }
+  const after = hit.source.slice(hit.end).replace(/^[\s,.]+|[\s,.]+$/g, '')
+  return !after
+}
+
+function phraseHit(
+  haystack: string,
+  phrase: string
+): { end: number; source: string; start: number } | undefined {
+  const pattern = flexiblePhrasePattern(phrase)
+  const direct = pattern.exec(haystack)
+  if (direct) {
+    return {
+      end: direct.index + direct[0].length,
+      source: haystack,
+      start: direct.index,
+    }
+  }
+  const folded = foldAccents(haystack)
+  if (folded === haystack) {
+    return undefined
+  }
+  const foldedMatch = pattern.exec(folded)
+  if (!foldedMatch) {
+    return undefined
+  }
+  return {
+    end: foldedMatch.index + foldedMatch[0].length,
+    source: folded,
+    start: foldedMatch.index,
+  }
 }
 
 function flexiblePhrasePattern(phrase: string): RegExp {
@@ -540,6 +792,16 @@ function flexiblePhrasePattern(phrase: string): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function setsIntersect(left: Iterable<string>, right: Iterable<string>): boolean {
+  const rightSet = right instanceof Set ? right : new Set(right)
+  for (const value of left) {
+    if (rightSet.has(value)) {
+      return true
+    }
+  }
+  return false
 }
 
 export function densityForName(

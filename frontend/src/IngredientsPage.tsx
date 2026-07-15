@@ -1,5 +1,6 @@
 import { InformationCircleIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isEqual } from 'lodash-es'
 import type { FormEvent } from 'react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -27,9 +28,27 @@ const INGREDIENT_NOTES = [
   'Aliases are comma-separated alternate names used for matching.',
 ]
 
+interface IngredientFormState {
+  aliases: string
+  density: string
+  name: string
+}
+
 interface SaveIngredientInput {
   ingredient: CatalogIngredient
   originalName?: string
+}
+
+function emptyIngredientForm(): IngredientFormState {
+  return { aliases: '', density: '', name: '' }
+}
+
+function ingredientFormFromCatalog(item: CatalogIngredient): IngredientFormState {
+  return {
+    aliases: item.aliases.join(', '),
+    density: item.density_kg_m3 == null ? '' : String(item.density_kg_m3),
+    name: item.name,
+  }
 }
 
 export function IngredientsPage() {
@@ -40,10 +59,12 @@ export function IngredientsPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogIngredient | null>(null)
-  const [name, setName] = useState('')
-  const [density, setDensity] = useState('')
-  const [aliases, setAliases] = useState('')
+  const [initial, setInitial] = useState<IngredientFormState>(emptyIngredientForm)
+  const [draft, setDraft] = useState<IngredientFormState>(emptyIngredientForm)
   const [query, setQuery] = useState('')
+
+  const dirty = editing !== null && !isEqual(initial, draft)
+  const { aliases, density, name } = draft
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -214,7 +235,7 @@ export function IngredientsPage() {
               onBlur={() => {
                 void estimateDensityFromName()
               }}
-              onChange={event => setName(event.target.value)}
+              onChange={event => setDraft(current => ({ ...current, name: event.target.value }))}
               required
               value={name}
             />
@@ -227,7 +248,9 @@ export function IngredientsPage() {
               <input
                 className={`${inputClassName} min-w-0 flex-1`}
                 inputMode="decimal"
-                onChange={event => setDensity(event.target.value)}
+                onChange={event =>
+                  setDraft(current => ({ ...current, density: event.target.value }))
+                }
                 placeholder="Leave blank to show weight (lb/oz)"
                 value={density}
               />
@@ -243,7 +266,9 @@ export function IngredientsPage() {
             </span>
             <input
               className={`${inputClassName} mt-1`}
-              onChange={event => setAliases(event.target.value)}
+              onChange={event =>
+                setDraft(current => ({ ...current, aliases: event.target.value }))
+              }
               placeholder="flour, ap flour"
               value={aliases}
             />
@@ -271,11 +296,23 @@ export function IngredientsPage() {
               <span />
             )}
             <div className="flex gap-2">
-              <Button onClick={closeDialog} type="button" variant="ghost">
-                Cancel
-              </Button>
-              <Button disabled={saveMutation.isPending || !name.trim()} type="submit">
-                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              {!editing || dirty ? (
+                <Button onClick={closeDialog} type="button" variant="ghost">
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                className={editing ? 'w-[80px] justify-center' : undefined}
+                disabled={saveMutation.isPending || !name.trim()}
+                type="submit"
+              >
+                {saveMutation.isPending
+                  ? 'Saving...'
+                  : editing
+                    ? dirty
+                      ? 'Update'
+                      : 'Done'
+                    : 'Save'}
               </Button>
             </div>
           </div>
@@ -303,18 +340,18 @@ export function IngredientsPage() {
   )
 
   function openCreate() {
+    const snapshot = emptyIngredientForm()
     setEditing(null)
-    setName('')
-    setDensity('')
-    setAliases('')
+    setInitial(snapshot)
+    setDraft(snapshot)
     setDialogOpen(true)
   }
 
   function openEdit(item: CatalogIngredient) {
+    const snapshot = ingredientFormFromCatalog(item)
     setEditing(item)
-    setName(item.name)
-    setDensity(item.density_kg_m3 == null ? '' : String(item.density_kg_m3))
-    setAliases(item.aliases.join(', '))
+    setInitial(snapshot)
+    setDraft(snapshot)
     setDialogOpen(true)
   }
 
@@ -322,6 +359,9 @@ export function IngredientsPage() {
     setDeleteConfirmOpen(false)
     setDialogOpen(false)
     setEditing(null)
+    const snapshot = emptyIngredientForm()
+    setInitial(snapshot)
+    setDraft(snapshot)
   }
 
   async function estimateDensityFromName() {
@@ -338,7 +378,9 @@ export function IngredientsPage() {
       if (value == null || value <= 0) {
         return
       }
-      setDensity(current => (current.trim() ? current : String(Math.round(value))))
+      setDraft(current =>
+        current.density.trim() ? current : { ...current, density: String(Math.round(value)) }
+      )
     } catch {
       // Leave blank; search icon still available.
     }
@@ -361,6 +403,10 @@ export function IngredientsPage() {
 
   function handleSave(event: FormEvent) {
     event.preventDefault()
+    if (editing && !dirty) {
+      closeDialog()
+      return
+    }
     const densityValue = density.trim()
     const parsedDensity = densityValue ? Number(densityValue) : null
     if (densityValue && Number.isNaN(parsedDensity)) {

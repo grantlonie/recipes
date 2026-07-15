@@ -1,7 +1,13 @@
 import { normalizeUnit, splitGluedAmount } from './units'
 
-export const INGREDIENT_TOKEN_RE =
-  /@(?:([A-Za-z0-9_./' -]+?)\{([^}]*)\}|([A-Za-z0-9_./' -]+?)(?=\s|[.,;:!?)]|\(|$))(?:\(([^)]*)\))?/g
+/** ASCII + Latin letters with diacritics (excl. ×÷) so names like jalapeño parse fully. */
+export const COOKLANG_TOKEN_CHARS =
+  "A-Za-z0-9_./' \\-\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F"
+
+export const INGREDIENT_TOKEN_RE = new RegExp(
+  `@(?:([${COOKLANG_TOKEN_CHARS}]+?)\\{([^}]*)\\}|([${COOKLANG_TOKEN_CHARS}]+?)(?=\\s|[.,;:!?)]|\\(|$))(?:\\(([^)]*)\\))?`,
+  'g',
+)
 
 export interface IngredientAttrs {
   fixed: boolean

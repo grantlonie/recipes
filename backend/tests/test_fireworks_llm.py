@@ -45,6 +45,35 @@ Brown @beef{454%g}.
     assert "Brown @beef{454%g}." in normalized
 
 
+def test_normalize_model_output_strips_result_wrapper():
+    raw = """<result>
+---
+title: Sheet-Pan Chicken
+---
+
+Add @jalapeño brine{2%Tbsp}.
+</result>"""
+    normalized = normalize_model_output(raw)
+    assert normalized.startswith("---")
+    assert "<result>" not in normalized
+    assert "</result>" not in normalized
+    assert "Add @jalapeño brine{2%Tbsp}." in normalized
+
+
+def test_normalize_model_output_strips_unclosed_result_prefix():
+    raw = """<result>
+---
+title: Soup
+---
+
+Cook @onion{1}.
+"""
+    normalized = normalize_model_output(raw)
+    assert normalized.startswith("---")
+    assert "<result>" not in normalized
+    assert "Cook @onion{1}." in normalized
+
+
 def test_reasoning_extra_body_is_model_aware():
     assert reasoning_extra_body("accounts/fireworks/models/qwen3p7-plus") == {
         "thinking": {"type": "disabled"}

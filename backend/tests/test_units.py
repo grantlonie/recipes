@@ -59,7 +59,12 @@ def test_format_metric_and_us():
 def test_format_fraction_single_unit():
     assert format_fraction(2.25) == "2 ¼"
     assert format_fraction(0.5) == "½"
-    assert format_fraction(0.125) == "⅛"
+    assert format_fraction(1 / 3) == "⅓"
+    assert format_fraction(0.33) == "⅓"
+    assert format_fraction(0.375) == "⅓"
+    assert format_fraction(2 / 3) == "⅔"
+    assert format_fraction(0.75) == "¾"
+    assert format_fraction(0.125) == "¼"
 
 
 def test_format_grams_value():

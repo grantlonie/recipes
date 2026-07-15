@@ -10,59 +10,61 @@ const UNICODE_FRACTION_VALUES: Record<string, number> = {
   '⅞': 0.875,
 }
 
-const EIGHTH_UNICODE: Record<number, string> = {
-  1: '⅛',
-  2: '¼',
-  3: '⅜',
-  4: '½',
-  5: '⅝',
-  6: '¾',
-  7: '⅞',
-}
-
-export const EIGHTH_FRACTION_OPTIONS: Array<{ eighths: number; label: string }> = [
-  { eighths: 0, label: '—' },
-  { eighths: 1, label: '⅛' },
-  { eighths: 2, label: '¼' },
-  { eighths: 3, label: '⅜' },
-  { eighths: 4, label: '½' },
-  { eighths: 5, label: '⅝' },
-  { eighths: 6, label: '¾' },
-  { eighths: 7, label: '⅞' },
+/** Cooking-friendly display fractions: quarters, thirds, and half. */
+const DISPLAY_FRACTIONS: Array<{ label: string; value: number }> = [
+  { label: '', value: 0 },
+  { label: '¼', value: 0.25 },
+  { label: '⅓', value: 1 / 3 },
+  { label: '½', value: 0.5 },
+  { label: '⅔', value: 2 / 3 },
+  { label: '¾', value: 0.75 },
+  { label: '', value: 1 },
 ]
 
-export interface QuantityEighthParts {
+export const FRACTION_OPTIONS: Array<{ label: string; value: number }> = [
+  { label: '—', value: 0 },
+  { label: '¼', value: 0.25 },
+  { label: '⅓', value: 1 / 3 },
+  { label: '½', value: 0.5 },
+  { label: '⅔', value: 2 / 3 },
+  { label: '¾', value: 0.75 },
+]
+
+export interface QuantityParts {
+  fraction: number
   whole: number
-  remainderEighths: number
 }
 
-export function quantityToEighthParts(value: string): QuantityEighthParts {
+export function quantityToParts(value: string): QuantityParts {
   const parsed = parseQuantity(value)
   if (parsed === null) {
-    return { whole: 0, remainderEighths: 0 }
+    return { fraction: 0, whole: 0 }
   }
 
-  const eighths = Math.round(parsed * 8)
+  const nearest = nearestDisplayAmount(parsed)
   return {
-    whole: Math.floor(eighths / 8),
-    remainderEighths: ((eighths % 8) + 8) % 8,
+    fraction: nearest.fraction,
+    whole: nearest.whole,
   }
 }
 
-export function eighthPartsToQuantity(whole: number, remainderEighths: number): string {
-  if (whole === 0 && remainderEighths === 0) {
+export function partsToQuantity(whole: number, fraction: number): string {
+  if (whole === 0 && fraction === 0) {
     return ''
   }
 
-  if (remainderEighths === 0) {
+  if (fraction === 0) {
     return String(whole)
   }
 
-  const fraction = EIGHTH_UNICODE[remainderEighths] ?? `${remainderEighths}/8`
+  const label = DISPLAY_FRACTIONS.find(
+    option => option.value !== 0 && option.value !== 1 && almostEqual(option.value, fraction)
+  )?.label
+  const fractionLabel = label ?? String(fraction)
   if (whole === 0) {
-    return fraction
+    return fractionLabel
   }
-  return `${whole} ${fraction}`
+  return `${whole} ${fractionLabel}`
 }
 
 export function parseQuantity(value: string): number | null {
@@ -113,17 +115,48 @@ export function formatQuantityDisplay(value: string): string {
     return value
   }
 
-  const eighths = Math.round(parsed * 8)
-  const whole = Math.floor(eighths / 8)
-  const remainderEighths = ((eighths % 8) + 8) % 8
-
-  if (remainderEighths === 0) {
-    return String(whole)
+  const nearest = nearestDisplayAmount(parsed)
+  if (nearest.fraction === 0) {
+    return String(nearest.whole)
   }
 
-  const fraction = EIGHTH_UNICODE[remainderEighths] ?? `${remainderEighths}/8`
-  if (whole === 0) {
-    return fraction
+  const label = DISPLAY_FRACTIONS.find(
+    option => option.value !== 0 && option.value !== 1 && almostEqual(option.value, nearest.fraction)
+  )?.label
+  const fractionLabel = label ?? String(nearest.fraction)
+  if (nearest.whole === 0) {
+    return fractionLabel
   }
-  return `${whole} ${fraction}`
+  return `${nearest.whole} ${fractionLabel}`
+}
+
+function nearestDisplayAmount(value: number): QuantityParts {
+  const absolute = Math.abs(value)
+  const whole = Math.floor(absolute + 1e-9)
+  const frac = absolute - whole
+
+  let best = DISPLAY_FRACTIONS[0]
+  let bestDistance = Number.POSITIVE_INFINITY
+  let bestTieBreak = Number.POSITIVE_INFINITY
+  for (const candidate of DISPLAY_FRACTIONS) {
+    const distance = Math.abs(candidate.value - frac)
+    const tieBreak = candidate.value === 0 || candidate.value === 1 ? 1 : 0
+    if (
+      distance < bestDistance - 1e-12 ||
+      (Math.abs(distance - bestDistance) <= 1e-12 && tieBreak < bestTieBreak)
+    ) {
+      best = candidate
+      bestDistance = distance
+      bestTieBreak = tieBreak
+    }
+  }
+
+  if (best.value === 1) {
+    return { fraction: 0, whole: whole + 1 }
+  }
+  return { fraction: best.value, whole }
+}
+
+function almostEqual(left: number, right: number): boolean {
+  return Math.abs(left - right) < 1e-9
 }

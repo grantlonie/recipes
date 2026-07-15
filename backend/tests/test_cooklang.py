@@ -161,6 +161,21 @@ def test_parse_ingredients_keeps_braced_multi_word_names_together():
     assert ingredients[2].unit is None
 
 
+def test_parse_ingredients_allows_accented_letters_in_names():
+    ingredients = parse_ingredients(
+        "Combine @pickled jalapeño brine{2%Tbsp} and @pickled jalapeños{0.33%cup}."
+    )
+
+    assert [ingredient.name for ingredient in ingredients] == [
+        "pickled jalapeño brine",
+        "pickled jalapeños",
+    ]
+    assert ingredients[0].quantity == "2"
+    assert ingredients[0].unit == "Tbsp"
+    assert ingredients[1].quantity == "0.33"
+    assert ingredients[1].unit == "cup"
+
+
 def test_parse_ingredients_still_supports_single_word_shorthand():
     ingredients = parse_ingredients("Season with @salt and serve.")
 

@@ -16,6 +16,10 @@ COOKLANG_FENCE_RE = re.compile(
     r"```(?:[A-Za-z0-9_+-]*)?\s*\n?(.*?)```",
     re.DOTALL | re.IGNORECASE,
 )
+RESULT_BLOCK_RE = re.compile(
+    r"<result>\s*(.*?)\s*</result>",
+    re.DOTALL | re.IGNORECASE,
+)
 THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
@@ -136,8 +140,21 @@ def strip_think_blocks(content: str) -> str:
     return THINK_BLOCK_RE.sub("", content).strip()
 
 
+def strip_result_wrappers(content: str) -> str:
+    """Remove model wrappers like <result>...</result> around Cooklang docs."""
+    cleaned = content.strip()
+    match = RESULT_BLOCK_RE.search(cleaned)
+    if match:
+        return match.group(1).strip()
+    if cleaned[:8].casefold() == "<result>":
+        cleaned = cleaned[8:].lstrip()
+    if cleaned[-9:].casefold() == "</result>":
+        cleaned = cleaned[:-9].rstrip()
+    return cleaned
+
+
 def normalize_model_output(content: str) -> str:
-    cleaned = strip_think_blocks(content)
+    cleaned = strip_result_wrappers(strip_think_blocks(content))
     fenced = COOKLANG_FENCE_RE.search(cleaned)
     if fenced:
         cleaned = fenced.group(1).strip()

@@ -1,5 +1,9 @@
-export const COOKWARE_TOKEN_RE =
-  /#(?:([A-Za-z0-9_./' -]+?)\{\}|([A-Za-z0-9_./' -]+?)(?=\s|[.,;:!?)]|$))/g
+import { COOKLANG_TOKEN_CHARS } from './cooklangTokens'
+
+export const COOKWARE_TOKEN_RE = new RegExp(
+  `#(?:([${COOKLANG_TOKEN_CHARS}]+?)\\{\\}|([${COOKLANG_TOKEN_CHARS}]+?)(?=\\s|[.,;:!?)]|$))`,
+  'g',
+)
 
 export interface CookwareAttrs {
   name: string

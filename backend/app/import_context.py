@@ -15,6 +15,11 @@ Output rules:
 - Ingredients must appear inline in steps as @name{{quantity%unit}} or @name{{quantity%unit}}(note).
 - Multi-word ingredient names MUST use braces: @olive oil{{2%Tbsp}}, @all-purpose flour{{1.5%cup}}.
 - Put preparation words in (notes) after the amount, not in the ingredient name.
+  Words from the Ingredients list such as chopped, diced, minced, thinly sliced,
+  finely grated, and similar MUST appear in the (note). Keep variety words that
+  belong to the shopping name in the @name when useful (pickled jalapeños),
+  but still carry prep into the note.
+  Example: "⅓ cup chopped pickled jalapeños" → @pickled jalapeños{{0.33%cup}}(chopped).
 - Use ==Section Title== for sections (not markdown headings).
 - Use #cookware{{}} markers when relevant and ~timer{{10%minutes}} for timers.
   Never put counts on cookware (#pan{{}}, not pan{{1}} or baking pan{{1}}).

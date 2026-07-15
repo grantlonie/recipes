@@ -24,6 +24,8 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "green bell pepper ≠ black pepper" in prompt
     assert "Never write {0%g}" in prompt
     assert "Avoid these mistakes:" in prompt
+    assert "Put preparation words in (notes)" in prompt
+    assert '@pickled jalapeños{0.33%cup}(chopped)' in prompt
     assert "@green bell pepper{1}(diced)" in prompt
     assert "Treat source spellings tbsp" in prompt
     assert '"1 tbsp fennel seeds"' in prompt
@@ -144,6 +146,52 @@ Cook.
     result = validate_imported_cooklang(content, source_text=source)
     assert any("garlic" in warning for warning in result.warnings)
     assert not any("onion" in warning.lower() for warning in result.warnings)
+
+
+def test_validate_imported_cooklang_flags_missing_prep_notes():
+    content = """---
+title: Sheet pan
+---
+
+Toss @jalapenos{0.33%cup}(pickled) with @corn{4%cup}.
+Garnish with @jalapenos{1}(sliced into rings).
+"""
+    source = """Ingredients
+1/3 cup chopped pickled jalapeños, plus brine from the jar
+4 cups corn kernels
+1 jalapeño, sliced into rings
+
+Directions
+Cook.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert any(
+        "chopped" in warning and "Source preparation note missing for" in warning
+        for warning in result.warnings
+    )
+    assert not any(
+        "sliced into rings" in warning and "Source preparation note missing for" in warning
+        for warning in result.warnings
+    )
+    # Soft warning only — do not trigger the expensive repair model.
+    assert not result.needs_repair
+
+
+def test_validate_imported_cooklang_accepts_prep_notes():
+    content = """---
+title: Sheet pan
+---
+
+Toss @jalapenos{0.33%cup}(pickled, chopped) with @corn{4%cup}.
+"""
+    source = """Ingredients
+1/3 cup chopped pickled jalapeños
+
+Directions
+Cook.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert result.warnings == []
 
 
 def test_validate_recognizes_converted_amounts_as_present():

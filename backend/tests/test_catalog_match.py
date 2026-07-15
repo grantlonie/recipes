@@ -42,6 +42,7 @@ def test_match_catalog_ingredient_preserves_alias_variety_as_note():
         ),
         CatalogIngredient(name="black pepper", aliases=["pepper", "ground black pepper"]),
         CatalogIngredient(name="olive oil", aliases=["extra virgin olive oil", "evoo"]),
+        CatalogIngredient(name="corn", aliases=["corn kernels"]),
     ]
     balsamic = match_catalog_ingredient("balsamic vinegar", catalog)
     assert balsamic.catalog is not None
@@ -63,6 +64,12 @@ def test_match_catalog_ingredient_preserves_alias_variety_as_note():
     assert evoo.catalog is not None
     assert evoo.catalog.name == "olive oil"
     assert evoo.note == ""
+
+    # Synonym alias where catalog name is a prefix, not the head suffix.
+    corn = match_catalog_ingredient("corn kernels", catalog)
+    assert corn.catalog is not None
+    assert corn.catalog.name == "corn"
+    assert corn.note == ""
 
 
 def test_match_catalog_ingredient_matches_singular_and_plural():
@@ -103,6 +110,39 @@ def test_apply_catalog_mapping_rewrites_known_ingredients(tmp_path):
     assert "@bacon" in mapped
     assert "@mystery spice{}" in mapped
     assert unmatched == ["mystery spice"]
+
+
+def test_match_pickled_jalapenos_keeps_pickled_as_note():
+    catalog = [
+        CatalogIngredient(name="jalapenos", aliases=[]),
+    ]
+    match = match_catalog_ingredient("pickled jalapeños", catalog)
+    assert match.catalog is not None
+    assert match.catalog.name == "jalapenos"
+    assert match.note == "pickled"
+
+    # Brine is a different substance — leave unmatched rather than collapsing to jalapenos.
+    assert match_catalog_ingredient("pickled jalapeño brine", catalog).catalog is None
+    assert match_catalog_ingredient("jalapeño brine", catalog).catalog is None
+
+
+def test_match_prefers_jalapeno_brine_over_jalapenos():
+    catalog = [
+        CatalogIngredient(name="jalapenos", aliases=[]),
+        CatalogIngredient(name="jalapeno brine", aliases=[]),
+    ]
+    brine = match_catalog_ingredient("pickled jalapeño brine", catalog)
+    assert brine.catalog is not None
+    assert brine.catalog.name == "jalapeno brine"
+    assert brine.note == "pickled"
+
+
+def test_match_folds_accents_without_aliases():
+    catalog = [CatalogIngredient(name="jalapenos", aliases=[])]
+    exact = match_catalog_ingredient("jalapeños", catalog)
+    assert exact.catalog is not None
+    assert exact.catalog.name == "jalapenos"
+    assert exact.note == ""
 
 
 def test_match_catalog_ingredient_prefers_head_noun_over_modifier():

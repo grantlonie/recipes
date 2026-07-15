@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app import cooklang
-from app.ingredient_inflection import inflection_forms
+from app.ingredient_inflection import fold_accents, inflection_forms
 from app.ingredients import IngredientRepository, normalize_ingredient_key
 from app.models import CatalogIngredient
 from app.non_ingredients import is_non_ingredient
@@ -76,6 +76,7 @@ _SUBSTANCE_CHANGE_TOKENS = frozenset(
         "bean",
         "beans",
         "bell",
+        "brine",
         "broth",
         "butter",
         "cheese",
@@ -207,6 +208,9 @@ def _note_for_exact_match(imported_name: str, canonical_name: str, matched_label
     """Keep variety/modifiers when an alias collapses to a shorter catalog name.
 
     Example: \"balsamic vinegar\" matches vinegar via alias → note \"balsamic\".
+    Synonym aliases where the catalog name is not the head-noun suffix
+    (\"corn kernels\" → \"corn\") stay note-free — leftovers like \"kernels\" are
+    identity wording, not variety.
     Pure inflections (\"egg\" → \"eggs\") and short aliases that expand
     (\"pepper\" → \"black pepper\", \"evoo\" → \"olive oil\") stay note-free.
     Alternate full names (\"italian frying pepper\" → \"green bell pepper\") keep
@@ -217,6 +221,9 @@ def _note_for_exact_match(imported_name: str, canonical_name: str, matched_label
 
     matched_form = _matched_phrase_form(imported_name, canonical_name)
     if matched_form is not None:
+        # Only pre-head leftovers become notes (balsamic vinegar → balsamic).
+        if not _matched_phrase_is_suffix(imported_name, matched_form):
+            return ""
         return _extract_unmatched_note(imported_name, matched_form)
 
     # pepper → black pepper; ground pepper → black pepper (modifier + expanding head)
@@ -230,6 +237,8 @@ def _note_for_exact_match(imported_name: str, canonical_name: str, matched_label
         return ""
     head_form = _matched_phrase_form(imported_name, head)
     if head_form is None:
+        return ""
+    if not _matched_phrase_is_suffix(imported_name, head_form):
         return ""
     return _extract_unmatched_note(imported_name, head_form)
 
@@ -251,7 +260,7 @@ def _matched_phrase_form(haystack: str, phrase: str) -> str | None:
     trimmed = haystack.strip()
     best: str | None = None
     for form in inflection_forms(phrase):
-        if _flexible_phrase_pattern(form).search(trimmed) is None:
+        if _phrase_hit(trimmed, form) is None:
             continue
         if best is None or len(form) > len(best):
             best = form
@@ -260,19 +269,20 @@ def _matched_phrase_form(haystack: str, phrase: str) -> str | None:
 
 def _phrase_match_score(haystack: str, candidate: str, matched_form: str) -> tuple[int, int, int]:
     """Prefer multi-word labels, then rightmost head-noun matches, then longer labels."""
-    match = _flexible_phrase_pattern(matched_form).search(haystack.strip())
+    hit = _phrase_hit(haystack.strip(), matched_form)
     word_count = len(normalize_ingredient_key(candidate).split())
-    end = match.end() if match else -1
+    end = hit[2] if hit else -1
     return (word_count, end, len(candidate))
 
 
 def _extract_unmatched_note(imported_name: str, matched_label: str) -> str:
     imported = imported_name.strip()
-    match = _flexible_phrase_pattern(matched_label).search(imported)
-    if not match:
+    hit = _phrase_hit(imported, matched_label)
+    if hit is None:
         return imported
-    before = imported[: match.start()].strip()
-    after = imported[match.end() :].strip()
+    source, start, end = hit
+    before = source[:start].strip()
+    after = source[end:].strip()
     return ", ".join(part for part in (before, after) if part)
 
 
@@ -323,11 +333,27 @@ def _is_expanding_alias(matched_form: str, catalog_name: str) -> bool:
 
 
 def _matched_phrase_is_suffix(imported_name: str, matched_form: str) -> bool:
-    match = _flexible_phrase_pattern(matched_form).search(imported_name.strip())
-    if match is None:
+    hit = _phrase_hit(imported_name.strip(), matched_form)
+    if hit is None:
         return False
-    after = imported_name[match.end() :].strip(" ,.")
+    source, _start, end = hit
+    after = source[end:].strip(" ,.")
     return not after
+
+
+def _phrase_hit(haystack: str, phrase: str) -> tuple[str, int, int] | None:
+    """Return (matched_source, start, end), folding accents when needed."""
+    pattern = _flexible_phrase_pattern(phrase)
+    match = pattern.search(haystack)
+    if match:
+        return haystack, match.start(), match.end()
+    folded = fold_accents(haystack)
+    if folded == haystack:
+        return None
+    match = pattern.search(folded)
+    if match is None:
+        return None
+    return folded, match.start(), match.end()
 
 
 def _flexible_phrase_pattern(phrase: str) -> re.Pattern[str]:

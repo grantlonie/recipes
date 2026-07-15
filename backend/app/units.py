@@ -77,14 +77,23 @@ VOLUME_TO_ML: dict[str, float] = {
 }
 
 UNICODE_FRACTIONS = {
-    Fraction(1, 8): "⅛",
     Fraction(1, 4): "¼",
-    Fraction(3, 8): "⅜",
+    Fraction(1, 3): "⅓",
     Fraction(1, 2): "½",
-    Fraction(5, 8): "⅝",
+    Fraction(2, 3): "⅔",
     Fraction(3, 4): "¾",
-    Fraction(7, 8): "⅞",
 }
+
+# Quarters, thirds, and half — no eighths for display.
+_DISPLAY_FRACTION_CANDIDATES = (
+    Fraction(0),
+    Fraction(1, 4),
+    Fraction(1, 3),
+    Fraction(1, 2),
+    Fraction(2, 3),
+    Fraction(3, 4),
+    Fraction(1),
+)
 
 
 @dataclass(frozen=True)
@@ -154,13 +163,26 @@ def grams_to_ml(grams: float, density_kg_m3: float) -> float:
     return grams * 1000.0 / density_kg_m3
 
 
-def format_fraction(value: float, *, step: Fraction = Fraction(1, 8)) -> str:
+def format_fraction(value: float) -> str:
+    """Round to the nearest quarter, third, or half for display."""
     if value < 0:
-        return format_fraction(-value, step=step)
-    steps = int(round(value / float(step)))
-    total = steps * step
-    whole = int(total)
-    remainder = total - whole
+        return format_fraction(-value)
+
+    whole = int(math.floor(value + 1e-12))
+    fractional = Fraction(value - whole).limit_denominator(10_000)
+    best = min(
+        _DISPLAY_FRACTION_CANDIDATES,
+        key=lambda candidate: (
+            abs(candidate - fractional),
+            0 if candidate not in (0, 1) else 1,
+        ),
+    )
+    if best == 1:
+        whole += 1
+        remainder = Fraction(0)
+    else:
+        remainder = best
+
     if remainder == 0:
         return str(whole)
     fraction = UNICODE_FRACTIONS.get(remainder, f"{remainder.numerator}/{remainder.denominator}")
@@ -225,7 +247,7 @@ def format_us_volume(grams: float, density_kg_m3: float) -> DisplayAmount:
     if tbsp >= 1:
         return DisplayAmount(format_fraction(tbsp), "Tbsp")
     tsp = ml / ML_PER_TSP
-    return DisplayAmount(format_fraction(tsp, step=Fraction(1, 4)), "tsp")
+    return DisplayAmount(format_fraction(tsp), "tsp")
 
 
 def format_amount(

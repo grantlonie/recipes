@@ -4,7 +4,8 @@ import re
 from dataclasses import dataclass
 
 from app import cooklang
-from app.ingredient_inflection import inflection_forms, normalize_ingredient_key
+from app.ingredient_inflection import inflection_forms, normalize_ingredient_key, token_match_forms
+from app.models import Ingredient
 
 _INVALID_AMOUNT_RE = re.compile(
     r"^\s*(?:=)?(?:0(?:\.0+)?%g|0|pinch|splash|to taste|as needed|optional)\s*$",
@@ -122,6 +123,31 @@ _STOP_WORDS = frozenset(
         "with",
     }
 )
+# Prep words that shopping-list lines usually put before the ingredient name.
+_PREP_WORDS = frozenset(
+    {
+        "chopped",
+        "crumbled",
+        "crushed",
+        "cubed",
+        "diced",
+        "grated",
+        "halved",
+        "julienned",
+        "melted",
+        "minced",
+        "peeled",
+        "pitted",
+        "quartered",
+        "seeded",
+        "shredded",
+        "sliced",
+        "softened",
+        "toasted",
+        "trimmed",
+    }
+)
+# Prep-note gaps stay soft warnings only — they must not trigger a second LLM repair pass.
 _STRUCTURAL_WARNING_PREFIXES = (
     "Invalid amount for @",
     "Plain-text amount not marked as ingredient:",
@@ -154,6 +180,7 @@ def validate_imported_cooklang(content: str, *, source_text: str | None = None) 
     warnings.extend(_cookware_count_warnings(body))
     if source_text:
         warnings.extend(_missing_source_ingredient_warnings(body, source_text))
+        warnings.extend(_missing_prep_note_warnings(body, source_text))
     return ImportValidation(warnings=warnings)
 
 
@@ -232,6 +259,39 @@ def _missing_source_ingredient_warnings(body: str, source_text: str) -> list[str
     return warnings
 
 
+def _missing_prep_note_warnings(body: str, source_text: str) -> list[str]:
+    """Flag shopping-list prep words (chopped, diced, …) dropped from Cooklang notes."""
+    source_lines = _source_ingredient_lines(source_text)
+    if not source_lines:
+        return []
+
+    cook_ingredients = cooklang.parse_ingredients(body)
+    warnings: list[str] = []
+    for line in source_lines:
+        if _SKIP_SOURCE_LINE_RE.search(line):
+            continue
+        prep_words = _source_prep_words(line)
+        if not prep_words:
+            continue
+        matches = _matching_cook_ingredients(line, cook_ingredients)
+        if not matches:
+            continue
+        covered: set[str] = set()
+        for ingredient in matches:
+            haystack = f"{ingredient.name} {ingredient.note or ''}".casefold()
+            for prep in prep_words:
+                forms = set(inflection_forms(prep))
+                forms.add(prep)
+                if any(re.search(rf"\b{re.escape(form)}\b", haystack) for form in forms):
+                    covered.add(prep)
+        missing = [prep for prep in prep_words if prep not in covered]
+        if missing:
+            warnings.append(
+                f"Source preparation note missing for {line}: {', '.join(missing)}"
+            )
+    return warnings
+
+
 def _source_ingredient_lines(source_text: str) -> list[str]:
     lines = source_text.splitlines()
     in_ingredients = False
@@ -257,20 +317,42 @@ def _source_ingredient_lines(source_text: str) -> list[str]:
     return collected
 
 
+def _source_prep_words(line: str) -> list[str]:
+    tokens = re.findall(r"[^\W\d_][^\W\d_']{2,}", line.casefold(), flags=re.UNICODE)
+    return list(dict.fromkeys(token for token in tokens if token in _PREP_WORDS))
+
+
+def _matching_cook_ingredients(line: str, cook_ingredients: list[Ingredient]) -> list[Ingredient]:
+    content_tokens = _source_content_tokens(line)
+    if not content_tokens:
+        return []
+    matches: list[Ingredient] = []
+    for ingredient in cook_ingredients:
+        name_forms: set[str] = set()
+        for token in normalize_ingredient_key(ingredient.name).split():
+            name_forms.update(token_match_forms(token))
+        for token in content_tokens:
+            if token_match_forms(token) & name_forms:
+                matches.append(ingredient)
+                break
+    return matches
+
+
 def _cook_ingredient_names(body: str) -> set[str]:
     names: set[str] = set()
     for match in cooklang.INGREDIENT_RE.finditer(body):
         name = (match.group("name_braced") or match.group("name") or "").strip()
         if not name:
             continue
-        names.update(inflection_forms(name))
-        names.update(normalize_ingredient_key(name).split())
+        names.update(token_match_forms(name))
+        for token in normalize_ingredient_key(name).split():
+            names.update(token_match_forms(token))
     return names
 
 
 def _cook_content_tokens(body: str) -> set[str]:
     tokens: set[str] = set()
-    for token in re.findall(r"[a-z][a-z']{2,}", body.casefold()):
+    for token in re.findall(r"[^\W\d_][^\W\d_']{2,}", body.casefold(), flags=re.UNICODE):
         if token in _STOP_WORDS or token in _UNIT_WORDS:
             continue
         tokens.add(token)
@@ -285,16 +367,16 @@ def _source_line_is_covered(line: str, cook_names: set[str], cook_tokens: set[st
 
     # Prefer matching against known @ingredient names / inflections.
     for token in content_tokens:
-        forms = set(inflection_forms(token))
-        forms.add(token)
-        if forms & cook_names:
+        if token_match_forms(token) & cook_names:
             return True
 
     # Fall back to presence of distinctive content tokens in the body.
     distinctive = [token for token in content_tokens if len(token) >= 4]
     if not distinctive:
         distinctive = content_tokens
-    return any(token in cook_tokens or set(inflection_forms(token)) & cook_tokens for token in distinctive)
+    return any(
+        token in cook_tokens or token_match_forms(token) & cook_tokens for token in distinctive
+    )
 
 
 def _source_content_tokens(line: str) -> list[str]:
@@ -302,7 +384,7 @@ def _source_content_tokens(line: str) -> list[str]:
     cleaned = re.sub(r"\d+(?:[./]\d+)?", " ", cleaned)
     tokens = [
         token
-        for token in re.findall(r"[a-z][a-z']{2,}", cleaned.casefold())
+        for token in re.findall(r"[^\W\d_][^\W\d_']{2,}", cleaned.casefold(), flags=re.UNICODE)
         if token not in _STOP_WORDS and token not in _UNIT_WORDS
     ]
     # Prefer later tokens (usually the ingredient head noun).
