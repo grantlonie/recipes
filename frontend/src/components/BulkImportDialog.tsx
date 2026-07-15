@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { Autocomplete } from './Autocomplete'
 import { Button } from './Button'
 import { DensitySearchLink } from './DensitySearchLink'
 import { Dialog } from './Dialog'
+import { updateRecipeMetadata } from '../api'
 import {
   buildBulkUnmatchedQueue,
   commitBulkMappingRows,
@@ -25,6 +27,8 @@ import {
   mappingRowNeedsDensity,
   type MappingRow,
 } from '../importMapping'
+import { useRecipeSync } from '../RecipeSyncContext'
+import { storeRecipe } from '../sync'
 import {
   errorTextClassName,
   inputClassName,
@@ -52,6 +56,7 @@ export function BulkImportDialog({
   refreshCatalog,
   sync,
 }: BulkImportDialogProps) {
+  const { notifyLocalChange } = useRecipeSync()
   const [items, setItems] = useState<BulkImportItem[]>([])
   const [queueRows, setQueueRows] = useState<BulkUnmatchedRow[]>([])
   const [converting, setConverting] = useState(false)
@@ -59,6 +64,8 @@ export function BulkImportDialog({
   const [applyingKey, setApplyingKey] = useState<string | null>(null)
   const [skipExistingBySlug, setSkipExistingBySlug] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [reviewIndex, setReviewIndex] = useState(-1)
+  const [reviewBusy, setReviewBusy] = useState(false)
   const catalogRef = useRef(catalog)
   const itemsRef = useRef(items)
   const activeRef = useRef(true)
@@ -104,6 +111,8 @@ export function BulkImportDialog({
     setItems(nextItems)
     setQueueRows([])
     setError(null)
+    setReviewIndex(-1)
+    setReviewBusy(false)
     setConverting(true)
     activeRef.current = true
 
@@ -202,6 +211,63 @@ export function BulkImportDialog({
     !saving &&
     progress.saved + progress.skipped + progress.failed === progress.total
   const applying = applyingKey !== null
+  const reviewQueue = useMemo(
+    () =>
+      items.filter(
+        item =>
+          item.status === 'saved' &&
+          Boolean(item.savedSlug) &&
+          item.validationWarnings.length > 0
+      ),
+    [items]
+  )
+  const reviewing = allSettled && reviewIndex >= 0 && reviewIndex < reviewQueue.length
+  const reviewItem = reviewing ? reviewQueue[reviewIndex] : null
+
+  useEffect(() => {
+    if (!allSettled || reviewIndex >= 0) {
+      return
+    }
+    if (reviewQueue.length > 0) {
+      setReviewIndex(0)
+    }
+  }, [allSettled, reviewIndex, reviewQueue.length])
+
+  function advanceReview() {
+    setReviewIndex(current => {
+      const next = current + 1
+      return next < reviewQueue.length ? next : reviewQueue.length
+    })
+  }
+
+  async function dismissReviewItem(item: BulkImportItem) {
+    if (!item.savedSlug || reviewBusy) {
+      return
+    }
+    setReviewBusy(true)
+    setError(null)
+    try {
+      const recipe = await updateRecipeMetadata(item.savedSlug, { review: [] })
+      await storeRecipe(recipe)
+      notifyLocalChange()
+      setItems(current =>
+        current.map(entry =>
+          entry.id === item.id
+            ? {
+                ...entry,
+                metadata: { ...entry.metadata, review: undefined },
+                validationWarnings: [],
+              }
+            : entry
+        )
+      )
+      // Item drops out of reviewQueue; keep the same index for the next item.
+    } catch (dismissError) {
+      setError(dismissError instanceof Error ? dismissError.message : 'Could not clear review')
+    } finally {
+      setReviewBusy(false)
+    }
+  }
 
   function updateQueueRow(index: number, patch: Partial<MappingRow>) {
     setQueueRows(current =>
@@ -439,6 +505,66 @@ export function BulkImportDialog({
         )}
       </div>
 
+      {reviewItem ? (
+        <div className="mt-5 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900">
+          <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+            Review {reviewIndex + 1} of {reviewQueue.length}
+          </p>
+          <p className="mt-1 text-base font-bold text-stone-900 dark:text-stone-100">
+            {typeof reviewItem.metadata.title === 'string'
+              ? reviewItem.metadata.title
+              : reviewItem.fileName}
+          </p>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-amber-950 dark:text-amber-100">
+            {reviewItem.validationWarnings.map(warning => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+          {Array.isArray(reviewItem.metadata.import_notes) &&
+          reviewItem.metadata.import_notes.length ? (
+            <details className="mt-3 text-sm text-amber-900 dark:text-amber-200">
+              <summary className="cursor-pointer font-medium">Import notes</summary>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                {(reviewItem.metadata.import_notes as string[]).map(note => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+              {typeof reviewItem.metadata.import_duration_ms === 'number' ? (
+                <p className="mt-1 text-xs opacity-80">
+                  {reviewItem.metadata.import_duration_ms} ms
+                </p>
+              ) : null}
+            </details>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              disabled={reviewBusy}
+              onClick={() => void dismissReviewItem(reviewItem)}
+              type="button"
+            >
+              Looks fine
+            </Button>
+            {reviewItem.savedSlug ? (
+              <Link
+                className="inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-semibold text-amber-950 ring-1 ring-amber-200 transition hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-50 dark:ring-amber-800"
+                onClick={() => advanceReview()}
+                to={`/recipes/edit/${reviewItem.savedSlug}`}
+              >
+                Edit
+              </Link>
+            ) : null}
+            <Button
+              disabled={reviewBusy}
+              onClick={advanceReview}
+              type="button"
+              variant="ghost"
+            >
+              Skip
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {progress.failed > 0 ? (
         <div className="mt-4 rounded-2xl bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200 dark:bg-red-950/40 dark:text-red-200 dark:ring-red-900">
           <p className="font-semibold">{progress.failed} failed</p>
@@ -489,9 +615,21 @@ export function BulkImportDialog({
             Save remaining as-is
           </Button>
         ) : null}
-        {allSettled ? (
+        {allSettled && !reviewing ? (
           <Button onClick={handleDone} type="button">
             Done
+          </Button>
+        ) : null}
+        {reviewing ? (
+          <Button
+            disabled={reviewBusy}
+            onClick={() => {
+              setReviewIndex(reviewQueue.length)
+            }}
+            type="button"
+            variant="ghost"
+          >
+            Skip remaining reviews
           </Button>
         ) : null}
       </div>

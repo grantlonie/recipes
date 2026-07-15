@@ -30,9 +30,11 @@ import { deleteRecipes, getLocalRecipe, getLocalTags } from './db'
 import {
   applyImportMapping,
   buildMappingRows,
+  isRefFile,
   mappingRowsAreValid,
   mergePreservedImage,
   parseImportedDocument,
+  resolveRefDisplay,
   type MappingRow,
   type PendingImport,
 } from './importMapping'
@@ -1146,7 +1148,7 @@ function ImageField({ className = '', onUpload, onValueChange, slug, value }: Im
   const uploadDisabled = !slug.trim() || uploading
   const hasFile = isRefFile(value)
   const previewUrl = hasFile
-    ? resolveRefDisplay(value)
+    ? resolveRefDisplay(value, slug)
     : value.startsWith('http')
       ? value
       : ''
@@ -1279,17 +1281,6 @@ function withPreservedImage(
     return next
   }
   return { ...metadata, image: merged }
-}
-
-function isRefFile(value: string): boolean {
-  return value.trim().startsWith('recipes/')
-}
-
-function resolveRefDisplay(value: string): string {
-  if (isRefFile(value)) {
-    return `/api/sources/${value.slice('recipes/'.length)}`
-  }
-  return value
 }
 
 function emptyIngredientForm(): IngredientFormState {

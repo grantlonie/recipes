@@ -40,11 +40,11 @@ interface CompactRecipeTileProps {
 
 export function HomePage({ isVisible }: HomePageProps) {
   const { localRevision, notifyLocalChange, status, sync } = useRecipeSync()
-  const { activeTags, bookmarkedOnly, query, recentRecipes, scrollTop, setScrollTop } =
+  const { activeTags, bookmarkedOnly, query, recentRecipes, reviewOnly, scrollTop, setScrollTop } =
     useRecipeListState()
   const scrollRestoringRef = useRef(false)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
-  const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
+  const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${reviewOnly}|${showAllRecipes}`
   const [summaries, setSummaries] = useState<RecipeSummary[]>([])
   const [details, setDetails] = useState<RecipeDetail[]>([])
   const [localReady, setLocalReady] = useState(false)
@@ -69,7 +69,11 @@ export function HomePage({ isVisible }: HomePageProps) {
   const searchQuery = query.trim()
   const showSearchResults = searchQuery.length > 0
   const bookmarkedRecipes = useMemo(
-    () => filterRecipes(summaries, true, activeTags),
+    () => filterRecipes(summaries, { bookmarkedOnly: true, activeTags }),
+    [activeTags, summaries]
+  )
+  const reviewRecipes = useMemo(
+    () => filterRecipes(summaries, { reviewOnly: true, activeTags }),
     [activeTags, summaries]
   )
   const displayRecentRecipes = useMemo(() => {
@@ -79,7 +83,7 @@ export function HomePage({ isVisible }: HomePageProps) {
       .filter(recipe => !localReady || bySlug.has(recipe.slug))
   }, [localReady, recentRecipes, summaries])
   const taggedRecipes = useMemo(
-    () => filterRecipes(summaries, false, activeTags),
+    () => filterRecipes(summaries, { activeTags }),
     [activeTags, summaries]
   )
   const hasTagFilter = activeTags.length > 0
@@ -87,8 +91,20 @@ export function HomePage({ isVisible }: HomePageProps) {
     if (!showSearchResults) {
       return []
     }
-    return filterRecipes(searchRecipes(summaries, details, searchQuery), bookmarkedOnly, activeTags)
-  }, [activeTags, bookmarkedOnly, details, searchQuery, showSearchResults, summaries])
+    return filterRecipes(searchRecipes(summaries, details, searchQuery), {
+      bookmarkedOnly,
+      reviewOnly,
+      activeTags,
+    })
+  }, [
+    activeTags,
+    bookmarkedOnly,
+    details,
+    reviewOnly,
+    searchQuery,
+    showSearchResults,
+    summaries,
+  ])
 
   useEffect(() => {
     sync()
@@ -149,7 +165,22 @@ export function HomePage({ isVisible }: HomePageProps) {
   return (
     <>
       {!showSearchResults ? (
-        bookmarkedOnly ? (
+        reviewOnly ? (
+          reviewRecipes.length ? (
+            <CompactRecipeGrid
+              bookmarkPendingSlug={
+                bookmarkMutation.isPending ? bookmarkMutation.variables?.slug : undefined
+              }
+              onBookmarkToggle={handleBookmarkToggle}
+              recipes={reviewRecipes}
+              title="Needs review"
+            />
+          ) : (
+            <p className="text-sm text-stone-600 dark:text-stone-400">
+              No recipes need review.
+            </p>
+          )
+        ) : bookmarkedOnly ? (
           bookmarkedRecipes.length ? (
             <CompactRecipeGrid
               bookmarkPendingSlug={
@@ -306,6 +337,7 @@ function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {
     image: recipe.image,
     notes: recipe.notes,
     original_url: recipe.original_url,
+    review: recipe.review,
     servings: recipe.servings,
     slug: recipe.slug,
     tags: recipe.tags,
@@ -313,9 +345,20 @@ function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {
   }
 }
 
-function filterRecipes(recipes: RecipeSummary[], bookmarkedOnly: boolean, activeTags: string[]) {
+function filterRecipes(
+  recipes: RecipeSummary[],
+  options: {
+    activeTags?: string[]
+    bookmarkedOnly?: boolean
+    reviewOnly?: boolean
+  } = {}
+) {
+  const activeTags = options.activeTags ?? []
   return recipes.filter(recipe => {
-    if (bookmarkedOnly && !recipe.bookmarked) {
+    if (options.bookmarkedOnly && !recipe.bookmarked) {
+      return false
+    }
+    if (options.reviewOnly && !(recipe.review && recipe.review.length > 0)) {
       return false
     }
     if (activeTags.some(tag => !recipe.tags.includes(tag))) {

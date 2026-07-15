@@ -1,10 +1,14 @@
 import {
   BookmarkIcon as BookmarkIconOutline,
+  ClipboardDocumentCheckIcon,
   TagIcon,
   UserCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
-import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
+import {
+  BookmarkIcon as BookmarkIconSolid,
+  ClipboardDocumentCheckIcon as ClipboardDocumentCheckIconSolid,
+} from '@heroicons/react/24/solid'
 import type { ChangeEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
@@ -162,8 +166,16 @@ function AppShell() {
 }
 
 function HomeSearchBar() {
-  const { activeTags, bookmarkedOnly, query, setActiveTags, setBookmarkedOnly, setQuery } =
-    useRecipeListState()
+  const {
+    activeTags,
+    bookmarkedOnly,
+    query,
+    reviewOnly,
+    setActiveTags,
+    setBookmarkedOnly,
+    setQuery,
+    setReviewOnly,
+  } = useRecipeListState()
   const { localRevision } = useRecipeSync()
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState(query)
@@ -247,6 +259,18 @@ function HomeSearchBar() {
             </p>
           )}
         </Popover>
+        <button
+          aria-label={reviewOnly ? 'Show all recipes' : 'Show recipes needing review'}
+          className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300"
+          onClick={() => setReviewOnly(!reviewOnly)}
+          type="button"
+        >
+          {reviewOnly ? (
+            <ClipboardDocumentCheckIconSolid aria-hidden="true" className="h-5 w-5" />
+          ) : (
+            <ClipboardDocumentCheckIcon aria-hidden="true" className="h-5 w-5" />
+          )}
+        </button>
         <button
           aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
           className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300"

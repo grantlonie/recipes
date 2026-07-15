@@ -36,6 +36,7 @@ export interface RecipeSummary {
   image?: string | null
   notes: string[]
   original_url?: string | null
+  review?: string[]
   servings: number
   slug: string
   tags: string[]
@@ -79,6 +80,7 @@ export interface AssetUploadResponse {
 export interface RecipeMetadataInput {
   bookmarked?: boolean
   image?: string | null
+  review?: string[] | null
   servings?: number | null
   tags?: string[] | null
 }

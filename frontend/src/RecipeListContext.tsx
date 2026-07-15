@@ -10,12 +10,14 @@ interface RecipeListState {
   bookmarkedOnly: boolean
   query: string
   recentRecipes: RecipeSummary[]
+  reviewOnly: boolean
   scrollTop: number
   addRecentRecipe: (recipe: RecipeSummary) => void
   removeRecentRecipe: (slug: string) => void
   setActiveTags: (tags: string[]) => void
   setBookmarkedOnly: (value: boolean) => void
   setQuery: (value: string) => void
+  setReviewOnly: (value: boolean) => void
   setScrollTop: (value: number) => void
 }
 
@@ -28,6 +30,7 @@ interface RecipeListProviderProps {
 export function RecipeListProvider({ children }: RecipeListProviderProps) {
   const [activeTags, setActiveTagsState] = useState<string[]>([])
   const [bookmarkedOnly, setBookmarkedOnlyState] = useState(false)
+  const [reviewOnly, setReviewOnlyState] = useState(false)
   const [query, setQueryState] = useState('')
   const [recentRecipes, setRecentRecipes] = useState<RecipeSummary[]>(() => readRecentRecipes())
   const [scrollTop, setScrollTop] = useState(0)
@@ -56,6 +59,17 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
 
   const setBookmarkedOnly = useCallback((value: boolean) => {
     setBookmarkedOnlyState(value)
+    if (value) {
+      setReviewOnlyState(false)
+    }
+    setScrollTop(0)
+  }, [])
+
+  const setReviewOnly = useCallback((value: boolean) => {
+    setReviewOnlyState(value)
+    if (value) {
+      setBookmarkedOnlyState(false)
+    }
     setScrollTop(0)
   }, [])
 
@@ -73,10 +87,12 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
         removeRecentRecipe,
         query,
         recentRecipes,
+        reviewOnly,
         scrollTop,
         setActiveTags,
         setBookmarkedOnly,
         setQuery,
+        setReviewOnly,
         setScrollTop,
       }}
     >

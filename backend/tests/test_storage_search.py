@@ -55,13 +55,20 @@ Brown @beef{1%lb}.
         image="https://example.com/chili.jpg",
         servings=6,
         tags=["dinner", "freezer"],
+        review=["Check salt amount"],
     )
 
     assert "Brown @beef{1%lb}." in recipe.content
     assert recipe.bookmarked is True
+    assert recipe.review == ["Check salt amount"]
     assert recipe.image == "https://example.com/chili.jpg"
     assert recipe.servings == 6
     assert recipe.tags == ["dinner", "freezer"]
+    assert "review:" in recipe.content
+
+    cleared = repository.update_metadata("dinner-chili", review=[])
+    assert cleared.review == []
+    assert "review:" not in cleared.content
     assert not list(tmp_path.rglob("*.jpg"))
 
 
@@ -211,6 +218,52 @@ def test_write_recipe_renames_slug_and_assets(tmp_path):
     repository.write_recipe(
         "chili",
         """---
+image: image.jpg
+source: source.pdf
+title: Chili
+---
+
+Add @beans{2}.
+""",
+    )
+    chili_dir = recipe_root / "chili"
+    (chili_dir / "image.jpg").write_bytes(b"img")
+    (chili_dir / "source.pdf").write_bytes(b"pdf")
+
+    recipe = repository.write_recipe(
+        "chicken-soup",
+        """---
+image: image.jpg
+source: source.pdf
+title: Chicken Soup
+---
+
+Add @beans{2}.
+""",
+        previous_slug="chili",
+    )
+
+    assert recipe.slug == "chicken-soup"
+    assert not repository.recipe_path("chili").exists()
+    assert repository.recipe_path("chicken-soup").exists()
+    assert (recipe_root / "chicken-soup" / "image.jpg").exists()
+    assert (recipe_root / "chicken-soup" / "recipe.cook").exists()
+    assert not (recipe_root / "chili").exists()
+    assert "image: image.jpg" in recipe.content
+    assert "source: source.pdf" in recipe.content
+    assert recipe.image == "/api/sources/chicken-soup/image.jpg"
+    assert recipe.original_url == "/api/sources/chicken-soup/source.pdf"
+
+
+def test_write_recipe_normalizes_legacy_asset_paths_on_rename(tmp_path):
+    recipe_root = tmp_path / "recipes"
+    repository = RecipeRepository(
+        app_base_url="http://testserver",
+        recipe_root=recipe_root,
+    )
+    repository.write_recipe(
+        "chili",
+        """---
 image: recipes/chili/image.jpg
 source: recipes/chili/source.pdf
 title: Chili
@@ -236,11 +289,7 @@ Add @beans{2}.
         previous_slug="chili",
     )
 
-    assert recipe.slug == "chicken-soup"
-    assert not repository.recipe_path("chili").exists()
-    assert repository.recipe_path("chicken-soup").exists()
-    assert (recipe_root / "chicken-soup" / "image.jpg").exists()
-    assert (recipe_root / "chicken-soup" / "recipe.cook").exists()
-    assert not (recipe_root / "chili").exists()
-    assert "recipes/chicken-soup/image.jpg" in recipe.content
-    assert "recipes/chicken-soup/source.pdf" in recipe.content
+    assert "image: image.jpg" in recipe.content
+    assert "source: source.pdf" in recipe.content
+    assert "recipes/" not in recipe.content
+    assert recipe.image == "/api/sources/chicken-soup/image.jpg"

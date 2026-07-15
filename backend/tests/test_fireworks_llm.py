@@ -16,6 +16,46 @@ def settings() -> Settings:
     return Settings(fireworks_api_key="test-key")
 
 
+def test_normalize_model_output_strips_trailing_reasoning():
+    raw = """---
+title: Scallops
+---
+
+Cook @scallops{1%lb}.
+
+Wait, I need to reconsider the vermouth amount. The source says cup without a number.
+
+Actually, let me finalize:
+
+---
+title: Scallops Again
+---
+
+Cook @scallops{2%lb}.
+"""
+    normalized = normalize_model_output(raw)
+    assert normalized.startswith("---")
+    assert "Cook @scallops{1%lb}." in normalized
+    assert "Wait, I need to reconsider" not in normalized
+    assert "Scallops Again" not in normalized
+    assert normalized.count("---") == 2
+
+
+def test_normalize_model_output_strips_leading_prose():
+    raw = """Here is the recipe:
+
+---
+title: Soup
+---
+
+Cook @onion{1}.
+"""
+    normalized = normalize_model_output(raw)
+    assert normalized.startswith("---")
+    assert "Here is the recipe" not in normalized
+    assert "Cook @onion{1}." in normalized
+
+
 def test_normalize_model_output_strips_yaml_fence():
     raw = """```yaml
 ---

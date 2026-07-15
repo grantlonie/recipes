@@ -473,6 +473,7 @@ export async function saveBulkImportItem(
       bookmarked: recipe.bookmarked,
       notes: recipe.notes,
       original_url: recipe.original_url,
+      review: recipe.review,
       servings: recipe.servings,
       slug: recipe.slug,
       tags: recipe.tags,

@@ -9,7 +9,7 @@ from typing import Any
 from openai import APIStatusError, OpenAI
 
 from app.config import Settings
-from app.cooklang import sanitize_front_matter
+from app.cooklang import sanitize_front_matter, trim_cooklang_document
 from app.sources import guess_media_type
 
 COOKLANG_FENCE_RE = re.compile(
@@ -158,6 +158,18 @@ def normalize_model_output(content: str) -> str:
     fenced = COOKLANG_FENCE_RE.search(cleaned)
     if fenced:
         cleaned = fenced.group(1).strip()
-    elif not cleaned.startswith("---"):
+    cleaned = extract_cooklang_document(cleaned)
+    if not cleaned.startswith("---"):
         return cleaned
-    return sanitize_front_matter(cleaned)
+    return sanitize_front_matter(trim_cooklang_document(cleaned))
+
+
+def extract_cooklang_document(content: str) -> str:
+    """Drop leading prose so the document starts at the first YAML front matter."""
+    cleaned = content.strip()
+    if cleaned.startswith("---"):
+        return cleaned
+    match = re.search(r"(?m)^---\s*$", cleaned)
+    if not match:
+        return cleaned
+    return cleaned[match.start() :].strip()

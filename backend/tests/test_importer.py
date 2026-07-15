@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from app.config import Settings
+from app import cooklang as cooklang_mod
 from app.importer import (
     ImportError,
     import_from_file,
@@ -97,9 +98,14 @@ def test_import_from_text_skips_quality_repair_when_clean(
 
     assert mock_complete.call_count == 1
     assert preview.validation_warnings == []
+    metadata, _body = cooklang_mod.parse_document(preview.content)
+    assert "review" not in metadata
+    assert "import_time" in metadata
+    assert isinstance(metadata["import_duration_ms"], int)
+    assert any(note.startswith("pass1:") for note in metadata["import_notes"])
 
 
-def test_import_from_text_embeds_soft_warnings_as_leading_notes(
+def test_import_from_text_stores_soft_warnings_in_review_metadata(
     settings: Settings, ingredients: IngredientRepository
 ):
     ingredients.upsert(CatalogIngredient(name="jalapenos"))
@@ -124,10 +130,38 @@ Cook.
     assert any(
         "Source preparation note missing" in warning for warning in preview.validation_warnings
     )
-    metadata_end = preview.content.index("---\n\n") + len("---\n\n")
-    body = preview.content[metadata_end:]
-    assert body.startswith("> Import error: Source preparation note missing")
-    assert body.index("> Import error:") < body.index("Toss @jalapenos")
+    metadata, body = cooklang_mod.parse_document(preview.content)
+    assert "Import error:" not in body
+    assert metadata["review"]
+    assert any("Source preparation note missing" in item for item in metadata["review"])
+    assert "import_time" in metadata
+    assert isinstance(metadata["import_duration_ms"], int)
+    assert metadata["import_notes"]
+    assert any(note.startswith("pass1:") for note in metadata["import_notes"])
+
+
+def test_import_from_text_heals_invalid_refs_without_repair_model(
+    settings: Settings, ingredients: IngredientRepository
+):
+    cooklang = """Here is the recipe:
+
+---
+title: Soup
+image: photos/soup.jpg
+---
+
+Cook @onion{1}.
+"""
+    with patch("app.importer.complete_cooklang", return_value=cooklang) as mock_complete:
+        preview = import_from_text("Recipe text", settings=settings, ingredients=ingredients)
+
+    assert mock_complete.call_count == 1
+    metadata, body = cooklang_mod.parse_document(preview.content)
+    assert metadata["title"] == "Soup"
+    assert "image" not in metadata
+    assert "Cook @onion" in body
+    assert any("heal:" in note for note in metadata["import_notes"])
+    assert not any("pass2:" in note for note in metadata["import_notes"])
 
 
 def test_import_from_text_reports_unmatched_ingredients(
@@ -321,7 +355,7 @@ def test_import_from_url_keeps_existing_image_file(
     cooklang = """---
 title: Chicken & bacon pasta
 source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta
-image: recipes/chicken-bacon-pasta/image.jpg
+image: image.jpg
 ---
 
 Add @chicken{} and @bacon{}.
@@ -345,7 +379,7 @@ Add @chicken{} and @bacon{}.
         with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
             preview = import_from_url(page_url, settings=settings, ingredients=ingredients)
 
-    assert "image: recipes/chicken-bacon-pasta/image.jpg" in preview.content
+    assert "image: image.jpg" in preview.content
     assert scraped_image not in preview.content
     assert preview.image_url is None
 
@@ -373,13 +407,12 @@ def test_import_from_html_file_extracts_page_image(
             source_file,
             settings=settings,
             ingredients=ingredients,
-            source_path="recipes/chili/source.html",
+            source_path="source.html",
         )
 
     assert f"image: {image_url}" in preview.content
     assert preview.image_url == image_url
-    assert "source: recipes/chili/source.html" in preview.content
-
+    assert "source: source.html" in preview.content
 
 def test_import_from_text_file_scrapes_embedded_website_url(
     settings: Settings,
@@ -417,12 +450,12 @@ def test_import_from_text_file_scrapes_embedded_website_url(
                 source_file,
                 settings=settings,
                 ingredients=ingredients,
-                source_path="recipes/alice-medrich-s-best-cocoa-brownies/source.txt",
+                source_path="source.txt",
             )
 
     assert f"image: {image_url}" in preview.content
     assert preview.image_url == image_url
-    assert "source: recipes/alice-medrich-s-best-cocoa-brownies/source.txt" in preview.content
+    assert "source: source.txt" in preview.content
     assert page_url not in preview.content.split("---")[1]
 
 
@@ -445,7 +478,33 @@ def test_import_from_file_sets_source_path_for_assets(
                 source_file,
                 settings=settings,
                 ingredients=ingredients,
+                source_path="source.txt",
+            )
+
+    assert "source: source.txt" in preview.content
+
+
+def test_import_from_file_normalizes_legacy_source_path(
+    settings: Settings,
+    ingredients: IngredientRepository,
+    tmp_path: Path,
+):
+    source_dir = tmp_path / "chili"
+    source_dir.mkdir()
+    source_file = source_dir / "source.txt"
+    source_file.write_text("Chili recipe text", encoding="utf-8")
+
+    with patch("app.importer.extract_text_from_path", return_value="Chili recipe text"):
+        with patch(
+            "app.importer.complete_cooklang",
+            return_value="---\ntitle: Chili\n---\n\nBrown @beef{}.\n",
+        ):
+            preview = import_from_file(
+                source_file,
+                settings=settings,
+                ingredients=ingredients,
                 source_path="recipes/chili/source.txt",
             )
 
-    assert "source: recipes/chili/source.txt" in preview.content
+    assert "source: source.txt" in preview.content
+    assert "recipes/" not in preview.content

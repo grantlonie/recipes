@@ -142,7 +142,7 @@ def _copy_source(path: Path, recipe_root: Path, slug: str) -> str:
         existing.unlink()
     destination = assets_dir / f"source{path.suffix.lower()}"
     shutil.copy2(path, destination)
-    return metadata_asset_path(slug, "source", path.suffix)
+    return metadata_asset_path("source", path.suffix)
 
 
 if __name__ == "__main__":

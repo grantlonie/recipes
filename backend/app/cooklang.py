@@ -10,7 +10,14 @@ from app.units import normalize_unit, split_glued_amount
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 FRONT_MATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
 QUOTE_DESCRIPTION_KEYS = frozenset({"description", "introduction"})
+QUOTE_LIST_KEYS = frozenset({"review", "import_notes"})
+APP_OWNED_IMPORT_KEYS = frozenset(
+    {"review", "import_time", "import_duration_ms", "import_notes"}
+)
+IMPORT_ERROR_NOTE_PREFIX = "Import error: "
 RECIPES_PREFIX = "recipes/"
+# Local assets live next to recipe.cook as source.* / image.* (no slug in metadata).
+LOCAL_ASSET_FILENAME_RE = re.compile(r"^(?:source|image)\.[A-Za-z0-9]+$")
 # Latin letters with diacritics (excl. ×÷) so names like jalapeño parse fully.
 TOKEN_CHARS = r"A-Za-z0-9_./' \-" + "\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F"
 INGREDIENT_RE = re.compile(
@@ -119,6 +126,121 @@ def sanitize_front_matter(content: str) -> str:
     return f"---\n{render_front_matter(loaded)}\n---\n{stripped[match.end() :]}"
 
 
+def heal_imported_cooklang(content: str) -> tuple[str, list[str]]:
+    """Local repairs that avoid an expensive second LLM call when possible.
+
+    Returns (healed_content, heal_notes). Notes describe what was fixed.
+    """
+    notes: list[str] = []
+    cleaned = content.strip()
+    if not cleaned.startswith("---"):
+        match = re.search(r"(?m)^---\s*$", cleaned)
+        if match:
+            cleaned = cleaned[match.start() :].strip()
+            notes.append("heal: stripped leading prose before front matter")
+
+    trimmed = trim_cooklang_document(cleaned)
+    if trimmed != cleaned:
+        notes.append("heal: trimmed trailing LLM reasoning / duplicate document")
+        cleaned = trimmed
+
+    cleaned = sanitize_front_matter(cleaned)
+    try:
+        metadata, body = parse_document(cleaned)
+    except Exception:
+        return cleaned, notes
+
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    for key in ("source", "image"):
+        value = parse_ref_value(metadata, key)
+        if value and not validate_ref_value(value):
+            metadata.pop(key, None)
+            notes.append(f"heal: dropped invalid {key} ref ({value})")
+
+    if not metadata.get("title") or not body.strip():
+        return cleaned, notes
+
+    return render_document(metadata, body), notes
+
+
+# Model sometimes keeps "thinking" in the main content channel after a valid .cook doc.
+_LLM_REASONING_START_RE = re.compile(
+    r"(?im)^(?:"
+    r"Wait,?\s+I\b|Actually,?\s+(?:wait|let me|I)\b|Let me (?:reconsider|finalize|also|check)\b|"
+    r"Hmm,|I (?:need to|should|think|decided|will)\b|Looking at this\b|"
+    r"My (?:description|revised|final)\b|Revised description\b|"
+    r"One more thing\b|I'll go with\b|I'?m overcomplicating\b"
+    r")"
+)
+
+
+def trim_cooklang_document(content: str) -> str:
+    """Keep the first Cooklang document; drop trailing reasoning and restarts."""
+    stripped = content.strip()
+    match = FRONT_MATTER_RE.match(stripped)
+    if not match:
+        return content
+
+    front_end = match.end()
+    body = stripped[front_end:]
+
+    # A second front-matter block means the model restarted after thinking out loud.
+    second = re.search(r"\n---\s*\n", body)
+    if second:
+        body = body[: second.start()]
+
+    body = _strip_trailing_llm_reasoning(body)
+    return f"{stripped[:front_end]}{body}".rstrip() + "\n"
+
+
+def _strip_trailing_llm_reasoning(body: str) -> str:
+    if not body.strip():
+        return body
+
+    # Prefer cutting at paragraph boundaries when reasoning prose appears.
+    parts = re.split(r"\n\s*\n", body)
+    kept: list[str] = []
+    for part in parts:
+        text = part.strip()
+        if not text:
+            continue
+        if kept and _LLM_REASONING_START_RE.match(text):
+            break
+        if kept and _looks_like_llm_reasoning_paragraph(text):
+            break
+        kept.append(part)
+    if not kept:
+        return body
+    return "\n\n".join(kept).rstrip() + "\n"
+
+
+def _looks_like_llm_reasoning_paragraph(text: str) -> bool:
+    """Heuristic for mid-document self-talk that isn't a cook tip note."""
+    if text.startswith(">"):
+        return False
+    if text.startswith("==") and text.endswith("=="):
+        return False
+    if "@" in text or "#{" in text or "~{" in text:
+        return False
+    lowered = text.casefold()
+    markers = (
+        "the rules say",
+        "i decided to",
+        "if i strictly follow",
+        "let me finalize",
+        "let me also reconsider",
+        "overcomplicating",
+        "don't invent",
+        "do not invent",
+        "yaml should handle",
+        "i'll leave it unquoted",
+        "revised description",
+    )
+    return any(marker in lowered for marker in markers)
+
+
 def format_yaml_quoted_string(value: str) -> str:
     """Encode a scalar as a double-quoted YAML string with escapes."""
     escaped = (
@@ -139,14 +261,22 @@ def render_front_matter(metadata: dict[str, Any]) -> str:
         if key in QUOTE_DESCRIPTION_KEYS and isinstance(value, str):
             lines.append(f"{key}: {format_yaml_quoted_string(value)}")
             continue
-        lines.append(
-            yaml.safe_dump(
-                {key: value},
-                allow_unicode=True,
-                default_flow_style=False,
-                sort_keys=False,
-            ).strip()
-        )
+        if key in QUOTE_LIST_KEYS and isinstance(value, list):
+            items = [str(item).strip() for item in value if str(item).strip()]
+            if not items:
+                continue
+            lines.append(f"{key}:")
+            for item in items:
+                lines.append(f"  - {format_yaml_quoted_string(item)}")
+            continue
+        dumped = yaml.safe_dump(
+            {key: value},
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+            width=10_000,
+        ).strip()
+        lines.append(dumped)
     return "\n".join(lines)
 
 
@@ -340,6 +470,45 @@ def metadata_bookmarked(metadata: dict[str, Any]) -> bool:
     return bool(value)
 
 
+def metadata_string_list(metadata: dict[str, Any], key: str) -> list[str]:
+    value = metadata.get(key)
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def metadata_review(metadata: dict[str, Any]) -> list[str]:
+    return metadata_string_list(metadata, "review")
+
+
+def metadata_import_notes(metadata: dict[str, Any]) -> list[str]:
+    return metadata_string_list(metadata, "import_notes")
+
+
+def strip_app_owned_import_keys(metadata: dict[str, Any]) -> None:
+    for key in APP_OWNED_IMPORT_KEYS:
+        metadata.pop(key, None)
+
+
+def strip_import_error_notes(body: str) -> str:
+    """Remove legacy `> Import error:` notes from recipe bodies."""
+    blocks = parse_blocks(body)
+    kept: list[str] = []
+    for block in blocks:
+        if isinstance(block, RecipeNote) and block.text.startswith(IMPORT_ERROR_NOTE_PREFIX):
+            continue
+        if isinstance(block, RecipeNote):
+            kept.append(f"> {block.text}")
+        elif isinstance(block, RecipeSection):
+            kept.append(f"=={block.title}==")
+        else:
+            kept.append(block.text)
+    return "\n\n".join(kept).strip() + ("\n" if kept else "")
+
+
 def metadata_title(metadata: dict[str, Any], fallback: str) -> str:
     title = metadata.get("title")
     return str(title).strip() if title else fallback
@@ -362,8 +531,28 @@ def is_ref_url(value: str) -> bool:
     return value.startswith(("http://", "https://"))
 
 
+def is_local_asset_filename(value: str) -> bool:
+    return bool(LOCAL_ASSET_FILENAME_RE.fullmatch(value))
+
+
+def is_legacy_recipes_path(value: str) -> bool:
+    if not value.startswith(RECIPES_PREFIX):
+        return False
+    remainder = value.removeprefix(RECIPES_PREFIX)
+    parts = remainder.split("/")
+    return len(parts) == 2 and bool(parts[0]) and is_local_asset_filename(parts[1])
+
+
 def is_ref_file(value: str) -> bool:
-    return value.startswith(RECIPES_PREFIX)
+    return is_local_asset_filename(value) or is_legacy_recipes_path(value)
+
+
+def local_asset_filename(value: str) -> str | None:
+    if is_local_asset_filename(value):
+        return value
+    if is_legacy_recipes_path(value):
+        return value.rsplit("/", 1)[-1]
+    return None
 
 
 def validate_ref_value(value: str) -> bool:
@@ -371,6 +560,12 @@ def validate_ref_value(value: str) -> bool:
     if not stripped:
         return True
     return is_ref_url(stripped) or is_ref_file(stripped)
+
+
+def normalize_ref_value(value: str) -> str:
+    """Collapse legacy recipes/{slug}/asset.* refs to bare asset.* filenames."""
+    filename = local_asset_filename(value)
+    return filename if filename is not None else value
 
 
 def metadata_image(metadata: dict[str, Any]) -> str | None:
@@ -420,26 +615,36 @@ def metadata_source_file(metadata: dict[str, Any]) -> str | None:
     return None
 
 
-def resolve_image_url(metadata: dict[str, Any], app_base_url: str) -> str | None:
+def resolve_asset_api_path(value: str, *, slug: str | None = None) -> str | None:
+    if is_legacy_recipes_path(value):
+        return f"/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
+    if is_local_asset_filename(value):
+        if not slug:
+            return None
+        return f"/api/sources/{slug}/{value}"
+    return None
+
+
+def resolve_image_url(
+    metadata: dict[str, Any], app_base_url: str, *, slug: str | None = None
+) -> str | None:
     value = metadata_image(metadata)
     if not value:
         return None
     if is_ref_url(value):
         return value
-    if is_ref_file(value):
-        return f"/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
-    return value
+    return resolve_asset_api_path(value, slug=slug) or value
 
 
-def resolve_source_url(metadata: dict[str, Any], app_base_url: str) -> str | None:
+def resolve_source_url(
+    metadata: dict[str, Any], app_base_url: str, *, slug: str | None = None
+) -> str | None:
     value = metadata_source_value(metadata)
     if not value:
         return None
     if is_ref_url(value):
         return value
-    if is_ref_file(value):
-        return f"/api/sources/{value.removeprefix(RECIPES_PREFIX)}"
-    return None
+    return resolve_asset_api_path(value, slug=slug)
 
 
 def metadata_original_url(metadata: dict[str, Any]) -> str | None:
@@ -480,6 +685,7 @@ def set_metadata_values(
     image: str | None = None,
     servings: float | None = None,
     tags: list[str] | None = None,
+    review: list[str] | None = None,
 ) -> dict[str, Any]:
     updated = dict(metadata)
     if bookmarked is not None:
@@ -490,6 +696,12 @@ def set_metadata_values(
         updated["servings"] = servings
     if tags is not None:
         updated["tags"] = sorted({tag.strip() for tag in tags if tag.strip()}, key=str.casefold)
+    if review is not None:
+        cleaned = [item.strip() for item in review if item.strip()]
+        if cleaned:
+            updated["review"] = cleaned
+        else:
+            updated.pop("review", None)
     return updated
 
 
@@ -545,19 +757,34 @@ def validate_document_refs(metadata: dict[str, Any]) -> None:
     for key in ("source", "image"):
         value = parse_ref_value(metadata, key)
         if value and not validate_ref_value(value):
-            raise ValueError(f"Invalid {key} value: must be http(s) URL or recipes/ path")
+            raise ValueError(
+                f"Invalid {key} value: must be http(s) URL or local asset file "
+                "(source.* / image.*)"
+            )
+
+
+def normalize_document_refs(metadata: dict[str, Any]) -> None:
+    for key in ("source", "image"):
+        value = parse_ref_value(metadata, key)
+        if not value:
+            continue
+        normalized = normalize_ref_value(value)
+        if normalized != value:
+            metadata[key] = normalized
 
 
 def normalize_document(content: str) -> str:
     metadata, body = parse_document(content)
+    normalize_document_refs(metadata)
     validate_document_refs(metadata)
     return render_document(metadata, normalize_body_amounts(body))
 
 
 def prepare_imported_content(content: str) -> str:
-    metadata, body = parse_document(content)
+    metadata, body = parse_document(trim_cooklang_document(content))
     metadata.pop("tags", None)
-    body = normalize_ingredient_amounts(body)
+    strip_app_owned_import_keys(metadata)
+    body = normalize_ingredient_amounts(strip_import_error_notes(body))
     return normalize_document(render_document(metadata, body))
 
 

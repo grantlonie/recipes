@@ -46,10 +46,32 @@ export interface PendingImport {
 export function mergePreservedImage(current: string, imported: string): string {
   const existing = current.trim()
   const next = imported.trim()
-  if (existing.startsWith('recipes/')) {
+  if (isRefFile(existing)) {
     return existing
   }
   return next || existing
+}
+
+export function isRefFile(value: string): boolean {
+  const trimmed = value.trim()
+  if (/^(?:source|image)\.[A-Za-z0-9]+$/.test(trimmed)) {
+    return true
+  }
+  return /^recipes\/[^/]+\/(?:source|image)\.[A-Za-z0-9]+$/.test(trimmed)
+}
+
+export function resolveRefDisplay(value: string, slug?: string): string {
+  const trimmed = value.trim()
+  if (/^(?:source|image)\.[A-Za-z0-9]+$/.test(trimmed)) {
+    if (!slug) {
+      return trimmed
+    }
+    return `/api/sources/${slug}/${trimmed}`
+  }
+  if (trimmed.startsWith('recipes/')) {
+    return `/api/sources/${trimmed.slice('recipes/'.length)}`
+  }
+  return trimmed
 }
 
 export function parseImportedDocument(content: string) {
@@ -343,9 +365,10 @@ function parseSimpleMetadata(frontMatter: string) {
       continue
     }
     const list: string[] = []
-    while (lines[index + 1]?.trim().startsWith('- ')) {
+    while (lines[index + 1]?.match(/^\s*-\s+/)) {
       index += 1
-      list.push(lines[index].trim().slice(2).trim())
+      const item = lines[index].replace(/^\s*-\s+/, '').trim()
+      list.push(String(parseScalar(item)))
     }
     metadata[key] = list
   }
@@ -355,7 +378,14 @@ function parseSimpleMetadata(frontMatter: string) {
 
 function renderMetadataValue(key: string, value: unknown): string[] {
   if (Array.isArray(value)) {
-    return [key + ':', ...value.map(item => `  - ${escapeScalar(String(item))}`)]
+    const quoteLists = key === 'review' || key === 'import_notes'
+    return [
+      key + ':',
+      ...value.map(item => {
+        const text = String(item)
+        return `  - ${quoteLists ? JSON.stringify(text) : escapeScalar(text)}`
+      }),
+    ]
   }
   if (typeof value === 'boolean') {
     return [`${key}: ${value ? 'true' : 'false'}`]

@@ -207,6 +207,7 @@ function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {
     image: recipe.image,
     notes: recipe.notes,
     original_url: recipe.original_url,
+    review: recipe.review,
     servings: recipe.servings,
     slug: recipe.slug,
     tags: recipe.tags,

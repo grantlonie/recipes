@@ -374,6 +374,7 @@ def update_metadata(
             image=payload.image,
             servings=payload.servings,
             tags=payload.tags,
+            review=payload.review,
         )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

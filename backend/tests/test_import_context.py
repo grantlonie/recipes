@@ -12,7 +12,7 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
     assert "YAML-quote the entire title when it contains quotes or punctuation" in prompt
-    assert "Descriptions should stay plain unquoted text" not in prompt
+    assert "Do not invent app-owned front-matter keys" in prompt
     assert "Escape internal double quotes" in prompt
     assert "title: Chili" in prompt
     assert "prep time: 15 minutes" in prompt
@@ -101,33 +101,35 @@ def test_clean_source_text_removes_noise_sections():
     assert "World" in cleaned
 
 
-def test_validate_imported_cooklang_flags_invalid_amounts_and_plain_text():
+def test_validate_imported_cooklang_flags_invalid_amounts_and_cookware():
     content = """---
 title: Test
 ---
 
 Season with @salt{0%g}(to taste).
 
-Add 1 Tbsp sambal oelek and oil the baking pan{1}.
+Add @sambal oelek{1%Tbsp} and oil the baking pan{1}.
 """
     result = validate_imported_cooklang(content)
     joined = "\n".join(result.warnings)
     assert "Invalid amount for @salt" in joined
-    assert "Plain-text amount not marked as ingredient: 1 Tbsp" in joined
     assert "Cookware should use #name{}" in joined
     assert result.needs_repair
+    assert not any("Plain-text amount" in warning for warning in result.warnings)
 
 
-def test_validate_allows_plain_byproduct_amounts():
+def test_validate_ignores_plain_text_amounts():
     content = """---
 title: Test
 ---
 
+Add 1 Tbsp sambal oelek to the pan.
+If crumbly, add 1 to 2 tablespoons softened butter.
 Drain all but 2 tablespoons of the fat. Reserve 0.5 cup of pasta water.
-Ladle about 0.25 cup of gravy over the roast.
 """
     result = validate_imported_cooklang(content)
     assert result.warnings == []
+    assert not result.needs_repair
 
 
 def test_validate_imported_cooklang_flags_missing_source_ingredients():

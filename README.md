@@ -89,8 +89,8 @@ tags:
   - dinner
 bookmarked: false
 servings: 6
-image: https://example.com/chili.jpg
-source: https://example.com/original-recipe
+image: image.jpg
+source: source.txt
 prep time: 15 minutes
 cook time: 45 minutes
 description: Good freezer meal.
@@ -99,6 +99,8 @@ description: Good freezer meal.
 Brown @beef{1%lb}.
 ```
 
+Local `source.*` / `image.*` refs are relative to the recipe folder (no slug in the path), so
+renaming a recipe directory does not require rewriting metadata. HTTP(S) URLs are also allowed.
 ## Offline sync
 
 The frontend caches recipes and the ingredient catalog in IndexedDB and syncs from `/api/sync/*`

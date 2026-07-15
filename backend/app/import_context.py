@@ -77,6 +77,8 @@ Output rules:
 - Always write tablespoon amounts as Tbsp (capital T). Source casing does not matter.
 - Do not invent ingredients or steps that are not supported by the source text.
 - Omit tags from front matter.
+- Do not invent app-owned front-matter keys: review, import_time, import_duration_ms,
+  or import_notes. The app sets those after conversion.
 - Front matter may include: title, source, image, servings, prep time, cook time,
   time, description.
 - When the source lists prep and cook times separately, store BOTH as separate keys:

@@ -41,9 +41,9 @@ def recipe_file(recipe_root: Path, slug: str) -> Path:
     return recipe_dir(recipe_root, slug) / RECIPE_FILENAME
 
 
-def metadata_asset_path(slug: str, kind: str, extension: str) -> str:
+def metadata_asset_path(kind: str, extension: str) -> str:
     ext = extension.lower().lstrip(".")
-    return f"{RECIPES_PREFIX}{slug}/{kind}.{ext}"
+    return f"{kind}.{ext}"
 
 
 def delete_recipe_dir(recipe_root: Path, slug: str) -> None:
@@ -110,7 +110,7 @@ async def save_upload(
 
     destination = assets_dir / f"{kind}{extension}"
     destination.write_bytes(data)
-    return metadata_asset_path(slug, kind, extension)
+    return metadata_asset_path(kind, extension)
 
 
 def guess_media_type(path: Path) -> str:

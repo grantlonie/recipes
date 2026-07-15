@@ -1,5 +1,6 @@
 from app.cooklang import (
     format_yaml_quoted_string,
+    heal_imported_cooklang,
     metadata_cook_time,
     normalize_document,
     parse_blocks,
@@ -12,6 +13,7 @@ from app.cooklang import (
     scale_blocks,
     scale_steps,
     split_amount,
+    trim_cooklang_document,
 )
 
 
@@ -142,6 +144,96 @@ Bake @batter{}.
     metadata, _body = parse_document(fixed)
     assert metadata["description"] == "Classic fudgy brownies. Use natural or Dutch‑"
     assert 'description: "Classic fudgy brownies. Use natural or Dutch‑"' in fixed
+
+
+def test_trim_cooklang_document_keeps_first_recipe_only():
+    raw = """---
+title: Scallops
+---
+
+Season @sea scallops{907%g}.
+
+> Parsley leaves can be used in place of celery leaves.
+
+Wait, I need to reconsider the vermouth amount. I decided to use 0.25.
+
+Let me finalize:
+
+---
+title: Scallops Redo
+---
+
+Season @sea scallops{1%lb}.
+"""
+    trimmed = trim_cooklang_document(raw)
+    assert "Season @sea scallops{907%g}." in trimmed
+    assert "Parsley leaves can be used" in trimmed
+    assert "Wait, I need to reconsider" not in trimmed
+    assert "Scallops Redo" not in trimmed
+
+
+def test_heal_imported_cooklang_strips_prose_and_bad_refs():
+    raw = """Here is the recipe:
+
+---
+title: Soup
+image: photos/soup.jpg
+source: not-a-url
+---
+
+Cook @onion{1}.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    assert healed.lstrip().startswith("---")
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Soup"
+    assert "image" not in metadata
+    assert "source" not in metadata
+    assert "Cook @onion{1}." in body
+    assert any("leading prose" in note for note in notes)
+    assert any("invalid image" in note for note in notes)
+    assert any("invalid source" in note for note in notes)
+
+
+def test_render_front_matter_quotes_import_notes_with_colons():
+    content = render_document(
+        {
+            "title": "Tart",
+            "import_notes": [
+                "pass2: quality repair via gpt-oss-120b — Plain-text amount not marked as ingredient: 2 tablespoons"
+            ],
+        },
+        "Bake @batter{}.",
+    )
+    assert 'import_notes:\n- "pass2: quality repair' in content or (
+        'import_notes:\n  - "pass2: quality repair' in content
+    )
+    metadata, _body = parse_document(content)
+    assert metadata["import_notes"][0].startswith("pass2:")
+    assert "2 tablespoons" in metadata["import_notes"][0]
+
+
+def test_prepare_imported_content_strips_import_error_notes_and_app_keys():
+    content = """---
+title: Test
+review:
+  - stale
+import_time: "2020-01-01T00:00:00Z"
+import_duration_ms: 12
+import_notes:
+  - old
+---
+
+> Import error: Source ingredient may be missing from Cooklang: To finish
+
+Bake @batter{}.
+"""
+    prepared = prepare_imported_content(content)
+    metadata, body = parse_document(prepared)
+    assert "review" not in metadata
+    assert "import_time" not in metadata
+    assert "Import error:" not in body
+    assert "Bake @batter{}." in body
 
 
 def test_prepare_imported_content_normalizes_volume_units():

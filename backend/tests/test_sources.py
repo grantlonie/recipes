@@ -12,8 +12,9 @@ from app.sources import (
 )
 
 
-def test_metadata_asset_path_uses_recipes_prefix():
-    assert metadata_asset_path("chili", "source", ".pdf") == "recipes/chili/source.pdf"
+def test_metadata_asset_path_is_relative_filename():
+    assert metadata_asset_path("source", ".pdf") == "source.pdf"
+    assert metadata_asset_path("image", "jpg") == "image.jpg"
 
 
 def test_resolve_asset_file_reads_uploaded_asset(tmp_path: Path):

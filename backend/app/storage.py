@@ -19,6 +19,7 @@ def summary_from_detail(recipe: RecipeDetail) -> RecipeSummary:
         image=recipe.image,
         notes=recipe.notes,
         original_url=recipe.original_url,
+        review=recipe.review,
         servings=recipe.servings,
         slug=recipe.slug,
         tags=recipe.tags,
@@ -129,7 +130,6 @@ class RecipeRepository:
     ) -> RecipeDetail:
         if previous_slug and previous_slug != slug:
             rename_recipe_dir(self.recipe_root, previous_slug, slug)
-            content = _rewrite_asset_paths(content, previous_slug, slug)
 
         path = self.recipe_path(slug)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,11 +155,17 @@ class RecipeRepository:
         image: str | None = None,
         servings: float | None = None,
         tags: list[str] | None = None,
+        review: list[str] | None = None,
     ) -> RecipeDetail:
         recipe = self.sync_slug(slug)
         metadata, body = cooklang.parse_document(recipe.content)
         updated_metadata = cooklang.set_metadata_values(
-            metadata, bookmarked=bookmarked, image=image, servings=servings, tags=tags
+            metadata,
+            bookmarked=bookmarked,
+            image=image,
+            servings=servings,
+            tags=tags,
+            review=review,
         )
         return self.write_recipe(slug, cooklang.render_document(updated_metadata, body))
 
@@ -185,12 +191,13 @@ class RecipeRepository:
             content=content,
             cook_time=cooklang.metadata_cook_time(metadata),
             cookware=cooklang.parse_cookware(body),
-            image=cooklang.resolve_image_url(metadata, self.app_base_url),
+            image=cooklang.resolve_image_url(metadata, self.app_base_url, slug=slug),
             ingredients=cooklang.parse_ingredients(body, servings=servings),
             metadata=metadata,
             notes=cooklang.parse_notes(metadata, body),
-            original_url=cooklang.resolve_source_url(metadata, self.app_base_url),
+            original_url=cooklang.resolve_source_url(metadata, self.app_base_url, slug=slug),
             public_url=f"{self.app_base_url.rstrip('/')}/recipes/{quote(slug)}",
+            review=cooklang.metadata_review(metadata),
             servings=servings,
             slug=slug,
             blocks=cooklang.parse_blocks(body),
@@ -199,12 +206,3 @@ class RecipeRepository:
             title=title,
             updated_at=datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat(),
         )
-
-
-def _rewrite_asset_paths(content: str, old_slug: str, new_slug: str) -> str:
-    metadata, body = cooklang.parse_document(content)
-    for key in ("source", "image"):
-        value = cooklang.parse_ref_value(metadata, key)
-        if value and value.startswith(f"recipes/{old_slug}/"):
-            metadata[key] = value.replace(f"recipes/{old_slug}/", f"recipes/{new_slug}/", 1)
-    return cooklang.render_document(metadata, body)

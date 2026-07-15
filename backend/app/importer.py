@@ -4,6 +4,9 @@ import asyncio
 import logging
 import re
 import tempfile
+import time
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -31,7 +34,6 @@ from app.models import ImportPreview
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
-IMPORT_ERROR_NOTE_PREFIX = "Import error: "
 logger = logging.getLogger(__name__)
 SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 BROWSER_HEADERS = {
@@ -53,6 +55,22 @@ BROWSER_HEADERS = {
 
 class ImportError(RuntimeError):
     pass
+
+
+@dataclass
+class ImportTrace:
+    notes: list[str] = field(default_factory=list)
+    started_monotonic: float = field(default_factory=time.monotonic)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def add(self, note: str) -> None:
+        text = note.strip()
+        if text:
+            self.notes.append(text)
+
+
+def _model_label(model: str) -> str:
+    return model.rsplit("/", 1)[-1]
 
 
 def import_from_url(
@@ -146,11 +164,11 @@ def import_from_file(
             ingredients=ingredients,
         )
 
-    if source_path and source_path.startswith("recipes/"):
+    if source_path and cooklang.is_ref_file(source_path):
         metadata, body = cooklang.parse_document(preview.content)
-        metadata["source"] = source_path
+        metadata["source"] = cooklang.normalize_ref_value(source_path)
         if extension in image_extensions:
-            metadata.setdefault("image", source_path)
+            metadata.setdefault("image", cooklang.normalize_ref_value(source_path))
         content = cooklang.render_document(metadata, body) + "\n"
         preview = preview.model_copy(
             update={
@@ -171,12 +189,11 @@ def import_from_slug_file(
     path = _find_source_file(recipe_root, slug)
     if path is None:
         raise ImportError("No source file found for recipe")
-    source_path = f"recipes/{slug}/{path.name}"
     return import_from_file(
         path,
         settings=settings,
         ingredients=ingredients,
-        source_path=source_path,
+        source_path=path.name,
     )
 
 
@@ -237,6 +254,8 @@ def _import_image_file(
     settings: Settings,
     ingredients: IngredientRepository,
 ) -> ImportPreview:
+    trace = ImportTrace()
+    primary_model = settings.import_model_vision
     system_prompt = build_system_prompt()
     user_message = build_user_message(
         "The recipe is provided as an image. Extract the recipe faithfully.",
@@ -251,14 +270,23 @@ def _import_image_file(
         )
     except LLMError as error:
         raise ImportError(str(error)) from error
-    return _with_import_error_notes(
+    raw = cooklang.sanitize_front_matter(raw)
+    raw, heal_notes = cooklang.heal_imported_cooklang(raw)
+    for note in heal_notes:
+        trace.add(note)
+    trace.add(
+        f"pass1: {_model_label(primary_model)} (vision)"
+        + (" (healed locally)" if heal_notes else "")
+    )
+    return _with_import_metadata(
         _finalize_import(
-            cooklang.sanitize_front_matter(raw),
+            raw,
             source_url=None,
             settings=settings,
             ingredients=ingredients,
             source_text=None,
-        )
+        ),
+        trace=trace,
     )
 
 
@@ -270,6 +298,8 @@ def _import_extracted_text(
     settings: Settings,
     ingredients: IngredientRepository,
 ) -> ImportPreview:
+    trace = ImportTrace()
+    primary_model = settings.import_model_text
     system_prompt = build_system_prompt()
     user_message = build_user_message(
         extracted_text,
@@ -286,11 +316,21 @@ def _import_extracted_text(
         raise ImportError(str(error)) from error
 
     raw = cooklang.sanitize_front_matter(raw)
+    raw, heal_notes = cooklang.heal_imported_cooklang(raw)
+    for note in heal_notes:
+        trace.add(note)
+
     if not _is_valid_import(raw):
+        reason = _invalid_import_reason(raw)
         _log_advanced_processing(
-            "invalid Cooklang on first pass",
+            f"invalid Cooklang on first pass ({reason})",
             content=raw,
             source_url=source_url,
+        )
+        repair_model = settings.import_model_repair
+        trace.add(
+            f"pass2: invalid Cooklang after {_model_label(primary_model)} ({reason}); "
+            f"repair via {_model_label(repair_model)}"
         )
         try:
             raw = complete_cooklang(
@@ -301,11 +341,20 @@ def _import_extracted_text(
                     "The previous output was invalid Cooklang. "
                     "Return only valid Cooklang with YAML front matter."
                 ),
-                model=settings.import_model_repair,
+                model=repair_model,
             )
         except LLMError as error:
             raise ImportError(str(error)) from error
         raw = cooklang.sanitize_front_matter(raw)
+        raw, repair_heal_notes = cooklang.heal_imported_cooklang(raw)
+        for note in repair_heal_notes:
+            trace.add(note)
+    else:
+        if not any(note.startswith("pass1:") for note in trace.notes):
+            label = f"pass1: {_model_label(primary_model)}"
+            if heal_notes:
+                label += " (healed locally)"
+            trace.add(label)
 
     preview = _finalize_import(
         raw,
@@ -315,7 +364,7 @@ def _import_extracted_text(
         ingredients=ingredients,
         source_text=extracted_text,
     )
-    return _with_import_error_notes(
+    return _with_import_metadata(
         _maybe_quality_repair(
             preview,
             extracted_text=extracted_text,
@@ -324,7 +373,9 @@ def _import_extracted_text(
             settings=settings,
             ingredients=ingredients,
             system_prompt=system_prompt,
-        )
+            trace=trace,
+        ),
+        trace=trace,
     )
 
 
@@ -360,7 +411,11 @@ def _finalize_import(
 
     slug_source = source_url or metadata.get("title", "imported-recipe")
     if isinstance(slug_source, str) and cooklang.is_ref_file(slug_source):
-        slug_source = Path(slug_source).parent.name
+        # Legacy recipes/{slug}/asset.* → use folder name; bare asset.* → title.
+        if cooklang.is_legacy_recipes_path(slug_source):
+            slug_source = Path(slug_source).parent.name
+        else:
+            slug_source = metadata.get("title", "imported-recipe")
     suggested_slug = suggest_slug(str(slug_source), content)
     return ImportPreview(
         content=content + "\n",
@@ -380,6 +435,7 @@ def _maybe_quality_repair(
     settings: Settings,
     ingredients: IngredientRepository,
     system_prompt: str,
+    trace: ImportTrace,
 ) -> ImportPreview:
     validation = validate_imported_cooklang(preview.content, source_text=extracted_text)
     if not validation.needs_repair:
@@ -389,6 +445,13 @@ def _maybe_quality_repair(
         "structural quality warnings after first pass",
         content=preview.content,
         source_url=source_url,
+    )
+    repair_model = settings.import_model_repair
+    warning_summary = "; ".join(validation.warnings[:4])
+    if len(validation.warnings) > 4:
+        warning_summary += f"; +{len(validation.warnings) - 4} more"
+    trace.add(
+        f"pass2: quality repair via {_model_label(repair_model)} — {warning_summary}"
     )
     try:
         repaired = complete_cooklang(
@@ -400,13 +463,15 @@ def _maybe_quality_repair(
                 warnings=validation.warnings,
                 max_chars=settings.import_max_source_chars,
             ),
-            model=settings.import_model_repair,
+            model=repair_model,
         )
     except LLMError:
+        trace.add("pass2: quality repair failed; keeping first-pass result")
         return preview.model_copy(update={"validation_warnings": validation.warnings})
 
     repaired = cooklang.sanitize_front_matter(repaired)
     if not _is_valid_import(repaired):
+        trace.add("pass2: quality repair returned invalid Cooklang; keeping first-pass result")
         return preview.model_copy(update={"validation_warnings": validation.warnings})
 
     repaired_preview = _finalize_import(
@@ -421,33 +486,31 @@ def _maybe_quality_repair(
     return repaired_preview
 
 
-def _with_import_error_notes(preview: ImportPreview) -> ImportPreview:
-    """Embed remaining validation warnings as leading Cooklang notes."""
-    if not preview.validation_warnings:
-        return preview
-
+def _with_import_metadata(preview: ImportPreview, *, trace: ImportTrace) -> ImportPreview:
+    """Write app-owned review/import_* front matter; never embed validation as step notes."""
     metadata, body = cooklang.parse_document(preview.content)
-    existing_notes = {
-        match.group("note").strip() for match in cooklang.NOTE_RE.finditer(body)
-    }
-    note_lines: list[str] = []
-    for warning in preview.validation_warnings:
-        text = warning.strip()
-        if not text:
-            continue
-        if not text.startswith(IMPORT_ERROR_NOTE_PREFIX):
-            text = f"{IMPORT_ERROR_NOTE_PREFIX}{text}"
-        if text in existing_notes:
-            continue
-        note_lines.append(f"> {text}")
-        existing_notes.add(text)
+    cooklang.strip_app_owned_import_keys(metadata)
+    body = cooklang.strip_import_error_notes(body)
 
-    if not note_lines:
-        return preview
+    duration_ms = max(0, int((time.monotonic() - trace.started_monotonic) * 1000))
+    notes = list(trace.notes)
+    if preview.validation_warnings:
+        remaining = "; ".join(preview.validation_warnings[:4])
+        if len(preview.validation_warnings) > 4:
+            remaining += f"; +{len(preview.validation_warnings) - 4} more"
+        notes.append(f"remaining warnings: {remaining}")
+        metadata["review"] = [warning.strip() for warning in preview.validation_warnings if warning.strip()]
+    else:
+        metadata.pop("review", None)
 
-    notes_block = "\n\n".join(note_lines)
-    new_body = f"{notes_block}\n\n{body.lstrip()}" if body.strip() else f"{notes_block}\n"
-    content = cooklang.render_document(metadata, new_body)
+    metadata["import_time"] = trace.started_at.isoformat().replace("+00:00", "Z")
+    metadata["import_duration_ms"] = duration_ms
+    if notes:
+        metadata["import_notes"] = notes
+    else:
+        metadata.pop("import_notes", None)
+
+    content = cooklang.render_document(metadata, body)
     if not content.endswith("\n"):
         content += "\n"
     return preview.model_copy(update={"content": content})
@@ -475,7 +538,7 @@ def _log_advanced_processing(
 
 
 def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:
-    """Set image from scrape unless a local recipes/ file path is already present."""
+    """Set image from scrape unless a local asset file is already present."""
     if cooklang.metadata_image_file(metadata):
         return
     if image_url and cooklang.is_ref_url(image_url):
@@ -527,19 +590,23 @@ def _fetch_source_image_url(url: str) -> str | None:
 
 
 def _is_valid_import(content: str) -> bool:
+    return _invalid_import_reason(content) is None
+
+
+def _invalid_import_reason(content: str) -> str | None:
     try:
         metadata, body = cooklang.parse_document(content.strip())
-    except Exception:
-        return False
+    except Exception as error:
+        return f"parse error: {error}"
     if not metadata.get("title"):
-        return False
+        return "missing title"
     if not body.strip():
-        return False
+        return "empty body"
     try:
         cooklang.validate_document_refs(metadata)
-    except ValueError:
-        return False
-    return True
+    except ValueError as error:
+        return str(error)
+    return None
 
 
 def _find_source_file(recipe_root: Path, slug: str) -> Path | None:

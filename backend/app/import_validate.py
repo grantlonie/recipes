@@ -11,12 +11,6 @@ _INVALID_AMOUNT_RE = re.compile(
     r"^\s*(?:=)?(?:0(?:\.0+)?%g|0|pinch|splash|to taste|as needed|optional)\s*$",
     re.IGNORECASE,
 )
-_PLAIN_AMOUNT_RE = re.compile(
-    r"(?<![@#~{/\w])(?P<qty>\d+(?:\.\d+)?(?:\s+\d+/\d+)?|\d+/\d+)\s*"
-    r"(?P<unit>cups?|Tbsp|tbsp|tsp|teaspoons?|tablespoons?|ounces?|oz|pounds?|lbs?|"
-    r"grams?|kg|ml|liters?|litres?|cloves?)\b",
-    re.IGNORECASE,
-)
 _COOKWARE_COUNT_RE = re.compile(
     r"\b(?:baking\s+)?(?:pan|skillet|bowl|board|rack|dish|pot|sheet|tray)"
     r"\{\d+(?:%[^}]*)?\}",
@@ -33,11 +27,6 @@ _TRAILING_TAG_CLOUD_RE = re.compile(
 _SKIP_SOURCE_LINE_RE = re.compile(
     r"(?i)^(serving suggestions?|notes?|yield|makes|serves|set a timer|tools?|"
     r"nutrition|related|per serving)\b|^\*"
-)
-_PLAIN_AMOUNT_ALLOW_RE = re.compile(
-    r"(?i)\b(?:of the fat|of fat|pasta water|of gravy|drippings?|pan juices?|"
-    r"cooking (?:liquid|juices?)|of (?:this|the) (?:mixture|liquid|dough|"
-    r"sauce|batter|syrup|water|gravy)|all but)\b"
 )
 _UNIT_WORDS = frozenset(
     {
@@ -147,10 +136,9 @@ _PREP_WORDS = frozenset(
         "trimmed",
     }
 )
-# Prep-note gaps stay soft warnings only — they must not trigger a second LLM repair pass.
+# Prep-note gaps stay soft — they must not trigger a second LLM.
 _STRUCTURAL_WARNING_PREFIXES = (
     "Invalid amount for @",
-    "Plain-text amount not marked as ingredient:",
     "Cookware should use #name{}",
     "Source ingredient may be missing from Cooklang:",
 )
@@ -176,7 +164,6 @@ def validate_imported_cooklang(content: str, *, source_text: str | None = None) 
         return ImportValidation(warnings=["Could not parse imported Cooklang for validation"])
 
     warnings.extend(_invalid_amount_warnings(body))
-    warnings.extend(_plain_amount_warnings(body))
     warnings.extend(_cookware_count_warnings(body))
     if source_text:
         warnings.extend(_missing_source_ingredient_warnings(body, source_text))
@@ -214,24 +201,6 @@ def _invalid_amount_warnings(body: str) -> list[str]:
                 f"Invalid amount for @{name}: {{{amount}}} — "
                 "use an empty amount with a (to taste)/(as needed) note instead"
             )
-    return warnings
-
-
-def _plain_amount_warnings(body: str) -> list[str]:
-    warnings: list[str] = []
-    for match in _PLAIN_AMOUNT_RE.finditer(body):
-        snippet = match.group(0).strip()
-        start = match.start()
-        open_brace = body.rfind("{", 0, start)
-        close_brace = body.rfind("}", 0, start)
-        if open_brace > close_brace:
-            continue
-        window = body[match.end() : match.end() + 48]
-        if _PLAIN_AMOUNT_ALLOW_RE.search(window) or _PLAIN_AMOUNT_ALLOW_RE.search(
-            body[max(0, start - 24) : match.end() + 48]
-        ):
-            continue
-        warnings.append(f"Plain-text amount not marked as ingredient: {snippet}")
     return warnings
 
 

@@ -57,6 +57,7 @@ class RecipeSummary(BaseModel):
     image: str | None = None
     notes: list[str] = Field(default_factory=list)
     original_url: str | None = None
+    review: list[str] = Field(default_factory=list)
     servings: float = 1
     slug: str
     tags: list[str] = Field(default_factory=list)
@@ -88,6 +89,7 @@ class RecipeUpdate(BaseModel):
 class MetadataUpdate(BaseModel):
     bookmarked: bool | None = None
     image: str | None = None
+    review: list[str] | None = None
     servings: float | None = None
     tags: list[str] | None = None
 

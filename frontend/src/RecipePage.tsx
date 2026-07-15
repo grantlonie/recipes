@@ -37,6 +37,7 @@ import {
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
 import { densityForName, formatDisplayAmount, formatIngredientAmount } from './units'
 import { useUnitSystem } from './UnitSystemContext'
+import { isRefFile, resolveRefDisplay } from './importMapping'
 
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
 
@@ -105,6 +106,14 @@ export function RecipePage() {
   })
   const bookmarkMutation = useMutation({
     mutationFn: () => updateRecipeMetadata(slug, { bookmarked: !recipeQuery.data?.bookmarked }),
+    onSuccess: async recipe => {
+      queryClient.setQueryData(['recipe', slug], recipe)
+      await storeRecipe(recipe)
+      notifyLocalChange()
+    },
+  })
+  const dismissReviewMutation = useMutation({
+    mutationFn: () => updateRecipeMetadata(slug, { review: [] }),
     onSuccess: async recipe => {
       queryClient.setQueryData(['recipe', slug], recipe)
       await storeRecipe(recipe)
@@ -356,6 +365,60 @@ export function RecipePage() {
         </div>
       </section>
 
+      {recipe.review?.length ? (
+        <section className="rounded-xl bg-amber-50 px-4 py-3 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:ring-amber-900">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+                Needs review
+              </h2>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-950 dark:text-amber-100">
+                {recipe.review.map(item => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              {Array.isArray(recipe.metadata.import_notes) &&
+              recipe.metadata.import_notes.length ? (
+                <details className="mt-2 text-sm text-amber-900 dark:text-amber-200">
+                  <summary className="cursor-pointer font-medium">Import notes</summary>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {(recipe.metadata.import_notes as string[]).map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                  {typeof recipe.metadata.import_duration_ms === 'number' ? (
+                    <p className="mt-1 pl-1 text-xs opacity-80">
+                      Import took {recipe.metadata.import_duration_ms} ms
+                      {typeof recipe.metadata.import_time === 'string'
+                        ? ` · ${recipe.metadata.import_time}`
+                        : ''}
+                    </p>
+                  ) : null}
+                </details>
+              ) : null}
+            </div>
+            {auth.authenticated ? (
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Link
+                  className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-amber-950 ring-1 ring-amber-200 transition hover:bg-amber-100 dark:bg-amber-900/50 dark:text-amber-50 dark:ring-amber-800 dark:hover:bg-amber-900"
+                  to={`/recipes/edit/${slug}`}
+                >
+                  Edit
+                </Link>
+                <button
+                  className="rounded-lg bg-amber-900 px-3 py-1.5 text-sm font-semibold text-amber-50 transition hover:bg-amber-800 disabled:opacity-50 dark:bg-amber-100 dark:text-amber-950 dark:hover:bg-white"
+                  disabled={dismissReviewMutation.isPending}
+                  onClick={() => dismissReviewMutation.mutate()}
+                  type="button"
+                >
+                  Looks fine
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       <ConfirmDialog
         confirmLabel="Delete"
         confirmVariant="danger"
@@ -443,14 +506,9 @@ export function RecipePage() {
                 }
 
                 if (block.kind === 'note') {
-                  const isImportError = block.text.startsWith('Import error:')
                   return (
                     <p
-                      className={
-                        isImportError
-                          ? 'rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-900'
-                          : 'px-1 text-sm italic text-stone-600 dark:text-stone-400'
-                      }
+                      className="px-1 text-sm italic text-stone-600 dark:text-stone-400"
                       key={`note-${index}`}
                     >
                       {renderCooklangStep(block.text, unitSystem, catalog, isScaled)}
@@ -784,11 +842,12 @@ function formatServings(value: number) {
 function resolveSourceHref(recipe: {
   metadata?: Record<string, unknown>
   original_url?: string | null
+  slug?: string
 }): string | null {
   const raw = recipe.metadata?.source
   const source = typeof raw === 'string' ? raw.trim() : ''
-  if (source.startsWith('recipes/')) {
-    return `/api/sources/${source.slice('recipes/'.length)}`
+  if (isRefFile(source)) {
+    return resolveRefDisplay(source, recipe.slug)
   }
   if (source.startsWith('http://') || source.startsWith('https://')) {
     return source
