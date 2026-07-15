@@ -61,10 +61,6 @@ export function RecipeDetailHeaderNav() {
   const { title, titleInHeader } = useRecipeDetailHeader()
 
   function handleBack() {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
     navigate('/')
   }
 

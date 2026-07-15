@@ -15,25 +15,30 @@ import {
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { BookmarkButton } from './components/BookmarkButton'
-import { Button } from './components/Button'
-import { Dialog } from './components/Dialog'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { Popover } from './components/Popover'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
 import { getRecipeBlocks } from './cooklangEditor'
 import { extractTokens, formatIngredientLabel } from './cooklangTokens'
+import { extractTimerTokens, formatTimerLabel } from './cooklangTimers'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { titleCaseIngredient } from './ingredientDisplay'
 import { useRecipeDetailHeader } from './RecipeDetailHeaderContext'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { loadRecipeStaleFirst, purgeRecipeIfDeleted, revalidateRecipe, storeRecipe } from './sync'
-import { cardClassName, panelClassName } from './themeClasses'
+import {
+  cardClassName,
+  panelClassName,
+  stepCookwareMarkerClassName,
+  stepIngredientMarkerClassName,
+  stepTimerMarkerClassName,
+} from './themeClasses'
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
 import { densityForName, formatDisplayAmount, formatIngredientAmount } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 
 const COOKWARE_RE = /#([^{}#]+)\{\}/g
-const TIMER_RE = /~([A-Za-z0-9_./' -]*?)\{([^}]*)\}/g
 
 const ICON_CLASS = 'h-5 w-5'
 const IMAGE_ACTION_BUTTON_CLASS =
@@ -53,12 +58,9 @@ type ScaleFactor = (typeof SCALE_OPTIONS)[number]['value']
 const SCALED_TEXT_CLASS = 'font-semibold text-orange-700 dark:text-orange-300'
 
 const STEP_MARKER_CLASS = {
-  cookware:
-    'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900 dark:border-stone-500 dark:bg-stone-700/90 dark:text-stone-100',
-  ingredient:
-    'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-100',
-  timer:
-    'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100',
+  cookware: stepCookwareMarkerClassName,
+  ingredient: stepIngredientMarkerClassName,
+  timer: stepTimerMarkerClassName,
 } as const
 
 const SCALED_INGREDIENT_MARKER_CLASS =
@@ -354,25 +356,18 @@ export function RecipePage() {
         </div>
       </section>
 
-      <Dialog labelledBy="delete-recipe-title" open={deleteDialogOpen}>
-        <h2
-          className="text-lg font-semibold text-stone-900 dark:text-stone-100"
-          id="delete-recipe-title"
-        >
-          Delete recipe?
-        </h2>
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
-          Delete &ldquo;{recipe.title}&rdquo;? This cannot be undone.
-        </p>
-        <div className="mt-6 flex justify-end gap-3">
-          <Button onClick={() => setDeleteDialogOpen(false)} variant="ghost">
-            Cancel
-          </Button>
-          <Button disabled={deleteMutation.isPending} onClick={handleDelete} variant="danger">
-            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-          </Button>
-        </div>
-      </Dialog>
+      <ConfirmDialog
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        confirming={deleteMutation.isPending}
+        confirmingLabel="Deleting..."
+        description={<>Delete &ldquo;{recipe.title}&rdquo;? This cannot be undone.</>}
+        labelledBy="delete-recipe-title"
+        onCancel={() => setDeleteDialogOpen(false)}
+        onConfirm={() => void handleDelete()}
+        open={deleteDialogOpen}
+        title="Delete recipe?"
+      />
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
@@ -700,13 +695,11 @@ function renderCooklangLine(
     })
   }
 
-  TIMER_RE.lastIndex = 0
-  for (const match of line.matchAll(TIMER_RE)) {
-    const [marker, name, amount] = match
+  for (const token of extractTimerTokens(line)) {
     markers.push({
-      index: match.index ?? 0,
-      length: marker.length,
-      text: formatTimerPhrase(name.trim(), amount),
+      index: token.start,
+      length: token.end - token.start,
+      text: formatTimerLabel(token),
       type: 'timer',
     })
   }
@@ -802,23 +795,4 @@ function formatIngredientFromToken(
     return formatIngredientLabel(token.name, token.note)
   }
   return `${formatted} ${formatIngredientLabel(token.name, token.note)}`
-}
-
-function formatTimerPhrase(name: string, amount: string) {
-  const { quantity, unit } = splitAmount(amount)
-  if (name) {
-    return name
-  }
-  if (!quantity) {
-    return amount
-  }
-  if (!unit) {
-    return quantity
-  }
-  return `${quantity} ${unit}`
-}
-
-function splitAmount(amount: string) {
-  const [quantity, unit] = amount.split('%', 2).map(part => part.trim())
-  return { quantity: quantity?.replace(/^=/, '') ?? '', unit: unit ?? '' }
 }

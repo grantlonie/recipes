@@ -1,6 +1,7 @@
 import type { JSONContent } from '@tiptap/core'
 
 import { extractTokens, serializeIngredient, type IngredientAttrs } from './cooklangTokens'
+import { extractTimerTokens, serializeTimer, type TimerAttrs } from './cooklangTimers'
 import type { RecipeBlock, RecipeDetail } from './types'
 
 const SECTION_LINE_RE = /^=+\s*(.+?)\s*=+\s*$/
@@ -93,34 +94,68 @@ function parseCooklangLine(line: string): JSONContent {
   return content ? { type: 'paragraph', content } : { type: 'paragraph' }
 }
 
+type InlineMarker =
+  | { end: number; kind: 'ingredient'; start: number; attrs: IngredientAttrs }
+  | { end: number; kind: 'timer'; start: number; attrs: TimerAttrs }
+
 function parseLineContent(line: string): JSONContent[] | undefined {
-  const tokens = extractTokens(line)
-  if (!tokens.length && !line) {
+  const markers = collectInlineMarkers(line)
+  if (!markers.length && !line) {
     return undefined
   }
 
   const content: JSONContent[] = []
   let cursor = 0
-  for (const token of tokens) {
-    if (token.start > cursor) {
-      content.push({ type: 'text', text: line.slice(cursor, token.start) })
+  for (const marker of markers) {
+    if (marker.start < cursor) {
+      continue
     }
-    content.push({
-      type: 'ingredient',
+    if (marker.start > cursor) {
+      content.push({ type: 'text', text: line.slice(cursor, marker.start) })
+    }
+    if (marker.kind === 'ingredient') {
+      content.push({ type: 'ingredient', attrs: marker.attrs })
+    } else {
+      content.push({ type: 'timer', attrs: marker.attrs })
+    }
+    cursor = marker.end
+  }
+  if (cursor < line.length) {
+    content.push({ type: 'text', text: line.slice(cursor) })
+  }
+  return content.length ? content : undefined
+}
+
+function collectInlineMarkers(line: string): InlineMarker[] {
+  const markers: InlineMarker[] = []
+  for (const token of extractTokens(line)) {
+    markers.push({
       attrs: {
         fixed: token.fixed,
         name: token.name,
         note: token.note,
         quantity: token.quantity,
         unit: token.unit,
-      } satisfies IngredientAttrs,
+      },
+      end: token.end,
+      kind: 'ingredient',
+      start: token.start,
     })
-    cursor = token.end
   }
-  if (cursor < line.length) {
-    content.push({ type: 'text', text: line.slice(cursor) })
+  for (const token of extractTimerTokens(line)) {
+    markers.push({
+      attrs: {
+        name: token.name,
+        quantity: token.quantity,
+        unit: token.unit,
+      },
+      end: token.end,
+      kind: 'timer',
+      start: token.start,
+    })
   }
-  return content.length ? content : undefined
+  markers.sort((left, right) => left.start - right.start)
+  return markers
 }
 
 function serializeBlock(block: JSONContent): string {
@@ -166,6 +201,13 @@ function serializeParagraph(paragraph: JSONContent): string {
           fixed: Boolean(node.attrs?.fixed),
           name: String(node.attrs?.name ?? ''),
           note: String(node.attrs?.note ?? ''),
+          quantity: String(node.attrs?.quantity ?? ''),
+          unit: String(node.attrs?.unit ?? ''),
+        })
+      }
+      if (node.type === 'timer') {
+        return serializeTimer({
+          name: String(node.attrs?.name ?? ''),
           quantity: String(node.attrs?.quantity ?? ''),
           unit: String(node.attrs?.unit ?? ''),
         })

@@ -16,6 +16,7 @@ import { useAuth } from './AuthContext'
 import { Autocomplete } from './components/Autocomplete'
 import { Button } from './components/Button'
 import { CameraCaptureDialog, isCameraCaptureSupported } from './components/CameraCaptureDialog'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { Dialog } from './components/Dialog'
 import { ImportingDialog } from './components/ImportingDialog'
 import { ImportMappingDialog } from './components/ImportMappingDialog'
@@ -24,6 +25,7 @@ import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
 import { VolumeQuantitySelect } from './components/VolumeQuantitySelect'
 import type { IngredientAttrs } from './cooklangTokens'
+import { type TimerAttrs, type TimerUnit, timerUnitSelectValue } from './cooklangTimers'
 import { deleteRecipes, getLocalRecipe, getLocalTags } from './db'
 import {
   applyImportMapping,
@@ -65,6 +67,12 @@ interface IngredientFormState {
   units: string
 }
 
+interface TimerFormState {
+  name: string
+  quantity: string
+  unit: TimerUnit
+}
+
 interface RecipeEditPageProps {
   mode: 'edit' | 'new'
 }
@@ -96,9 +104,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [sectionDialogOpen, setSectionDialogOpen] = useState(false)
   const [editingSectionPos, setEditingSectionPos] = useState<number | null>(null)
   const [sectionTitle, setSectionTitle] = useState('')
+  const [timerDialogOpen, setTimerDialogOpen] = useState(false)
+  const [editingTimerPos, setEditingTimerPos] = useState<number | null>(null)
+  const [timerInitial, setTimerInitial] = useState<TimerFormState>(emptyTimerForm)
+  const [timerDraft, setTimerDraft] = useState<TimerFormState>(emptyTimerForm)
   const [mappingOpen, setMappingOpen] = useState(false)
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
+  const [reimportConfirmOpen, setReimportConfirmOpen] = useState(false)
   const [recipeSlug, setRecipeSlug] = useState(mode === 'new' ? 'new-recipe' : slug)
   const [servings, setServings] = useState(4)
   const [source, setSource] = useState('')
@@ -131,6 +144,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     [mappingRows, catalog]
   )
   const ingredientDirty = editingPos !== null && !isEqual(ingredientInitial, ingredientDraft)
+  const timerDirty = editingTimerPos !== null && !isEqual(timerInitial, timerDraft)
 
   useEffect(() => {
     if (!auth.authenticated) {
@@ -222,6 +236,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setEditingSectionPos(pos)
     setSectionTitle(title)
     setSectionDialogOpen(true)
+  }, [])
+
+  const handleEditTimer = useCallback((pos: number, attrs: TimerAttrs) => {
+    const snapshot = timerFormFromAttrs(attrs)
+    setEditingTimerPos(pos)
+    setTimerInitial(snapshot)
+    setTimerDraft(snapshot)
+    setTimerDialogOpen(true)
   }, [])
 
   if (!auth.authenticated) {
@@ -395,6 +417,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               <Button onClick={openAddNote} variant="secondary">
                 Add note
               </Button>
+              <Button onClick={openAddTimer} variant="secondary">
+                Add time
+              </Button>
               <Button onClick={openAddSection} variant="secondary">
                 Add section
               </Button>
@@ -407,6 +432,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               onChange={setBody}
               onEditIngredient={handleEditIngredient}
               onEditSection={handleEditSection}
+              onEditTimer={handleEditTimer}
               ref={bodyEditorRef}
               unitSystem={unitSystem}
               value={body}
@@ -419,6 +445,22 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       </div>
 
       <ImportingDialog open={importMutation.isPending || reimportMutation.isPending} />
+
+      <ConfirmDialog
+        confirmLabel="Re-import"
+        confirming={reimportMutation.isPending}
+        confirmingLabel="Re-importing..."
+        description={
+          isRefFile(source)
+            ? 'Re-importing will overwrite the current recipe title, metadata, and body from the source file.'
+            : 'Re-importing will overwrite the current recipe title, metadata, and body from the source URL.'
+        }
+        labelledBy="reimport-confirm-title"
+        onCancel={() => setReimportConfirmOpen(false)}
+        onConfirm={() => void confirmReimportFromSource()}
+        open={reimportConfirmOpen}
+        title="Re-import recipe?"
+      />
 
       <Dialog labelledBy="ingredient-dialog-title" open={ingredientDialogOpen}>
         <h2 className="text-xl font-bold" id="ingredient-dialog-title">
@@ -537,6 +579,67 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         </div>
       </Dialog>
 
+      <Dialog labelledBy="timer-dialog-title" open={timerDialogOpen}>
+        <h2 className="text-xl font-bold" id="timer-dialog-title">
+          {editingTimerPos !== null ? 'Edit time' : 'Add time'}
+        </h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Field label="Amount">
+            <input
+              autoFocus
+              className={inputClassName}
+              inputMode="decimal"
+              min="0"
+              onChange={event =>
+                setTimerDraft(current => ({ ...current, quantity: event.target.value }))
+              }
+              placeholder="15"
+              step="any"
+              type="number"
+              value={timerDraft.quantity}
+            />
+          </Field>
+          <Field label="Unit">
+            <select
+              className={inputClassName}
+              onChange={event =>
+                setTimerDraft(current => ({
+                  ...current,
+                  unit: event.target.value as TimerUnit,
+                }))
+              }
+              value={timerDraft.unit}
+            >
+              <option value="minutes">min</option>
+              <option value="hours">hour</option>
+            </select>
+          </Field>
+        </div>
+        <div className="mt-6 flex justify-between gap-2">
+          {editingTimerPos !== null ? (
+            <Button onClick={deleteTimerToken} variant="danger">
+              Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            {editingTimerPos === null || timerDirty ? (
+              <Button onClick={closeTimerDialog} variant="ghost">
+                Cancel
+              </Button>
+            ) : null}
+            <Button
+              className={editingTimerPos !== null ? 'w-[80px] justify-center' : undefined}
+              disabled={!timerDraft.quantity.trim()}
+              onClick={confirmTimerDialog}
+            >
+              {editingTimerPos !== null ? (timerDirty ? 'Update' : 'Done') : 'Add time'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       <ImportMappingDialog
         catalog={catalog}
         onApply={() => void applyMapping()}
@@ -638,20 +741,15 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     await importMutation.mutateAsync(importUrl.trim())
   }
 
-  async function handleReimportFromSource() {
+  function handleReimportFromSource() {
     if (!source.trim()) {
       return
     }
+    setReimportConfirmOpen(true)
+  }
 
-    const confirmed = window.confirm(
-      isRefFile(source)
-        ? 'Re-importing will overwrite the current recipe title, metadata, and body from the source file. Continue?'
-        : 'Re-importing will overwrite the current recipe title, metadata, and body from the source URL. Continue?'
-    )
-    if (!confirmed) {
-      return
-    }
-
+  async function confirmReimportFromSource() {
+    setReimportConfirmOpen(false)
     await reimportMutation.mutateAsync()
   }
 
@@ -743,6 +841,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
   function openAddNote() {
     bodyEditorRef.current?.insertNote()
+  }
+
+  function openAddTimer() {
+    const snapshot = emptyTimerForm()
+    setEditingTimerPos(null)
+    setTimerInitial(snapshot)
+    setTimerDraft(snapshot)
+    setTimerDialogOpen(true)
   }
 
   function openAddSection() {
@@ -845,6 +951,48 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
     setSectionDialogOpen(false)
     setEditingSectionPos(null)
+  }
+
+  function closeTimerDialog() {
+    setTimerDialogOpen(false)
+    setEditingTimerPos(null)
+    const snapshot = emptyTimerForm()
+    setTimerInitial(snapshot)
+    setTimerDraft(snapshot)
+  }
+
+  function confirmTimerDialog() {
+    if (editingTimerPos !== null && !timerDirty) {
+      closeTimerDialog()
+      return
+    }
+    saveTimerToken()
+  }
+
+  function saveTimerToken() {
+    const quantity = timerDraft.quantity.trim()
+    if (!quantity) {
+      return
+    }
+    const attrs: TimerAttrs = {
+      name: timerDraft.name,
+      quantity,
+      unit: timerDraft.unit,
+    }
+    if (editingTimerPos !== null) {
+      bodyEditorRef.current?.updateTimer(editingTimerPos, attrs)
+    } else {
+      bodyEditorRef.current?.insertTimer(attrs)
+    }
+    closeTimerDialog()
+  }
+
+  function deleteTimerToken() {
+    if (editingTimerPos === null) {
+      return
+    }
+    bodyEditorRef.current?.deleteTimer(editingTimerPos)
+    closeTimerDialog()
   }
 }
 
@@ -998,6 +1146,18 @@ function resolveRefDisplay(value: string): string {
 
 function emptyIngredientForm(): IngredientFormState {
   return { fixed: false, name: '', note: '', qty: '', units: '' }
+}
+
+function emptyTimerForm(): TimerFormState {
+  return { name: '', quantity: '', unit: 'minutes' }
+}
+
+function timerFormFromAttrs(attrs: TimerAttrs): TimerFormState {
+  return {
+    name: attrs.name,
+    quantity: attrs.quantity,
+    unit: timerUnitSelectValue(attrs.unit),
+  }
 }
 
 function newIngredientForm(unitSystem: UnitSystem): IngredientFormState {

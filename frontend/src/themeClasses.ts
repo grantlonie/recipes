@@ -13,3 +13,12 @@ export const mappingCreateCardClassName =
   'bg-amber-100 ring-1 ring-amber-300 dark:bg-amber-950/45 dark:ring-amber-800'
 
 export const mappingCreateTitleClassName = 'text-amber-900 dark:text-amber-200'
+
+export const stepTimerMarkerClassName =
+  'inline rounded-md border border-amber-400 bg-amber-50/90 px-1 font-medium text-stone-900 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100'
+
+export const stepIngredientMarkerClassName =
+  'inline rounded-md border border-orange-200 bg-orange-100/70 px-1 font-semibold text-stone-900 dark:border-orange-800 dark:bg-orange-950/50 dark:text-orange-100'
+
+export const stepCookwareMarkerClassName =
+  'inline rounded-md border border-stone-500 bg-stone-100/90 px-1 font-bold text-stone-900 dark:border-stone-500 dark:bg-stone-700/90 dark:text-stone-100'

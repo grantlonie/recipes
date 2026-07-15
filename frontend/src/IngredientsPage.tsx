@@ -12,6 +12,7 @@ import {
 } from './api'
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { DensitySearchLink } from './components/DensitySearchLink'
 import { Dialog } from './components/Dialog'
 import { putIngredientCatalog } from './db'
@@ -36,6 +37,7 @@ export function IngredientsPage() {
   const queryClient = useQueryClient()
   const { ingredients, refresh } = useIngredientCatalog()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
   const [editing, setEditing] = useState<CatalogIngredient | null>(null)
   const [name, setName] = useState('')
@@ -279,6 +281,24 @@ export function IngredientsPage() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        confirming={deleteMutation.isPending}
+        confirmingLabel="Deleting..."
+        description={
+          <>
+            Delete &ldquo;{editing ? titleCaseIngredient(editing.name) : ''}&rdquo;? This cannot be
+            undone.
+          </>
+        }
+        labelledBy="delete-ingredient-title"
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        open={deleteConfirmOpen}
+        title="Delete ingredient?"
+      />
     </section>
   )
 
@@ -299,6 +319,7 @@ export function IngredientsPage() {
   }
 
   function closeDialog() {
+    setDeleteConfirmOpen(false)
     setDialogOpen(false)
     setEditing(null)
   }
@@ -327,9 +348,14 @@ export function IngredientsPage() {
     if (!editing) {
       return
     }
-    if (!window.confirm(`Delete ${titleCaseIngredient(editing.name)}?`)) {
+    setDeleteConfirmOpen(true)
+  }
+
+  function confirmDelete() {
+    if (!editing) {
       return
     }
+    setDeleteConfirmOpen(false)
     deleteMutation.mutate(editing.name)
   }
 

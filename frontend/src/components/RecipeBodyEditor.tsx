@@ -1,24 +1,31 @@
 import { EditorContent, useEditor } from '@tiptap/react'
+import type { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 
 import { parseCooklangBody, serializeCooklangBody } from '../cooklangEditor'
 import type { IngredientAttrs } from '../cooklangTokens'
+import type { TimerAttrs } from '../cooklangTimers'
 import type { CatalogIngredient, UnitSystem } from '../types'
 import { CookNoteExtension } from './cookNoteExtension'
 import { IngredientExtension } from './ingredientExtension'
 import { setIngredientDisplayState } from './ingredientDisplayStore'
 import { setSectionDisplayState } from './sectionDisplayStore'
 import { SectionExtension } from './sectionExtension'
+import { setTimerDisplayState } from './timerDisplayStore'
+import { TimerExtension } from './timerExtension'
 
 export interface RecipeBodyEditorHandle {
   deleteIngredient: (pos: number) => void
+  deleteTimer: (pos: number) => void
   focus: () => void
   insertIngredient: (attrs: IngredientAttrs) => void
   insertNote: () => void
   insertSection: (title: string) => void
+  insertTimer: (attrs: TimerAttrs) => void
   updateIngredient: (pos: number, attrs: IngredientAttrs) => void
   updateSection: (pos: number, title: string) => void
+  updateTimer: (pos: number, attrs: TimerAttrs) => void
 }
 
 interface RecipeBodyEditorProps {
@@ -26,13 +33,14 @@ interface RecipeBodyEditorProps {
   onChange: (body: string) => void
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
   onEditSection: (pos: number, title: string) => void
+  onEditTimer: (pos: number, attrs: TimerAttrs) => void
   unitSystem: UnitSystem
   value: string
 }
 
 export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEditorProps>(
   function RecipeBodyEditor(
-    { catalog, onChange, onEditIngredient, onEditSection, unitSystem, value },
+    { catalog, onChange, onEditIngredient, onEditSection, onEditTimer, unitSystem, value },
     ref
   ) {
     const onChangeRef = useRef(onChange)
@@ -59,6 +67,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           underline: false,
         }),
         IngredientExtension,
+        TimerExtension,
         SectionExtension,
         CookNoteExtension,
       ],
@@ -79,7 +88,12 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           if (!text) {
             return false
           }
-          if (!text.includes('@') && !text.includes('>') && !/^=+\s*.+\s*=+\s*$/m.test(text)) {
+          if (
+            !text.includes('@') &&
+            !text.includes('~') &&
+            !text.includes('>') &&
+            !/^=+\s*.+\s*=+\s*$/m.test(text)
+          ) {
             return false
           }
           event.preventDefault()
@@ -108,6 +122,10 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
     }, [onEditSection])
 
     useEffect(() => {
+      setTimerDisplayState({ onEditTimer })
+    }, [onEditTimer])
+
+    useEffect(() => {
       if (!editor || editor.isDestroyed) {
         return
       }
@@ -124,18 +142,10 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           editor?.commands.focus()
         },
         deleteIngredient(pos) {
-          if (!editor) {
-            return
-          }
-          const node = editor.state.doc.nodeAt(pos)
-          if (!node || node.type.name !== 'ingredient') {
-            return
-          }
-          editor
-            .chain()
-            .focus()
-            .deleteRange({ from: pos, to: pos + node.nodeSize })
-            .run()
+          deleteInlineNode(editor, pos, 'ingredient')
+        },
+        deleteTimer(pos) {
+          deleteInlineNode(editor, pos, 'timer')
         },
         insertIngredient(attrs) {
           if (!editor) {
@@ -166,22 +176,21 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           }
           editor.chain().focus().insertContent({ type: 'section', attrs: { title } }).run()
         },
-        updateIngredient(pos, attrs) {
+        insertTimer(attrs) {
           if (!editor) {
-            return
-          }
-          const node = editor.state.doc.nodeAt(pos)
-          if (!node || node.type.name !== 'ingredient') {
             return
           }
           editor
             .chain()
             .focus()
-            .command(({ tr }) => {
-              tr.setNodeMarkup(pos, undefined, attrs)
-              return true
-            })
+            .insertContent([
+              { type: 'timer', attrs },
+              { type: 'text', text: ' ' },
+            ])
             .run()
+        },
+        updateIngredient(pos, attrs) {
+          updateInlineNode(editor, pos, 'ingredient', attrs)
         },
         updateSection(pos, title) {
           if (!editor) {
@@ -200,6 +209,9 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
             })
             .run()
         },
+        updateTimer(pos, attrs) {
+          updateInlineNode(editor, pos, 'timer', attrs)
+        },
       }),
       [editor]
     )
@@ -207,3 +219,41 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
     return <EditorContent editor={editor} />
   }
 )
+
+function deleteInlineNode(editor: Editor | null, pos: number, typeName: string) {
+  if (!editor) {
+    return
+  }
+  const node = editor.state.doc.nodeAt(pos)
+  if (!node || node.type.name !== typeName) {
+    return
+  }
+  editor
+    .chain()
+    .focus()
+    .deleteRange({ from: pos, to: pos + node.nodeSize })
+    .run()
+}
+
+function updateInlineNode(
+  editor: Editor | null,
+  pos: number,
+  typeName: string,
+  attrs: IngredientAttrs | TimerAttrs
+) {
+  if (!editor) {
+    return
+  }
+  const node = editor.state.doc.nodeAt(pos)
+  if (!node || node.type.name !== typeName) {
+    return
+  }
+  editor
+    .chain()
+    .focus()
+    .command(({ tr }) => {
+      tr.setNodeMarkup(pos, undefined, attrs)
+      return true
+    })
+    .run()
+}
