@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import tempfile
 from pathlib import Path
@@ -30,6 +31,8 @@ from app.models import ImportPreview
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
+IMPORT_ERROR_NOTE_PREFIX = "Import error: "
+logger = logging.getLogger(__name__)
 SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 BROWSER_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -248,12 +251,14 @@ def _import_image_file(
         )
     except LLMError as error:
         raise ImportError(str(error)) from error
-    return _finalize_import(
-        cooklang.sanitize_front_matter(raw),
-        source_url=None,
-        settings=settings,
-        ingredients=ingredients,
-        source_text=None,
+    return _with_import_error_notes(
+        _finalize_import(
+            cooklang.sanitize_front_matter(raw),
+            source_url=None,
+            settings=settings,
+            ingredients=ingredients,
+            source_text=None,
+        )
     )
 
 
@@ -282,6 +287,11 @@ def _import_extracted_text(
 
     raw = cooklang.sanitize_front_matter(raw)
     if not _is_valid_import(raw):
+        _log_advanced_processing(
+            "invalid Cooklang on first pass",
+            content=raw,
+            source_url=source_url,
+        )
         try:
             raw = complete_cooklang(
                 settings=settings,
@@ -305,14 +315,16 @@ def _import_extracted_text(
         ingredients=ingredients,
         source_text=extracted_text,
     )
-    return _maybe_quality_repair(
-        preview,
-        extracted_text=extracted_text,
-        source_url=source_url,
-        image_url=image_url,
-        settings=settings,
-        ingredients=ingredients,
-        system_prompt=system_prompt,
+    return _with_import_error_notes(
+        _maybe_quality_repair(
+            preview,
+            extracted_text=extracted_text,
+            source_url=source_url,
+            image_url=image_url,
+            settings=settings,
+            ingredients=ingredients,
+            system_prompt=system_prompt,
+        )
     )
 
 
@@ -373,6 +385,11 @@ def _maybe_quality_repair(
     if not validation.needs_repair:
         return preview.model_copy(update={"validation_warnings": validation.warnings})
 
+    _log_advanced_processing(
+        "structural quality warnings after first pass",
+        content=preview.content,
+        source_url=source_url,
+    )
     try:
         repaired = complete_cooklang(
             settings=settings,
@@ -402,6 +419,59 @@ def _maybe_quality_repair(
     )
     # Prefer the repaired result even if some soft warnings remain.
     return repaired_preview
+
+
+def _with_import_error_notes(preview: ImportPreview) -> ImportPreview:
+    """Embed remaining validation warnings as leading Cooklang notes."""
+    if not preview.validation_warnings:
+        return preview
+
+    metadata, body = cooklang.parse_document(preview.content)
+    existing_notes = {
+        match.group("note").strip() for match in cooklang.NOTE_RE.finditer(body)
+    }
+    note_lines: list[str] = []
+    for warning in preview.validation_warnings:
+        text = warning.strip()
+        if not text:
+            continue
+        if not text.startswith(IMPORT_ERROR_NOTE_PREFIX):
+            text = f"{IMPORT_ERROR_NOTE_PREFIX}{text}"
+        if text in existing_notes:
+            continue
+        note_lines.append(f"> {text}")
+        existing_notes.add(text)
+
+    if not note_lines:
+        return preview
+
+    notes_block = "\n\n".join(note_lines)
+    new_body = f"{notes_block}\n\n{body.lstrip()}" if body.strip() else f"{notes_block}\n"
+    content = cooklang.render_document(metadata, new_body)
+    if not content.endswith("\n"):
+        content += "\n"
+    return preview.model_copy(update={"content": content})
+
+
+def _log_advanced_processing(
+    reason: str,
+    *,
+    content: str,
+    source_url: str | None = None,
+) -> None:
+    title_match = re.search(r"^title:\s*(?P<title>.+)$", content, re.MULTILINE)
+    label = (
+        title_match.group("title").strip()
+        if title_match
+        else (source_url or "unknown recipe")
+    )
+    message = (
+        f"Recipe import required more advanced processing ({reason}): {label}\n"
+        f"{content.rstrip() or '(empty)'}"
+    )
+    # Print so it always shows in the uvicorn/dev console without extra logging config.
+    print(f"[import] {message}", flush=True)
+    logger.warning("%s", message)
 
 
 def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:

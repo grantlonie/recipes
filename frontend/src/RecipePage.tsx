@@ -443,9 +443,14 @@ export function RecipePage() {
                 }
 
                 if (block.kind === 'note') {
+                  const isImportError = block.text.startsWith('Import error:')
                   return (
                     <p
-                      className="px-1 text-sm italic text-stone-600 dark:text-stone-400"
+                      className={
+                        isImportError
+                          ? 'rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-900'
+                          : 'px-1 text-sm italic text-stone-600 dark:text-stone-400'
+                      }
                       key={`note-${index}`}
                     >
                       {renderCooklangStep(block.text, unitSystem, catalog, isScaled)}

@@ -99,6 +99,37 @@ def test_import_from_text_skips_quality_repair_when_clean(
     assert preview.validation_warnings == []
 
 
+def test_import_from_text_embeds_soft_warnings_as_leading_notes(
+    settings: Settings, ingredients: IngredientRepository
+):
+    ingredients.upsert(CatalogIngredient(name="jalapenos"))
+    ingredients.upsert(CatalogIngredient(name="corn"))
+    cooklang = """---
+title: Sheet pan
+---
+
+Toss @jalapenos{0.33%cup}(pickled) with @corn{4%cup}.
+"""
+    source = """Ingredients
+1/3 cup chopped pickled jalapeños, plus brine from the jar
+4 cups corn kernels
+
+Directions
+Cook.
+"""
+    with patch("app.importer.complete_cooklang", return_value=cooklang) as mock_complete:
+        preview = import_from_text(source, settings=settings, ingredients=ingredients)
+
+    assert mock_complete.call_count == 1
+    assert any(
+        "Source preparation note missing" in warning for warning in preview.validation_warnings
+    )
+    metadata_end = preview.content.index("---\n\n") + len("---\n\n")
+    body = preview.content[metadata_end:]
+    assert body.startswith("> Import error: Source preparation note missing")
+    assert body.index("> Import error:") < body.index("Toss @jalapenos")
+
+
 def test_import_from_text_reports_unmatched_ingredients(
     settings: Settings, ingredients: IngredientRepository
 ):

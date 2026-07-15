@@ -480,26 +480,6 @@ export function BulkImportDialog({
         </div>
       ) : null}
 
-      {items.some(item => item.validationWarnings.length > 0) ? (
-        <div className="mt-4 rounded-2xl bg-amber-50 p-3 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-900">
-          <p className="font-semibold">Import validation warnings</p>
-          <ul className="mt-2 max-h-40 space-y-2 overflow-y-auto">
-            {items
-              .filter(item => item.validationWarnings.length > 0)
-              .map(item => (
-                <li key={item.id}>
-                  <span className="font-medium">{item.suggestedSlug || item.fileName}</span>
-                  <ul className="ml-4 list-disc">
-                    {item.validationWarnings.map(warning => (
-                      <li key={warning}>{warning}</li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-          </ul>
-        </div>
-      ) : null}
-
       <div className="mt-6 flex flex-wrap justify-end gap-2">
         <Button disabled={saving || applying} onClick={handleClose} type="button" variant="ghost">
           {allSettled ? 'Close' : 'Cancel'}
@@ -532,23 +512,38 @@ function mergeUnmatchedQueue(
   current: BulkUnmatchedRow[],
   next: BulkUnmatchedRow[]
 ): BulkUnmatchedRow[] {
-  const currentByKey = new Map(
-    current.map(row => [`${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`, row])
+  const nextByKey = new Map(
+    next.map(row => [`${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`, row])
   )
-  return next.map(row => {
-    const key = `${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`
-    const existing = currentByKey.get(key)
-    if (!existing) {
-      return row
+  const seen = new Set<string>()
+  const merged: BulkUnmatchedRow[] = []
+
+  // Keep first-seen order stable while imports finish and recipe counts change.
+  for (const existing of current) {
+    const key = `${existing.originalName.toLowerCase()}|${existing.unit.toLowerCase()}`
+    const updated = nextByKey.get(key)
+    if (!updated) {
+      continue
     }
-    return {
-      ...row,
+    seen.add(key)
+    merged.push({
+      ...updated,
       catalogName: existing.catalogName,
       createDensity: existing.createDensity,
       excluded: existing.excluded,
       note: existing.note,
+    })
+  }
+
+  for (const row of next) {
+    const key = `${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`
+    if (seen.has(key)) {
+      continue
     }
-  })
+    merged.push(row)
+  }
+
+  return merged
 }
 
 function BulkMappingRowCard({
