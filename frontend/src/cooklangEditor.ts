@@ -91,8 +91,8 @@ function parseCooklangLine(line: string): JSONContent {
 
   const noteMatch = line.match(NOTE_LINE_RE)
   if (noteMatch) {
-    const text = noteMatch[1]
-    return text ? { type: 'cookNote', content: [{ type: 'text', text }] } : { type: 'cookNote' }
+    const content = parseLineContent(noteMatch[1])
+    return content ? { type: 'cookNote', content } : { type: 'cookNote' }
   }
 
   const content = parseLineContent(line)
@@ -176,31 +176,14 @@ function collectInlineMarkers(line: string): InlineMarker[] {
 
 function serializeBlock(block: JSONContent): string {
   if (block.type === 'section') {
-    const title = String(block.attrs?.title ?? '').trim() || serializeInlineContent(block.content)
+    const title = String(block.attrs?.title ?? '').trim() || serializeParagraph(block)
     return `==${title}==`
   }
   if (block.type === 'cookNote') {
-    const text = serializeInlineContent(block.content)
+    const text = serializeParagraph(block)
     return text ? `> ${text}` : '>'
   }
   return serializeParagraph(block)
-}
-
-function serializeInlineContent(content: JSONContent[] | undefined): string {
-  if (!content?.length) {
-    return ''
-  }
-  return content
-    .map(node => {
-      if (node.type === 'text') {
-        return node.text ?? ''
-      }
-      if (node.type === 'hardBreak') {
-        return '\n'
-      }
-      return ''
-    })
-    .join('')
 }
 
 function serializeParagraph(paragraph: JSONContent): string {

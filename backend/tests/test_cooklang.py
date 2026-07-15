@@ -7,6 +7,7 @@ from app.cooklang import (
     parse_ingredients,
     prepare_imported_content,
     sanitize_front_matter,
+    scale_blocks,
     scale_steps,
     split_amount,
 )
@@ -211,6 +212,37 @@ def test_parse_ingredients_scales_amounts_with_embedded_units():
     assert salt.quantity == "½"
     assert salt.unit == "tsp"
     assert salt.scaled_quantity == "0.25"
+
+
+def test_parse_ingredients_excludes_note_line_references():
+    ingredients = parse_ingredients(
+        "\n".join(
+            [
+                "Add @chicken broth{836%g}(seafood).",
+                "> Start with @chicken broth{717%g} and add up to @chicken broth{119%g} more.",
+            ]
+        )
+    )
+
+    assert [ingredient.name for ingredient in ingredients] == ["chicken broth"]
+    assert ingredients[0].quantity == "836"
+    assert ingredients[0].unit == "g"
+    assert ingredients[0].note == "seafood"
+
+
+def test_scale_blocks_scales_note_ingredient_amounts():
+    blocks = parse_blocks(
+        "\n".join(
+            [
+                "Add @chicken broth{836%g}.",
+                "> Start with @chicken broth{717%g} of stock.",
+            ]
+        )
+    )
+    scaled = scale_blocks(blocks, scale=2, servings=1)
+
+    assert scaled[0].text == "Add @chicken broth{1672%g}."
+    assert scaled[1].text == "Start with @chicken broth{1434%g} of stock."
 
 
 def test_normalize_document_converts_fractions_to_decimals():

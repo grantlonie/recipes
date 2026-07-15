@@ -159,7 +159,9 @@ def parse_ingredients(
 ) -> list[Ingredient]:
     ingredients: list[Ingredient] = []
     factor = None if scale is None else scale / servings
-    for match in INGREDIENT_RE.finditer(strip_comments(body)):
+    # Note lines (`> ...`) may reference step ingredients for tips; keep them
+    # out of the shopping list so amounts are not double-counted.
+    for match in INGREDIENT_RE.finditer(strip_note_lines(strip_comments(body))):
         name = ingredient_name_from_match(match)
         if not name:
             continue
@@ -601,8 +603,10 @@ def scale_blocks(
     factor = scale / servings
     scaled: list[RecipeNote | RecipeSection | RecipeStep] = []
     for block in blocks:
-        if isinstance(block, (RecipeNote, RecipeSection)):
+        if isinstance(block, RecipeSection):
             scaled.append(block)
+        elif isinstance(block, RecipeNote):
+            scaled.append(RecipeNote(text=scale_step_ingredients(block.text, factor)))
         else:
             scaled.append(RecipeStep(text=scale_step_ingredients(block.text, factor)))
     return scaled
@@ -672,6 +676,10 @@ def strip_comments(body: str) -> str:
             continue
         lines.append(line.split("--", 1)[0])
     return "\n".join(lines)
+
+
+def strip_note_lines(body: str) -> str:
+    return "\n".join(line for line in body.splitlines() if not NOTE_RE.match(line))
 
 
 def unique(values: object) -> list[str]:

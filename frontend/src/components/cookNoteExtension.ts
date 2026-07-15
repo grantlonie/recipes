@@ -4,7 +4,7 @@ import { TextSelection } from '@tiptap/pm/state'
 export const CookNoteExtension = Node.create({
   name: 'cookNote',
   group: 'block',
-  content: 'text*',
+  content: 'inline*',
   defining: true,
 
   parseHTML() {

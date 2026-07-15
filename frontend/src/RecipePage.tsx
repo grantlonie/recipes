@@ -448,7 +448,7 @@ export function RecipePage() {
                       className="px-1 text-sm italic text-stone-600 dark:text-stone-400"
                       key={`note-${index}`}
                     >
-                      {block.text}
+                      {renderCooklangStep(block.text, unitSystem, catalog, isScaled)}
                     </p>
                   )
                 }
