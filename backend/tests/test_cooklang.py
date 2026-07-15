@@ -1,4 +1,5 @@
 from app.cooklang import (
+    format_yaml_quoted_string,
     metadata_cook_time,
     normalize_document,
     parse_blocks,
@@ -6,6 +7,7 @@ from app.cooklang import (
     parse_document,
     parse_ingredients,
     prepare_imported_content,
+    render_document,
     sanitize_front_matter,
     scale_blocks,
     scale_steps,
@@ -19,6 +21,49 @@ def test_split_amount_parses_ml_and_liter_units():
     assert split_amount("250ml") == ("250", "ml", False)
     assert split_amount("1.5%liters") == ("1.5", "l", False)
     assert split_amount("2 l") == ("2", "l", False)
+
+
+def test_format_yaml_quoted_string_escapes_internal_quotes():
+    assert format_yaml_quoted_string('He said "hello"') == r'"He said \"hello\""'
+
+
+def test_render_document_quotes_description():
+    content = render_document(
+        {
+            "title": "Cornbread",
+            "description": "Classic cornbread baked in a well-seasoned cast-iron pan for a crisp edge.",
+        },
+        "Bake @cornmeal{1%cup}.",
+    )
+    assert (
+        'description: "Classic cornbread baked in a well-seasoned cast-iron pan for a crisp edge."'
+        in content
+    )
+    metadata, body = parse_document(content)
+    assert metadata["description"] == (
+        "Classic cornbread baked in a well-seasoned cast-iron pan for a crisp edge."
+    )
+    assert "Bake @cornmeal{1%cup}." in body
+
+
+def test_sanitize_front_matter_quotes_unquoted_description():
+    raw = """---
+title: Cornbread
+description: Classic cornbread baked in a well-seasoned cast-iron pan for a crisp edge.
+---
+
+Bake @cornmeal{1%cup}.
+"""
+    fixed = sanitize_front_matter(raw)
+    assert (
+        'description: "Classic cornbread baked in a well-seasoned cast-iron pan for a crisp edge."'
+        in fixed
+    )
+    metadata, _body = parse_document(fixed)
+    assert metadata["description"] == (
+        "Classic cornbread baked in a well-seasoned cast-iron pan for a crisp edge."
+    )
+    assert sanitize_front_matter(fixed) == fixed
 
 
 def test_sanitize_front_matter_fixes_embedded_title_quotes():
@@ -36,7 +81,7 @@ Cook @lamb{}.
     assert sanitize_front_matter(fixed) == fixed
 
 
-def test_sanitize_front_matter_leaves_valid_yaml_unchanged():
+def test_sanitize_front_matter_leaves_valid_yaml_without_descriptions_unchanged():
     raw = """---
 title: Chili
 servings: 6
@@ -44,7 +89,11 @@ servings: 6
 
 Brown @beef{454%g}.
 """
-    assert sanitize_front_matter(raw) == raw
+    fixed = sanitize_front_matter(raw)
+    metadata, body = parse_document(fixed)
+    assert metadata == {"title": "Chili", "servings": 6}
+    assert "Brown @beef{454%g}." in body
+    assert sanitize_front_matter(fixed) == fixed
 
 
 def test_normalize_document_strips_mangled_description_quotes():
@@ -59,6 +108,10 @@ Bake @batter{}.
     metadata, _body = parse_document(normalized)
     assert metadata["description"] == (
         "Fudgy cocoa brownies made by melting butter with sugar and cocoa over"
+    )
+    assert (
+        'description: "Fudgy cocoa brownies made by melting butter with sugar and cocoa over"'
+        in normalized
     )
 
 
@@ -88,6 +141,7 @@ Bake @batter{}.
     fixed = sanitize_front_matter(raw)
     metadata, _body = parse_document(fixed)
     assert metadata["description"] == "Classic fudgy brownies. Use natural or Dutch‑"
+    assert 'description: "Classic fudgy brownies. Use natural or Dutch‑"' in fixed
 
 
 def test_prepare_imported_content_normalizes_volume_units():
@@ -227,6 +281,57 @@ def test_parse_ingredients_scales_amounts_with_embedded_units():
     assert salt.quantity == "½"
     assert salt.unit == "tsp"
     assert salt.scaled_quantity == "0.25"
+
+
+def test_parse_ingredients_merges_same_name_and_note():
+    ingredients = parse_ingredients(
+        "Mix @rice flour{0.5%cup} into the crust. "
+        "Sprinkle @rice flour{0.5%cup} over the top."
+    )
+
+    assert len(ingredients) == 1
+    assert ingredients[0].name == "rice flour"
+    assert ingredients[0].quantity == "1"
+    assert ingredients[0].unit == "cup"
+    assert ingredients[0].note is None
+
+
+def test_parse_ingredients_does_not_merge_different_notes():
+    ingredients = parse_ingredients(
+        "Slice @tomatoes{2}(beefsteak) and @tomatoes{1}(cherry)."
+    )
+
+    assert len(ingredients) == 2
+    assert ingredients[0].name == "tomatoes"
+    assert ingredients[0].note == "beefsteak"
+    assert ingredients[0].quantity == "2"
+    assert ingredients[1].name == "tomatoes"
+    assert ingredients[1].note == "cherry"
+    assert ingredients[1].quantity == "1"
+
+
+def test_parse_ingredients_does_not_merge_different_units():
+    ingredients = parse_ingredients(
+        "Add @rice flour{0.5%cup} and @rice flour{50%g}."
+    )
+
+    assert len(ingredients) == 2
+    assert ingredients[0].quantity == "0.5"
+    assert ingredients[0].unit == "cup"
+    assert ingredients[1].quantity == "50"
+    assert ingredients[1].unit == "g"
+
+
+def test_parse_ingredients_merges_scaled_amounts():
+    ingredients = parse_ingredients(
+        "Mix @rice flour{1%cup} into the crust. Sprinkle @rice flour{1%cup} over the top.",
+        scale=2,
+        servings=4,
+    )
+
+    assert len(ingredients) == 1
+    assert ingredients[0].quantity == "2"
+    assert ingredients[0].scaled_quantity == "1"
 
 
 def test_parse_ingredients_excludes_note_line_references():

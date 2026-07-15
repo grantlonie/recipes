@@ -12,7 +12,8 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
     assert "YAML-quote the entire title when it contains quotes or punctuation" in prompt
-    assert "Descriptions should stay plain unquoted text" in prompt
+    assert "Descriptions should stay plain unquoted text" not in prompt
+    assert "Escape internal double quotes" in prompt
     assert "title: Chili" in prompt
     assert "prep time: 15 minutes" in prompt
     assert "cook time: 45 minutes" in prompt
@@ -35,10 +36,10 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "when the source says 1 tbsp fennel seeds" in prompt
     assert "Use front-matter `description` for general recipe-level notes" in prompt
     assert "Step-specific tips stay as Cooklang `>` note lines" in prompt
-    assert "description: Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated." in prompt
+    assert 'description: "Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated."' in prompt
     assert (
-        "description: Hearty beer bread. Sift the flour (or spoon into the cup). "
-        "If not using beer, add a packet of active dry yeast."
+        'description: "Hearty beer bread. Sift the flour (or spoon into the cup). '
+        'If not using beer, add a packet of active dry yeast."'
     ) in prompt
     assert "> Soft crust: mix melted butter into the batter instead of pouring it over the top." in prompt
     assert "> If the mixture looks dry, add a splash of water before simmering." in prompt

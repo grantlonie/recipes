@@ -9,6 +9,7 @@ from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 FRONT_MATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
+QUOTE_DESCRIPTION_KEYS = frozenset({"description", "introduction"})
 RECIPES_PREFIX = "recipes/"
 # Latin letters with diacritics (excl. ×÷) so names like jalapeño parse fully.
 TOKEN_CHARS = r"A-Za-z0-9_./' \-" + "\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F"
@@ -71,7 +72,8 @@ def sanitize_front_matter(content: str) -> str:
     try:
         loaded = yaml.safe_load(front)
         if isinstance(loaded, dict):
-            return content
+            clean_metadata_notes(loaded)
+            return f"---\n{render_front_matter(loaded)}\n---\n{stripped[match.end() :]}"
     except yaml.YAMLError:
         pass
 
@@ -93,14 +95,17 @@ def sanitize_front_matter(content: str) -> str:
         except yaml.YAMLError:
             pass
         repaired = repair_broken_scalar(value)
-        fixed_lines.append(
-            yaml.safe_dump(
-                {key: repaired},
-                allow_unicode=True,
-                default_flow_style=False,
-                sort_keys=False,
-            ).strip()
-        )
+        if key in QUOTE_DESCRIPTION_KEYS:
+            fixed_lines.append(f"{key}: {format_yaml_quoted_string(repaired)}")
+        else:
+            fixed_lines.append(
+                yaml.safe_dump(
+                    {key: repaired},
+                    allow_unicode=True,
+                    default_flow_style=False,
+                    sort_keys=False,
+                ).strip()
+            )
 
     new_front = "\n".join(fixed_lines)
     try:
@@ -110,7 +115,39 @@ def sanitize_front_matter(content: str) -> str:
     except yaml.YAMLError:
         return content
 
-    return f"---\n{new_front}\n---\n{stripped[match.end() :]}"
+    clean_metadata_notes(loaded)
+    return f"---\n{render_front_matter(loaded)}\n---\n{stripped[match.end() :]}"
+
+
+def format_yaml_quoted_string(value: str) -> str:
+    """Encode a scalar as a double-quoted YAML string with escapes."""
+    escaped = (
+        value.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return f'"{escaped}"'
+
+
+def render_front_matter(metadata: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for key, value in metadata.items():
+        if value in (None, "", []):
+            continue
+        if key in QUOTE_DESCRIPTION_KEYS and isinstance(value, str):
+            lines.append(f"{key}: {format_yaml_quoted_string(value)}")
+            continue
+        lines.append(
+            yaml.safe_dump(
+                {key: value},
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            ).strip()
+        )
+    return "\n".join(lines)
 
 
 def render_document(metadata: dict[str, Any], body: str) -> str:
@@ -118,8 +155,7 @@ def render_document(metadata: dict[str, Any], body: str) -> str:
     if not clean_metadata:
         return body.lstrip("\n")
 
-    front_matter = yaml.safe_dump(clean_metadata, sort_keys=False, allow_unicode=True).strip()
-    return f"---\n{front_matter}\n---\n\n{body.lstrip()}"
+    return f"---\n{render_front_matter(clean_metadata)}\n---\n\n{body.lstrip()}"
 
 
 def format_ingredient_markup(name: str, amount: str, note: str | None = None) -> str:
@@ -178,7 +214,47 @@ def parse_ingredients(
                 unit=unit,
             )
         )
-    return ingredients
+    return merge_ingredients(ingredients)
+
+
+def merge_ingredients(ingredients: list[Ingredient]) -> list[Ingredient]:
+    groups: dict[tuple[str, str | None, str | None, bool], Ingredient] = {}
+    order: list[tuple[str, str | None, str | None, bool]] = []
+    for ingredient in ingredients:
+        key = (
+            ingredient.name,
+            ingredient.note,
+            normalize_unit(ingredient.unit),
+            ingredient.fixed,
+        )
+        if key not in groups:
+            groups[key] = ingredient
+            order.append(key)
+            continue
+        groups[key] = sum_ingredient_quantities(groups[key], ingredient)
+    return [groups[key] for key in order]
+
+
+def sum_ingredient_quantities(left: Ingredient, right: Ingredient) -> Ingredient:
+    quantity = _sum_quantity_text(left.quantity, right.quantity)
+    scaled_quantity = _sum_quantity_text(left.scaled_quantity, right.scaled_quantity)
+    return left.model_copy(
+        update={"quantity": quantity, "scaled_quantity": scaled_quantity},
+    )
+
+
+def _sum_quantity_text(left: str | None, right: str | None) -> str | None:
+    if left is None and right is None:
+        return None
+    if left is None:
+        return right
+    if right is None:
+        return left
+    left_number = parse_quantity_to_fraction(left)
+    right_number = parse_quantity_to_fraction(right)
+    if left_number is None or right_number is None:
+        return left
+    return format_decimal(left_number + right_number)
 
 
 def parse_cookware(body: str) -> list[str]:

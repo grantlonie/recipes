@@ -88,9 +88,10 @@ Output rules:
 - Prefer plain English durations (20 minutes, 1 hour 30 minutes).
 - YAML-quote the entire title when it contains quotes or punctuation
   (example: title: '"Greek" Lamb with Orzo'), never title: "Greek" Lamb....
-  Descriptions should stay plain unquoted text
-  (description: Hearty chili with kidney beans.). Do not wrap description in the
-  title quote pattern ('"...').
+  Always write `description` (and `introduction` if used) as a single-line
+  double-quoted YAML string. Escape internal double quotes as \\".
+  Never wrap description across lines without quotes.
+  (example: description: "Hearty chili with kidney beans. Leftovers keep 3 days refrigerated.")
 - source and image must be flat strings: either an http(s) URL or omitted if unknown.
 
 Language: {output_language}
@@ -104,7 +105,7 @@ image: https://example.com/chili.jpg
 servings: 6
 prep time: 15 minutes
 cook time: 45 minutes
-description: Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated.
+description: "Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated."
 ---
 Brown @beef{1%lb} in #large pot{}.
 
@@ -126,7 +127,7 @@ If you prefer a softer crust, mix the butter into the batter.
 > If using a non-alcoholic beverage instead of beer, add yeast.
 
 Right:
-description: Hearty beer bread. Sift the flour (or spoon into the cup). If not using beer, add a packet of active dry yeast.
+description: "Hearty beer bread. Sift the flour (or spoon into the cup). If not using beer, add a packet of active dry yeast."
 Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
 Season with @salt{}(to taste). Oil the #baking pan{}.
 Add @fennel seeds{1%Tbsp} when the source says 1 tbsp fennel seeds.
