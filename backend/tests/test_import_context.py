@@ -11,10 +11,12 @@ def test_build_system_prompt_omits_ingredient_catalog():
     prompt = build_system_prompt()
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
-    assert "YAML-quote the entire title when it contains quotes or punctuation" in prompt
+    assert "Always write `title`, `description`, and `introduction` as single-line" in prompt
+    assert "do not wrap titles in single quotes" in prompt
+    assert 'title: "Dori Sanders\' No-Churn Fresh Lemon Ice Cream"' in prompt
     assert "Do not invent app-owned front-matter keys" in prompt
     assert "Escape internal double quotes" in prompt
-    assert "title: Chili" in prompt
+    assert 'title: "Chili"' in prompt
     assert "prep time: 15 minutes" in prompt
     assert "cook time: 45 minutes" in prompt
     assert "Do not collapse prep and cook" in prompt

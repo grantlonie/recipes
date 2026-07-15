@@ -67,7 +67,7 @@ Mix @flour{}.
     normalized = normalize_model_output(raw)
     assert normalized.startswith("---")
     assert "```" not in normalized
-    assert "title: Award-Winning Soft Chocolate Chip Cookies" in normalized
+    assert 'title: "Award-Winning Soft Chocolate Chip Cookies"' in normalized
     assert "Mix @flour{}." in normalized
 
 
@@ -167,7 +167,7 @@ def test_complete_cooklang_streams_chunks(settings: Settings):
     assert "extra_headers" not in request_kwargs
     assert str(request_kwargs["user"]).startswith("recipes-import-")
 
-    assert "title: Test" in result
+    assert 'title: "Test"' in result
     assert "Step one." in result
 
 

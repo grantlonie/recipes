@@ -172,6 +172,45 @@ Season @sea scallops{1%lb}.
     assert "Scallops Redo" not in trimmed
 
 
+def test_trim_cooklang_document_prefers_later_complete_doc_when_first_lacks_title():
+    raw = """---
+description: "Draft without a title while worrying about the apostrophe."
+---
+
+Whisk sugar.
+
+Wait, YAML should handle the apostrophe if I double-quote the title.
+
+---
+title: "Dori Sanders' No-Churn Fresh Lemon Ice Cream"
+description: "No-churn fresh lemon ice cream."
+---
+
+Whisk @lemon zest{1%Tbsp}.
+"""
+    trimmed = trim_cooklang_document(raw)
+    metadata, body = parse_document(trimmed)
+    assert metadata["title"] == "Dori Sanders' No-Churn Fresh Lemon Ice Cream"
+    assert "Whisk @lemon zest{1%Tbsp}." in body
+    assert "Draft without a title" not in trimmed
+
+
+def test_sanitize_front_matter_quotes_title_with_apostrophe():
+    raw = """---
+title: 'Dori Sanders' No-Churn Fresh Lemon Ice Cream
+description: No-churn lemon ice cream.
+---
+
+Whisk @lemon zest{1%Tbsp}.
+"""
+    fixed = sanitize_front_matter(raw)
+    metadata, body = parse_document(fixed)
+    assert metadata["title"] == "'Dori Sanders' No-Churn Fresh Lemon Ice Cream"
+    assert metadata["description"] == "No-churn lemon ice cream."
+    assert 'title: "\'Dori Sanders\' No-Churn Fresh Lemon Ice Cream"' in fixed
+    assert "Whisk @lemon zest{1%Tbsp}." in body
+
+
 def test_heal_imported_cooklang_strips_prose_and_bad_refs():
     raw = """Here is the recipe:
 

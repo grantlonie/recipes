@@ -88,12 +88,13 @@ Output rules:
   gives one overall duration.
 - Use `time` only for a single overall duration when prep/cook are not listed separately.
 - Prefer plain English durations (20 minutes, 1 hour 30 minutes).
-- YAML-quote the entire title when it contains quotes or punctuation
-  (example: title: '"Greek" Lamb with Orzo'), never title: "Greek" Lamb....
-  Always write `description` (and `introduction` if used) as a single-line
-  double-quoted YAML string. Escape internal double quotes as \\".
-  Never wrap description across lines without quotes.
-  (example: description: "Hearty chili with kidney beans. Leftovers keep 3 days refrigerated.")
+- Always write `title`, `description`, and `introduction` as single-line
+  double-quoted YAML strings. Escape internal double quotes as \\".
+  Apostrophes are fine inside double quotes — do not wrap titles in single quotes.
+  (examples: title: "Dori Sanders' No-Churn Fresh Lemon Ice Cream",
+  title: "\\"Greek\\" Lamb with Orzo",
+  description: "Hearty chili with kidney beans. Leftovers keep 3 days refrigerated.")
+  Never wrap these fields across lines without quotes.
 - source and image must be flat strings: either an http(s) URL or omitted if unknown.
 
 Language: {output_language}
@@ -101,7 +102,7 @@ Unit style: quantities use % between amount and unit (example: 1.5%cup).
 """
 
 FEW_SHOT_EXAMPLE = """---
-title: Chili
+title: "Chili"
 source: https://example.com/chili
 image: https://example.com/chili.jpg
 servings: 6

@@ -9,7 +9,7 @@ from app.units import normalize_unit, split_glued_amount
 
 FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 FRONT_MATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
-QUOTE_DESCRIPTION_KEYS = frozenset({"description", "introduction"})
+QUOTE_DESCRIPTION_KEYS = frozenset({"description", "introduction", "title"})
 QUOTE_LIST_KEYS = frozenset({"review", "import_notes"})
 APP_OWNED_IMPORT_KEYS = frozenset(
     {"review", "import_time", "import_duration_ms", "import_notes"}
@@ -177,22 +177,81 @@ _LLM_REASONING_START_RE = re.compile(
 
 
 def trim_cooklang_document(content: str) -> str:
-    """Keep the first Cooklang document; drop trailing reasoning and restarts."""
+    """Keep one Cooklang document; drop trailing reasoning and bad restarts.
+
+    When the model emits multiple ``---`` documents (usually after self-talk about
+    quoting titles with apostrophes), prefer the first *complete* document
+    (title + body). Otherwise a draft without a title can discard a later fix.
+    """
     stripped = content.strip()
-    match = FRONT_MATTER_RE.match(stripped)
-    if not match:
+    candidates = _cooklang_document_candidates(stripped)
+    if not candidates:
         return content
 
-    front_end = match.end()
-    body = stripped[front_end:]
+    chosen = candidates[0]
+    for candidate in candidates:
+        if _cooklang_document_is_complete(candidate):
+            chosen = candidate
+            break
+    else:
+        for candidate in candidates:
+            if _cooklang_document_has_title(candidate):
+                chosen = candidate
+                break
 
-    # A second front-matter block means the model restarted after thinking out loud.
-    second = re.search(r"\n---\s*\n", body)
-    if second:
-        body = body[: second.start()]
+    match = FRONT_MATTER_RE.match(chosen)
+    if not match:
+        return chosen.rstrip() + "\n"
+    body = _strip_trailing_llm_reasoning(chosen[match.end() :])
+    return f"{chosen[: match.end()]}{body}".rstrip() + "\n"
 
-    body = _strip_trailing_llm_reasoning(body)
-    return f"{stripped[:front_end]}{body}".rstrip() + "\n"
+
+def _cooklang_document_candidates(content: str) -> list[str]:
+    """Split model output into full front-matter documents.
+
+    Only treats a later ``---`` as a new document when it opens real YAML
+    front matter (at least one ``key:`` line). Closing delimiters and bare
+    ``---`` rules in prose are ignored.
+    """
+    candidates: list[str] = []
+    remaining = content
+    while True:
+        match = FRONT_MATTER_RE.match(remaining)
+        if not match:
+            break
+        body = remaining[match.end() :]
+        next_start: int | None = None
+        for marker in re.finditer(r"(?m)^---\s*$", body):
+            chunk = body[marker.start() :]
+            nested = FRONT_MATTER_RE.match(chunk)
+            if not nested:
+                continue
+            if not re.search(r"(?m)^[A-Za-z0-9_-]+:\s*", nested.group(1)):
+                continue
+            next_start = match.end() + marker.start()
+            break
+        if next_start is None:
+            candidates.append(remaining.rstrip() + "\n")
+            break
+        candidates.append(remaining[:next_start].rstrip() + "\n")
+        remaining = remaining[next_start:]
+    return candidates
+
+
+def _cooklang_document_has_title(content: str) -> bool:
+    try:
+        metadata, _body = parse_document(content)
+    except Exception:
+        return False
+    return bool(isinstance(metadata, dict) and metadata.get("title"))
+
+
+def _cooklang_document_is_complete(content: str) -> bool:
+    try:
+        metadata, body = parse_document(content)
+    except Exception:
+        return False
+    return bool(isinstance(metadata, dict) and metadata.get("title") and body.strip())
 
 
 def _strip_trailing_llm_reasoning(body: str) -> str:
