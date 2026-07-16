@@ -45,8 +45,8 @@ export function SettingsPage() {
           <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
             Choose how ingredient amounts are shown in recipes.
           </p>
-          <div className="mt-3 rounded-2xl border border-orange-200 bg-white px-4 py-3 dark:border-stone-600 dark:bg-stone-900">
-            <UnitSystemToggle />
+          <div className="mt-3">
+            <UnitSystemToggle fullWidth />
           </div>
         </div>
 
