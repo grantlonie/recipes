@@ -6,7 +6,7 @@ interface DensitySearchLinkProps {
 
 export function DensitySearchLink({ ingredientName }: DensitySearchLinkProps) {
   const label = ingredientName.trim() || 'ingredient'
-  const query = `density of ${label} in kg/m3`
+  const query = `bulk density of ${label} in kg/m3`
 
   return (
     <a

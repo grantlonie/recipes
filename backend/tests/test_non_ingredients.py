@@ -8,6 +8,9 @@ def test_is_non_ingredient_matches_common_supplies():
     assert is_non_ingredient("parchment paper")
     assert is_non_ingredient("Parchment Paper")
     assert is_non_ingredient("large parchment paper")
+    assert is_non_ingredient("cooking spray")
+    assert is_non_ingredient("nonstick cooking spray")
+    assert is_non_ingredient("non-stick cooking spray")
     assert not is_non_ingredient("flour")
 
 
