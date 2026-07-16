@@ -55,6 +55,7 @@ import {
   formatIngredientAmount,
   isUsCookingVolumeUnit,
   normalizeUnit,
+  prefersFluidVolume,
   toGrams,
 } from './units'
 import { useUnitSystem } from './UnitSystemContext'
@@ -237,13 +238,18 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
   const handleEditIngredient = useCallback(
     (pos: number, attrs: IngredientAttrs) => {
-      const snapshot = ingredientFormFromAttrs(attrs, catalog, unitSystem)
+      const snapshot = ingredientFormFromAttrs(
+        attrs,
+        catalog,
+        unitSystem,
+        prefersFluidVolume(tags)
+      )
       setEditingPos(pos)
       setIngredientInitial(snapshot)
       setIngredientDraft(snapshot)
       setIngredientDialogOpen(true)
     },
-    [catalog, unitSystem]
+    [catalog, tags, unitSystem]
   )
 
   const handleEditSection = useCallback((pos: number, title: string) => {
@@ -436,6 +442,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               onEditSection={handleEditSection}
               onEditTimer={handleEditTimer}
               ref={bodyEditorRef}
+              preferFluidVolume={prefersFluidVolume(tags)}
               unitSystem={unitSystem}
               value={body}
             />
@@ -1320,11 +1327,13 @@ function newIngredientForm(unitSystem: UnitSystem): IngredientFormState {
 function ingredientFormFromAttrs(
   attrs: IngredientAttrs,
   catalog: CatalogIngredient[],
-  unitSystem: UnitSystem
+  unitSystem: UnitSystem,
+  preferFluidVolume = false
 ): IngredientFormState {
   const density = densityForName(attrs.name, catalog)
   const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
     densityKgM3: density,
+    preferFluidVolume,
     unitSystem,
   })
   return {

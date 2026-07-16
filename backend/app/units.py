@@ -7,11 +7,14 @@ from fractions import Fraction
 ML_PER_CUP = 236.5882365
 ML_PER_TBSP = ML_PER_CUP / 16
 ML_PER_TSP = ML_PER_CUP / 48
+ML_PER_FL_OZ = ML_PER_CUP / 8
 ML_PER_QUART = ML_PER_CUP * 4
 ML_PER_PINT = ML_PER_CUP * 2
 ML_PER_GALLON = ML_PER_CUP * 16
 G_PER_OZ = 28.349523125
 G_PER_LB = 453.59237
+
+FLUID_VOLUME_TAGS = frozenset({"cocktail", "drink", "mocktail"})
 
 UNIT_ALIASES: dict[str, str] = {
     "g": "g",
@@ -23,6 +26,12 @@ UNIT_ALIASES: dict[str, str] = {
     "oz": "oz",
     "ounce": "oz",
     "ounces": "oz",
+    "fl oz": "fl oz",
+    "floz": "fl oz",
+    "fl. oz": "fl oz",
+    "fl. oz.": "fl oz",
+    "fluid ounce": "fl oz",
+    "fluid ounces": "fl oz",
     "lb": "lb",
     "lbs": "lb",
     "pound": "lb",
@@ -71,6 +80,7 @@ VOLUME_TO_ML: dict[str, float] = {
     "cup": ML_PER_CUP,
     "Tbsp": ML_PER_TBSP,
     "tsp": ML_PER_TSP,
+    "fl oz": ML_PER_FL_OZ,
     "quart": ML_PER_QUART,
     "pint": ML_PER_PINT,
     "gallon": ML_PER_GALLON,
@@ -233,8 +243,38 @@ def format_us_mass(grams: float) -> DisplayAmount:
     return DisplayAmount(format_fraction(ounces), "oz")
 
 
-def format_us_volume(grams: float, density_kg_m3: float) -> DisplayAmount:
+def prefers_fluid_volume(tags: list[str] | None) -> bool:
+    if not tags:
+        return False
+    return any(tag.strip().casefold() in FLUID_VOLUME_TAGS for tag in tags)
+
+
+def format_metric_volume(grams: float, density_kg_m3: float) -> DisplayAmount:
     ml = grams_to_ml(grams, density_kg_m3)
+    sign = "-" if ml < 0 else ""
+    value = abs(ml)
+    if value >= 1000:
+        liters = value / 1000.0
+        if abs(liters - round(liters)) < 0.05:
+            return DisplayAmount(f"{sign}{int(round(liters))}", "l")
+        text = f"{liters:.1f}".rstrip("0").rstrip(".")
+        return DisplayAmount(f"{sign}{text}", "l")
+    if value < 10:
+        text = f"{value:.1f}".rstrip("0").rstrip(".")
+        return DisplayAmount(f"{sign}{text}", "ml")
+    return DisplayAmount(f"{sign}{round_grams(value)}", "ml")
+
+
+def format_us_volume(
+    grams: float,
+    density_kg_m3: float,
+    *,
+    prefer_fl_oz: bool = False,
+) -> DisplayAmount:
+    ml = grams_to_ml(grams, density_kg_m3)
+    if prefer_fl_oz:
+        fl_oz = ml / ML_PER_FL_OZ
+        return DisplayAmount(format_fraction(fl_oz), "fl oz")
     cups = ml / ML_PER_CUP
     if cups >= 4:
         quarts = cups / 4
@@ -256,16 +296,24 @@ def format_amount(
     *,
     unit_system: str,
     density_kg_m3: float | None = None,
+    prefer_fluid_volume: bool = False,
 ) -> DisplayAmount:
     if quantity is None:
         return DisplayAmount("", normalize_unit(unit))
 
     canonical = normalize_unit(unit)
     if canonical == "g":
+        has_density = density_kg_m3 is not None and density_kg_m3 > 0
+        if prefer_fluid_volume and has_density:
+            assert density_kg_m3 is not None
+            if unit_system == "metric":
+                return format_metric_volume(quantity, density_kg_m3)
+            return format_us_volume(quantity, density_kg_m3, prefer_fl_oz=True)
         if unit_system == "us_weight":
             return format_us_mass(quantity)
         if unit_system == "us":
-            if density_kg_m3 is not None and density_kg_m3 > 0:
+            if has_density:
+                assert density_kg_m3 is not None
                 return format_us_volume(quantity, density_kg_m3)
             return format_us_mass(quantity)
         return format_metric_mass(quantity)

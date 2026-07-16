@@ -4,6 +4,7 @@ import type { CatalogIngredient, UnitSystem } from '../types'
 export interface IngredientDisplayState {
   catalog: CatalogIngredient[]
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
+  preferFluidVolume: boolean
   unitSystem: UnitSystem
 }
 
@@ -12,6 +13,7 @@ const listeners = new Set<() => void>()
 let state: IngredientDisplayState = {
   catalog: [],
   onEditIngredient: () => undefined,
+  preferFluidVolume: false,
   unitSystem: 'metric',
 }
 

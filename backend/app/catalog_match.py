@@ -8,7 +8,7 @@ from app.ingredient_inflection import fold_accents, inflection_forms
 from app.ingredients import IngredientRepository, normalize_ingredient_key
 from app.models import CatalogIngredient
 from app.non_ingredients import is_non_ingredient
-from app.units import format_grams_value, is_volume_unit, to_grams
+from app.units import format_grams_value, is_volume_unit, normalize_unit, to_grams
 
 # Words allowed in leftover notes for partial catalog matches.
 _MODIFIER_WORDS = frozenset(
@@ -156,7 +156,12 @@ def match_catalog_ingredient(imported_name: str, catalog: list[CatalogIngredient
     return CatalogMatch(catalog=item, note=note)
 
 
-def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[str, list[str]]:
+def apply_catalog_mapping(
+    body: str,
+    repository: IngredientRepository,
+    *,
+    reinterpret_oz_as_fl_oz: bool = False,
+) -> tuple[str, list[str]]:
     catalog = repository.list_ingredients()
     unmatched: list[str] = []
 
@@ -184,6 +189,7 @@ def apply_catalog_mapping(body: str, repository: IngredientRepository) -> tuple[
             fixed,
             amount,
             catalog_match.catalog,
+            reinterpret_oz_as_fl_oz=reinterpret_oz_as_fl_oz,
         )
         if converted_amount is not None:
             amount = converted_amount
@@ -376,6 +382,8 @@ def _maybe_convert_to_grams(
     fixed: bool,
     original_amount: str,
     catalog_item: CatalogIngredient,
+    *,
+    reinterpret_oz_as_fl_oz: bool = False,
 ) -> str | None:
     if not quantity or not unit:
         return None
@@ -383,9 +391,17 @@ def _maybe_convert_to_grams(
     if number is None:
         return None
     density = catalog_item.density_kg_m3
-    if is_volume_unit(unit) and density is None:
+    convert_unit = unit
+    if (
+        reinterpret_oz_as_fl_oz
+        and normalize_unit(unit) == "oz"
+        and density is not None
+        and density > 0
+    ):
+        convert_unit = "fl oz"
+    if is_volume_unit(convert_unit) and density is None:
         return None
-    grams = to_grams(float(number), unit, density_kg_m3=density)
+    grams = to_grams(float(number), convert_unit, density_kg_m3=density)
     if grams is None:
         return None
     prefix = "=" if fixed else ""

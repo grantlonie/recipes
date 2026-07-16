@@ -1078,7 +1078,6 @@ def normalize_document(content: str) -> str:
 
 def prepare_imported_content(content: str) -> str:
     metadata, body = parse_document(trim_cooklang_document(content))
-    metadata.pop("tags", None)
     strip_app_owned_import_keys(metadata)
     body = normalize_ingredient_amounts(strip_import_error_notes(body))
     return normalize_document(render_document(metadata, body))

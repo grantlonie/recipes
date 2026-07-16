@@ -24,9 +24,15 @@ Output rules:
 - Use #cookware{{}} markers when relevant and ~timer{{10%minutes}} for timers.
   Never put counts on cookware (#pan{{}}, not pan{{1}} or baking pan{{1}}).
 - Prefer decimal quantities in amounts, not fractions.
-- Preserve the source's measurement units (cups, Tbsp, tsp, ml, L, g, oz, lb, counts).
-  Do not convert between volume and mass (no cups/Tbsp/tsp/ml to grams or vice versa).
+- Preserve the source's measurement units (cups, Tbsp, tsp, ml, L, g, oz, fl oz, lb, counts).
+  Do not convert between volume and mass (no cups/Tbsp/tsp/ml/fl oz to grams or vice versa).
   A later step converts volumes to grams using catalog densities.
+- Cocktail / drink liquid "ounces" are fluid ounces, not weight ounces.
+  For spirits, liqueurs, juices, syrups, bitters, and other drink pours, emit %fl oz
+  (example: 2 ounces vodka → @vodka{{2%fl oz}}).
+  Keep weight %oz only for true mass (meat, cheese, chocolate, canned goods by weight).
+- Tag drink recipes in front matter as tags: [cocktail] or tags: [mocktail] when the
+  source is a cocktail, mocktail, or mixed drink. Do not invent other tags.
 - Tablespoon vs teaspoon is size, not casing: 1 tablespoon ≠ 1 teaspoon.
   Treat source spellings tbsp / tbs / tablespoon(s) (any case) as tablespoon → emit Tbsp.
   Treat source spellings tsp / teaspoon(s) (any case) as teaspoon → emit tsp.
@@ -76,11 +82,10 @@ Output rules:
   step-local stay as `>` notes, and general make-ahead advice may go in `description`.
 - Always write tablespoon amounts as Tbsp (capital T). Source casing does not matter.
 - Do not invent ingredients or steps that are not supported by the source text.
-- Omit tags from front matter.
 - Do not invent app-owned front-matter keys: review, import_time, import_duration_ms,
   or import_notes. The app sets those after conversion.
 - Front matter may include: title, source, image, servings, prep time, cook time,
-  time, description.
+  time, description, tags (only cocktail or mocktail when applicable).
 - When the source lists prep and cook times separately, store BOTH as separate keys:
   prep time: 20 minutes
   cook time: 1 hour 30 minutes

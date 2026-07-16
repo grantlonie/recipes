@@ -41,6 +41,7 @@ interface RecipeBodyEditorProps {
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
   onEditSection: (pos: number, title: string) => void
   onEditTimer: (pos: number, attrs: TimerAttrs) => void
+  preferFluidVolume?: boolean
   unitSystem: UnitSystem
   value: string
 }
@@ -54,6 +55,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
       onEditIngredient,
       onEditSection,
       onEditTimer,
+      preferFluidVolume = false,
       unitSystem,
       value,
     },
@@ -131,9 +133,10 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
       setIngredientDisplayState({
         catalog,
         onEditIngredient,
+        preferFluidVolume,
         unitSystem,
       })
-    }, [catalog, onEditIngredient, unitSystem])
+    }, [catalog, onEditIngredient, preferFluidVolume, unitSystem])
 
     useEffect(() => {
       setCookwareDisplayState({ onEditCookware })

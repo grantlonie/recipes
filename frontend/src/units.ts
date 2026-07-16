@@ -4,11 +4,14 @@ import type { CatalogIngredient, UnitSystem } from './types'
 export const ML_PER_CUP = 236.5882365
 export const ML_PER_TBSP = ML_PER_CUP / 16
 export const ML_PER_TSP = ML_PER_CUP / 48
+export const ML_PER_FL_OZ = ML_PER_CUP / 8
 export const ML_PER_QUART = ML_PER_CUP * 4
 export const ML_PER_PINT = ML_PER_CUP * 2
 export const ML_PER_GALLON = ML_PER_CUP * 16
 export const G_PER_OZ = 28.349523125
 export const G_PER_LB = 453.59237
+
+const FLUID_VOLUME_TAGS = new Set(['cocktail', 'drink', 'mocktail'])
 
 const UNIT_ALIASES: Record<string, string> = {
   g: 'g',
@@ -20,6 +23,12 @@ const UNIT_ALIASES: Record<string, string> = {
   oz: 'oz',
   ounce: 'oz',
   ounces: 'oz',
+  'fl oz': 'fl oz',
+  floz: 'fl oz',
+  'fl. oz': 'fl oz',
+  'fl. oz.': 'fl oz',
+  'fluid ounce': 'fl oz',
+  'fluid ounces': 'fl oz',
   lb: 'lb',
   lbs: 'lb',
   pound: 'lb',
@@ -68,6 +77,7 @@ const VOLUME_TO_ML: Record<string, number> = {
   cup: ML_PER_CUP,
   Tbsp: ML_PER_TBSP,
   tsp: ML_PER_TSP,
+  'fl oz': ML_PER_FL_OZ,
   quart: ML_PER_QUART,
   pint: ML_PER_PINT,
   gallon: ML_PER_GALLON,
@@ -189,8 +199,35 @@ function formatUsMass(grams: number): DisplayAmount {
   return { quantity: formatQuantityDisplay(String(grams / G_PER_OZ)), unit: 'oz' }
 }
 
-function formatUsVolume(grams: number, densityKgM3: number): DisplayAmount {
+function formatMetricVolume(grams: number, densityKgM3: number): DisplayAmount {
   const ml = (grams * 1000) / densityKgM3
+  const sign = ml < 0 ? '-' : ''
+  const value = Math.abs(ml)
+  if (value >= 1000) {
+    const liters = value / 1000
+    if (Math.abs(liters - Math.round(liters)) < 0.05) {
+      return { quantity: sign + String(Math.round(liters)), unit: 'l' }
+    }
+    return { quantity: sign + trimNumber(liters, 1), unit: 'l' }
+  }
+  if (value < 10) {
+    return { quantity: sign + trimNumber(value, 1), unit: 'ml' }
+  }
+  return { quantity: sign + String(Math.round(value)), unit: 'ml' }
+}
+
+function formatUsVolume(
+  grams: number,
+  densityKgM3: number,
+  options: { preferFlOz?: boolean } = {}
+): DisplayAmount {
+  const ml = (grams * 1000) / densityKgM3
+  if (options.preferFlOz) {
+    return {
+      quantity: formatQuantityDisplay(String(ml / ML_PER_FL_OZ)),
+      unit: 'fl oz',
+    }
+  }
   const cups = ml / ML_PER_CUP
   if (cups >= 4) {
     const quarts = cups / 4
@@ -213,10 +250,21 @@ function formatUsVolume(grams: number, densityKgM3: number): DisplayAmount {
   return { quantity: formatQuantityDisplay(String(tsp)), unit: 'tsp' }
 }
 
+export function prefersFluidVolume(tags: string[] | null | undefined): boolean {
+  if (!tags?.length) {
+    return false
+  }
+  return tags.some(tag => FLUID_VOLUME_TAGS.has(tag.trim().toLowerCase()))
+}
+
 export function formatAmount(
   quantity: number | null,
   unit: string | null | undefined,
-  options: { unitSystem: UnitSystem; densityKgM3?: number | null }
+  options: {
+    unitSystem: UnitSystem
+    densityKgM3?: number | null
+    preferFluidVolume?: boolean
+  }
 ): DisplayAmount {
   if (quantity === null) {
     return { quantity: '', unit: normalizeUnit(unit) }
@@ -224,12 +272,19 @@ export function formatAmount(
 
   const canonical = normalizeUnit(unit)
   if (canonical === 'g') {
+    const hasDensity = options.densityKgM3 != null && options.densityKgM3 > 0
+    if (options.preferFluidVolume && hasDensity) {
+      if (options.unitSystem === 'metric') {
+        return formatMetricVolume(quantity, options.densityKgM3 as number)
+      }
+      return formatUsVolume(quantity, options.densityKgM3 as number, { preferFlOz: true })
+    }
     if (options.unitSystem === 'us_weight') {
       return formatUsMass(quantity)
     }
     if (options.unitSystem === 'us') {
-      if (options.densityKgM3 != null && options.densityKgM3 > 0) {
-        return formatUsVolume(quantity, options.densityKgM3)
+      if (hasDensity) {
+        return formatUsVolume(quantity, options.densityKgM3 as number)
       }
       return formatUsMass(quantity)
     }
@@ -258,6 +313,7 @@ export function formatIngredientAmount(
   options: {
     unitSystem: UnitSystem
     densityKgM3?: number | null
+    preferFluidVolume?: boolean
   }
 ): DisplayAmount {
   if (!quantityText) {
@@ -813,9 +869,12 @@ export function densityForName(
 
 const UNIT_DISPLAY_LABELS: Record<string, string> = {
   cup: 'cups',
+  'fl oz': 'fl oz',
   g: 'grams',
   kg: 'kilograms',
+  l: 'liters',
   lb: 'pounds',
+  ml: 'milliliters',
   oz: 'ounces',
   quart: 'quarts',
   Tbsp: 'tablespoons',
@@ -829,11 +888,11 @@ export function unitDisplayLabel(unit: string): string {
 export function editorUnitItems(
   unitSystem: UnitSystem
 ): Array<{ label: string; value: string } | { type: 'header'; label: string }> {
-  const metric = ['g', 'kg'].map(unit => ({
+  const metric = ['g', 'kg', 'ml', 'l'].map(unit => ({
     label: unitDisplayLabel(unit),
     value: unit,
   }))
-  const us = ['cup', 'Tbsp', 'tsp', 'quart', 'lb', 'oz'].map(unit => ({
+  const us = ['cup', 'Tbsp', 'tsp', 'fl oz', 'quart', 'lb', 'oz'].map(unit => ({
     label: unitDisplayLabel(unit),
     value: unit,
   }))

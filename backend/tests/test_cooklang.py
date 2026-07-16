@@ -393,6 +393,8 @@ import_time: "2020-01-01T00:00:00Z"
 import_duration_ms: 12
 import_notes:
   - old
+tags:
+  - cocktail
 ---
 
 > Import error: Source ingredient may be missing: To finish
@@ -403,6 +405,7 @@ Bake @batter{}.
     metadata, body = parse_document(prepared)
     assert "review" not in metadata
     assert "import_time" not in metadata
+    assert metadata.get("tags") == ["cocktail"]
     assert "Import error:" not in body
     assert "Bake @batter{}." in body
 

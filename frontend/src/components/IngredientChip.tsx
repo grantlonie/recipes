@@ -11,7 +11,12 @@ import { getIngredientDisplayState, subscribeIngredientDisplay } from './ingredi
 export function IngredientChip({ getPos, node }: NodeViewProps) {
   const display = useSyncExternalStore(subscribeIngredientDisplay, getIngredientDisplayState)
   const attrs = node.attrs as IngredientAttrs
-  const label = formatChipLabel(attrs, display.catalog, display.unitSystem)
+  const label = formatChipLabel(
+    attrs,
+    display.catalog,
+    display.unitSystem,
+    display.preferFluidVolume
+  )
 
   return (
     <NodeViewWrapper as="span" className="inline">
@@ -37,10 +42,12 @@ export function IngredientChip({ getPos, node }: NodeViewProps) {
 function formatChipLabel(
   attrs: IngredientAttrs,
   catalog: CatalogIngredient[],
-  unitSystem: UnitSystem
+  unitSystem: UnitSystem,
+  preferFluidVolume: boolean
 ) {
   const amount = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
     densityKgM3: densityForName(attrs.name, catalog),
+    preferFluidVolume,
     unitSystem,
   })
   const formatted = formatDisplayAmount(amount)

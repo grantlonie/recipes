@@ -4,8 +4,9 @@ import re
 from dataclasses import dataclass
 
 from app import cooklang
+from app.catalog_match import match_catalog_ingredient
 from app.ingredient_inflection import inflection_forms, normalize_ingredient_key, token_match_forms
-from app.models import Ingredient
+from app.models import CatalogIngredient, Ingredient
 
 _INVALID_AMOUNT_RE = re.compile(
     r"^\s*(?:=)?(?:0(?:\.0+)?%g|0|pinch|splash|to taste|as needed|optional)\s*$",
@@ -56,6 +57,8 @@ _UNIT_WORDS = frozenset(
         "ounce",
         "ounces",
         "oz",
+        "floz",
+        "fluid",
         "package",
         "packages",
         "pinch",
@@ -155,7 +158,12 @@ class ImportValidation:
         )
 
 
-def validate_imported_cooklang(content: str, *, source_text: str | None = None) -> ImportValidation:
+def validate_imported_cooklang(
+    content: str,
+    *,
+    source_text: str | None = None,
+    catalog: list[CatalogIngredient] | None = None,
+) -> ImportValidation:
     """Surface structural import problems without failing the import."""
     warnings: list[str] = []
     try:
@@ -166,7 +174,9 @@ def validate_imported_cooklang(content: str, *, source_text: str | None = None) 
     warnings.extend(_invalid_amount_warnings(body))
     warnings.extend(_cookware_count_warnings(body))
     if source_text:
-        warnings.extend(_missing_source_ingredient_warnings(body, source_text))
+        warnings.extend(
+            _missing_source_ingredient_warnings(body, source_text, catalog=catalog)
+        )
         warnings.extend(_missing_prep_note_warnings(body, source_text))
     return ImportValidation(warnings=warnings)
 
@@ -211,18 +221,23 @@ def _cookware_count_warnings(body: str) -> list[str]:
     ]
 
 
-def _missing_source_ingredient_warnings(body: str, source_text: str) -> list[str]:
+def _missing_source_ingredient_warnings(
+    body: str,
+    source_text: str,
+    *,
+    catalog: list[CatalogIngredient] | None = None,
+) -> list[str]:
     source_lines = _source_ingredient_lines(source_text)
     if not source_lines:
         return []
 
-    cook_names = _cook_ingredient_names(body)
+    cook_names = _cook_ingredient_names(body, catalog=catalog)
     cook_tokens = _cook_content_tokens(body)
     warnings: list[str] = []
     for line in source_lines:
         if _SKIP_SOURCE_LINE_RE.search(line):
             continue
-        if _source_line_is_covered(line, cook_names, cook_tokens):
+        if _source_line_is_covered(line, cook_names, cook_tokens, catalog=catalog):
             continue
         warnings.append(f"Source ingredient may be missing: {line}")
     return warnings
@@ -307,16 +322,32 @@ def _matching_cook_ingredients(line: str, cook_ingredients: list[Ingredient]) ->
     return matches
 
 
-def _cook_ingredient_names(body: str) -> set[str]:
+def _cook_ingredient_names(
+    body: str,
+    *,
+    catalog: list[CatalogIngredient] | None = None,
+) -> set[str]:
     names: set[str] = set()
     for match in cooklang.INGREDIENT_RE.finditer(body):
         name = (match.group("name_braced") or match.group("name") or "").strip()
         if not name:
             continue
-        names.update(token_match_forms(name))
-        for token in normalize_ingredient_key(name).split():
-            names.update(token_match_forms(token))
+        _add_ingredient_label_forms(names, name)
+        if catalog:
+            hit = match_catalog_ingredient(name, catalog)
+            if hit.catalog is not None:
+                for label in [hit.catalog.name, *hit.catalog.aliases]:
+                    _add_ingredient_label_forms(names, label)
     return names
+
+
+def _add_ingredient_label_forms(names: set[str], label: str) -> None:
+    text = label.strip()
+    if not text:
+        return
+    names.update(token_match_forms(text))
+    for token in normalize_ingredient_key(text).split():
+        names.update(token_match_forms(token))
 
 
 def _cook_content_tokens(body: str) -> set[str]:
@@ -329,15 +360,27 @@ def _cook_content_tokens(body: str) -> set[str]:
     return tokens
 
 
-def _source_line_is_covered(line: str, cook_names: set[str], cook_tokens: set[str]) -> bool:
+def _source_line_is_covered(
+    line: str,
+    cook_names: set[str],
+    cook_tokens: set[str],
+    *,
+    catalog: list[CatalogIngredient] | None = None,
+) -> bool:
     content_tokens = _source_content_tokens(line)
     if not content_tokens:
         return True
 
-    # Prefer matching against known @ingredient names / inflections.
+    # Prefer matching against known @ingredient names / inflections / aliases.
     for token in content_tokens:
         if token_match_forms(token) & cook_names:
             return True
+
+    # Catalog: source "triple sec" covers body @orange liqueur when aliased.
+    if catalog and _source_line_matches_catalog_cook_ingredient(
+        content_tokens, cook_names, catalog
+    ):
+        return True
 
     # Fall back to presence of distinctive content tokens in the body.
     distinctive = [token for token in content_tokens if len(token) >= 4]
@@ -346,6 +389,23 @@ def _source_line_is_covered(line: str, cook_names: set[str], cook_tokens: set[st
     return any(
         token in cook_tokens or token_match_forms(token) & cook_tokens for token in distinctive
     )
+
+
+def _source_line_matches_catalog_cook_ingredient(
+    content_tokens: list[str],
+    cook_names: set[str],
+    catalog: list[CatalogIngredient],
+) -> bool:
+    phrase = " ".join(content_tokens).strip()
+    if not phrase:
+        return False
+    hit = match_catalog_ingredient(phrase, catalog)
+    if hit.catalog is None:
+        return False
+    catalog_forms: set[str] = set()
+    for label in [hit.catalog.name, *hit.catalog.aliases]:
+        _add_ingredient_label_forms(catalog_forms, label)
+    return bool(catalog_forms & cook_names)
 
 
 def _source_content_tokens(line: str) -> list[str]:

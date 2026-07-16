@@ -272,3 +272,22 @@ def test_apply_catalog_mapping_does_not_corrupt_bell_pepper(tmp_path):
     frying_mapped, frying_unmatched = apply_catalog_mapping(frying_body, repository)
     assert "@green bell pepper{1}(italian frying, cored and seeded)" in frying_mapped
     assert frying_unmatched == []
+
+
+def test_apply_catalog_mapping_reinterprets_oz_as_fl_oz_for_cocktails(tmp_path):
+    repository = IngredientRepository(catalog_path=tmp_path / "ingredients.json")
+    repository.upsert(CatalogIngredient(name="simple syrup", density_kg_m3=1330))
+    repository.upsert(CatalogIngredient(name="vodka", density_kg_m3=940))
+
+    body = "Add @simple syrup{1%oz} and @vodka{2%fl oz}."
+    mass_mapped, _ = apply_catalog_mapping(body, repository)
+    assert "@simple syrup{28%g}" in mass_mapped
+
+    fluid_mapped, unmatched = apply_catalog_mapping(
+        body,
+        repository,
+        reinterpret_oz_as_fl_oz=True,
+    )
+    assert unmatched == []
+    assert "@simple syrup{39%g}" in fluid_mapped
+    assert "@vodka{56%g}" in fluid_mapped

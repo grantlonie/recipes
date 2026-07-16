@@ -5,6 +5,7 @@ from app.import_context import (
     truncate_source_text,
 )
 from app.import_validate import clean_source_text, validate_imported_cooklang
+from app.models import CatalogIngredient
 
 
 def test_build_system_prompt_omits_ingredient_catalog():
@@ -23,6 +24,9 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Do not collapse prep and cook" in prompt
     assert "Preserve the source's measurement units" in prompt
     assert "Do not convert between volume and mass" in prompt
+    assert "@vodka{2%fl oz}" in prompt
+    assert "tags: [cocktail]" in prompt
+    assert "Omit tags from front matter" not in prompt
     assert "@kidney beans{2%cup}" in prompt
     assert "Prefer grams" not in prompt
     assert "green bell pepper ≠ black pepper" in prompt
@@ -242,3 +246,37 @@ Bake.
 """
     result = validate_imported_cooklang(content, source_text=source)
     assert result.warnings == []
+
+
+def test_validate_covers_source_alias_via_catalog():
+    content = """---
+title: Lemon Drop
+---
+
+Add @vodka{57%g}, @orange liqueur{14.2%g}, and @lemon juice{28%g}.
+"""
+    source = """Ingredients
+2 ounces vodka
+1/2 ounce triple sec
+1 ounce lemon juice
+
+Directions
+Shake.
+"""
+    catalog = [
+        CatalogIngredient(
+            name="orange liqueur",
+            aliases=["triple sec", "cointreau"],
+            density_kg_m3=1100.0,
+        ),
+        CatalogIngredient(name="vodka", density_kg_m3=940.0),
+        CatalogIngredient(name="lemon juice", density_kg_m3=1030.0),
+    ]
+    without_catalog = validate_imported_cooklang(content, source_text=source)
+    assert any("triple sec" in warning for warning in without_catalog.warnings)
+
+    with_catalog = validate_imported_cooklang(
+        content, source_text=source, catalog=catalog
+    )
+    assert with_catalog.warnings == []
+    assert not with_catalog.needs_repair

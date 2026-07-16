@@ -35,7 +35,7 @@ import {
   stepTimerMarkerClassName,
 } from './themeClasses'
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
-import { densityForName, formatDisplayAmount, formatIngredientAmount } from './units'
+import { densityForName, formatDisplayAmount, formatIngredientAmount, prefersFluidVolume } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 import { isRefFile, resolveRefDisplay } from './importMapping'
 
@@ -129,6 +129,7 @@ export function RecipePage() {
     },
   })
   const recipe = scaledQuery.data ?? recipeQuery.data
+  const fluidVolumePreferred = prefersFluidVolume(recipe?.tags)
 
   useEffect(() => {
     if (recipeQuery.data) {
@@ -436,7 +437,12 @@ export function RecipePage() {
                   <span
                     className={`tabular-nums ${isScaled ? SCALED_TEXT_CLASS : 'text-stone-600 dark:text-stone-400'}`}
                   >
-                    {formatIngredientListAmount(ingredient, unitSystem, catalog)}
+                    {formatIngredientListAmount(
+                      ingredient,
+                      unitSystem,
+                      catalog,
+                      fluidVolumePreferred
+                    )}
                     {ingredient.fixed ? ' fixed' : ''}
                   </span>
                   <span className={isScaled ? SCALED_TEXT_CLASS : undefined}>
@@ -492,7 +498,13 @@ export function RecipePage() {
                       className="px-1 text-sm italic text-stone-600 dark:text-stone-400"
                       key={`note-${index}`}
                     >
-                      {renderCooklangStep(block.text, unitSystem, catalog, isScaled)}
+                      {renderCooklangStep(
+                        block.text,
+                        unitSystem,
+                        catalog,
+                        isScaled,
+                        fluidVolumePreferred
+                      )}
                     </p>
                   )
                 }
@@ -525,7 +537,13 @@ export function RecipePage() {
                     </label>
                     {completed ? null : (
                       <p className="whitespace-pre-line text-stone-800 dark:text-stone-200">
-                        {renderCooklangStep(block.text, unitSystem, catalog, isScaled)}
+                        {renderCooklangStep(
+                        block.text,
+                        unitSystem,
+                        catalog,
+                        isScaled,
+                        fluidVolumePreferred
+                      )}
                       </p>
                     )}
                   </div>
@@ -726,16 +744,17 @@ function renderCooklangStep(
   step: string,
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
-  isScaled: boolean
+  isScaled: boolean,
+  preferFluidVolume: boolean
 ) {
   const lines = step.split('\n')
   if (lines.length === 1) {
-    return renderCooklangLine(step, unitSystem, catalog, isScaled)
+    return renderCooklangLine(step, unitSystem, catalog, isScaled, preferFluidVolume)
   }
   return lines.map((line, index) => (
     <Fragment key={`${index}-${line}`}>
       {index > 0 ? '\n' : null}
-      {renderCooklangLine(line, unitSystem, catalog, isScaled)}
+      {renderCooklangLine(line, unitSystem, catalog, isScaled, preferFluidVolume)}
     </Fragment>
   ))
 }
@@ -744,7 +763,8 @@ function renderCooklangLine(
   line: string,
   unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
-  isScaled: boolean
+  isScaled: boolean,
+  preferFluidVolume: boolean
 ) {
   const markers: StepMarker[] = []
 
@@ -752,7 +772,7 @@ function renderCooklangLine(
     markers.push({
       index: token.start,
       length: token.end - token.start,
-      text: formatIngredientFromToken(token, unitSystem, catalog),
+      text: formatIngredientFromToken(token, unitSystem, catalog, preferFluidVolume),
       type: 'ingredient',
     })
   }
@@ -839,13 +859,15 @@ function resolveSourceHref(recipe: {
 function formatIngredientListAmount(
   ingredient: Ingredient,
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[]
+  catalog: CatalogIngredient[],
+  preferFluidVolume: boolean
 ) {
   const amount = formatIngredientAmount(
     ingredient.scaled_quantity ?? ingredient.quantity,
     ingredient.unit,
     {
       densityKgM3: densityForName(ingredient.name, catalog),
+      preferFluidVolume,
       unitSystem,
     }
   )
@@ -855,13 +877,15 @@ function formatIngredientListAmount(
 function formatIngredientFromToken(
   token: ReturnType<typeof extractTokens>[number],
   unitSystem: UnitSystem,
-  catalog: CatalogIngredient[]
+  catalog: CatalogIngredient[],
+  preferFluidVolume: boolean
 ) {
   if (!token.quantity) {
     return formatIngredientLabel(token.name, token.note)
   }
   const display = formatIngredientAmount(token.quantity, token.unit, {
     densityKgM3: densityForName(token.name, catalog),
+    preferFluidVolume,
     unitSystem,
   })
   const formatted = formatDisplayAmount(display)

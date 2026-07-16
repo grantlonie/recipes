@@ -32,6 +32,7 @@ from app.import_validate import validate_imported_cooklang
 from app.ingredients import IngredientRepository
 from app.models import ImportPreview
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
+from app.units import prefers_fluid_volume
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
 logger = logging.getLogger(__name__)
@@ -408,13 +409,24 @@ def _finalize_import(
     content = cooklang.render_document(metadata, body)
     content = cooklang.prepare_imported_content(content)
     metadata, body = cooklang.parse_document(content)
-    mapped_body, unmatched = apply_catalog_mapping(body, ingredients)
+    _ensure_drink_tags(metadata)
+    fluid_volume = prefers_fluid_volume(cooklang.metadata_tags(metadata))
+    mapped_body, unmatched = apply_catalog_mapping(
+        body,
+        ingredients,
+        reinterpret_oz_as_fl_oz=fluid_volume,
+    )
     content = cooklang.prepare_imported_content(cooklang.render_document(metadata, mapped_body))
     metadata, body = cooklang.parse_document(content)
     # Re-apply after normalize in case front-matter repair dropped image.
     _apply_import_image(metadata, image_url=image_url)
+    _ensure_drink_tags(metadata)
     content = cooklang.render_document(metadata, body)
-    validation = validate_imported_cooklang(content, source_text=source_text)
+    validation = validate_imported_cooklang(
+        content,
+        source_text=source_text,
+        catalog=ingredients.list_ingredients(),
+    )
 
     slug_source = source_url or metadata.get("title", "imported-recipe")
     if isinstance(slug_source, str) and cooklang.is_ref_file(slug_source):
@@ -444,7 +456,11 @@ def _maybe_quality_repair(
     system_prompt: str,
     trace: ImportTrace,
 ) -> ImportPreview:
-    validation = validate_imported_cooklang(preview.content, source_text=extracted_text)
+    validation = validate_imported_cooklang(
+        preview.content,
+        source_text=extracted_text,
+        catalog=ingredients.list_ingredients(),
+    )
     if not validation.needs_repair:
         return preview.model_copy(update={"validation_warnings": validation.warnings})
 
@@ -542,6 +558,33 @@ def _log_advanced_processing(
     # Print so it always shows in the uvicorn/dev console without extra logging config.
     print(f"[import] {message}", flush=True)
     logger.warning("%s", message)
+
+
+def _ensure_drink_tags(metadata: dict) -> None:
+    """Tag cocktails/mocktails so fluid ounces convert and display correctly."""
+    tags = cooklang.metadata_tags(metadata)
+    if prefers_fluid_volume(tags):
+        return
+    blob = " ".join(
+        str(metadata.get(key) or "")
+        for key in ("title", "description", "servings")
+    ).casefold()
+    markers = (
+        "cocktail",
+        "mocktail",
+        "gimlet",
+        "margarita",
+        "martini",
+        "negroni",
+        "daiquiri",
+        "mojito",
+        "old fashioned",
+        "highball",
+    )
+    if not any(marker in blob for marker in markers):
+        return
+    tag = "mocktail" if "mocktail" in blob else "cocktail"
+    metadata["tags"] = sorted({*tags, tag}, key=str.casefold)
 
 
 def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:
