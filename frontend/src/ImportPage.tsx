@@ -10,7 +10,7 @@ import { ImportMappingDialog } from './components/ImportMappingDialog'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { applyImportMapping, type MappingRow, type PendingImport } from './importMapping'
 import {
-  buildImportContent,
+  buildImportContentFromPending,
   finalizeImportedRecipe,
   persistImportedRecipe,
   prepareImportMapping,
@@ -50,6 +50,8 @@ export function ImportPage() {
   const importStarted = useRef(false)
   const [manualUrl, setManualUrl] = useState('')
   const [importError, setImportError] = useState<string | null>(null)
+  const [mappingApplying, setMappingApplying] = useState(false)
+  const [mappingError, setMappingError] = useState<string | null>(null)
   const [mappingOpen, setMappingOpen] = useState(false)
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -67,6 +69,8 @@ export function ImportPage() {
   }, [sharedUrl])
 
   function clearPendingMapping() {
+    setMappingApplying(false)
+    setMappingError(null)
     setMappingOpen(false)
     setMappingRows([])
     setPendingImport(null)
@@ -94,8 +98,10 @@ export function ImportPage() {
       openCreatedRecipe(recipe)
     },
     onError: error => {
-      setImportError(formatImportError(error))
+      const message = formatImportError(error)
+      setImportError(message)
       if (pendingImport) {
+        setMappingError(message)
         setMappingOpen(true)
       }
     },
@@ -141,6 +147,7 @@ export function ImportPage() {
         return
       }
 
+      setMappingError(null)
       setPendingPreview(result.preview)
       setPendingImport(prepared.pendingImport)
       setMappingRows(prepared.mappingRows)
@@ -207,14 +214,26 @@ export function ImportPage() {
   }
 
   async function applyMapping() {
-    if (!pendingImport || !pendingPreview) {
+    if (!pendingImport || !pendingPreview || mappingApplying) {
       return
     }
 
-    const { body } = await applyImportMapping(pendingImport, mappingRows, catalog, refreshCatalog)
-    const content = buildImportContent(pendingImport.metadata, body)
-    setMappingOpen(false)
-    await saveMutation.mutateAsync({ content, preview: pendingPreview })
+    setMappingApplying(true)
+    setMappingError(null)
+    setImportError(null)
+    try {
+      const { body } = await applyImportMapping(pendingImport, mappingRows, catalog, refreshCatalog)
+      const content = buildImportContentFromPending(pendingImport, body)
+      setMappingOpen(false)
+      await saveMutation.mutateAsync({ content, preview: pendingPreview })
+    } catch (error) {
+      const message = formatImportError(error)
+      setMappingError(message)
+      setImportError(message)
+      setMappingOpen(true)
+    } finally {
+      setMappingApplying(false)
+    }
   }
 
   function updateMappingRow(index: number, patch: Partial<MappingRow>) {
@@ -223,7 +242,7 @@ export function ImportPage() {
     )
   }
 
-  const busy = importMutation.isPending || saveMutation.isPending
+  const busy = importMutation.isPending || saveMutation.isPending || mappingApplying
 
   if (authLoading || (!auth.authenticated && !showImportError)) {
     return <ImportStatus message="Checking sign-in..." />
@@ -296,8 +315,9 @@ export function ImportPage() {
   return (
     <>
       <ImportMappingDialog
-        applying={saveMutation.isPending}
+        applying={mappingApplying || saveMutation.isPending}
         catalog={catalog}
+        error={mappingError}
         onApply={() => void applyMapping()}
         onCancel={() => {
           clearPendingMapping()

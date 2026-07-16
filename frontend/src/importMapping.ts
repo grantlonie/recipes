@@ -34,6 +34,8 @@ export interface PendingImport {
   preserveImage?: boolean
   preserveSource?: boolean
   preserveTags?: boolean
+  /** Original import document; preferred when rebuilding after mapping. */
+  sourceContent?: string
   suggestedSlug?: string
 }
 
@@ -84,6 +86,22 @@ export function renderImportDocument(metadata: Record<string, unknown>, body: st
     )
     .flatMap(([key, value]) => renderMetadataValue(key, value))
   return `---\n${lines.join('\n')}\n---\n\n${body.replace(/^\n+/, '')}`
+}
+
+/** Replace only the Cooklang body, keeping the original front matter bytes intact. */
+export function replaceImportedBody(content: string, body: string): string {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/)
+  if (!match) {
+    return body.replace(/^\n+/, '')
+  }
+  return `---\n${match[1]}\n---\n\n${body.replace(/^\n+/, '')}`
+}
+
+export function buildMappedImportContent(pendingImport: PendingImport, body: string): string {
+  if (pendingImport.sourceContent) {
+    return replaceImportedBody(pendingImport.sourceContent, body)
+  }
+  return renderImportDocument(pendingImport.metadata, body)
 }
 
 export function buildMappingRows(
@@ -253,8 +271,16 @@ export async function upsertCatalogFromMappingRows(
   }
 
   const nextCatalog = await getIngredientCatalog()
-  await putIngredientCatalog(nextCatalog)
-  await refreshCatalog()
+  try {
+    await putIngredientCatalog(nextCatalog)
+  } catch {
+    // Local cache is best-effort; ingredients were already saved on the server.
+  }
+  try {
+    await refreshCatalog()
+  } catch {
+    // Callers can continue with the fresh catalog from the server.
+  }
   return nextCatalog.ingredients
 }
 
@@ -436,7 +462,11 @@ function cleanMetadataNotes(metadata: Record<string, unknown>) {
 
 function cleanNoteText(value: string) {
   let text = value.trim()
-  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+  while (
+    text.length >= 2 &&
+    (text.startsWith('"') || text.startsWith("'")) &&
+    text.endsWith('\\')
+  ) {
     text = text.slice(1, -1).trimEnd()
   }
   if (

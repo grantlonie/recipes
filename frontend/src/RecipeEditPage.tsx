@@ -116,6 +116,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [editingCookwarePos, setEditingCookwarePos] = useState<number | null>(null)
   const [cookwareInitial, setCookwareInitial] = useState<CookwareFormState>(emptyCookwareForm)
   const [cookwareDraft, setCookwareDraft] = useState<CookwareFormState>(emptyCookwareForm)
+  const [mappingApplying, setMappingApplying] = useState(false)
+  const [mappingError, setMappingError] = useState<string | null>(null)
   const [mappingOpen, setMappingOpen] = useState(false)
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -231,16 +233,13 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     }
   }, [recipeQuery.data])
 
-  const handleEditIngredient = useCallback(
-    (pos: number, attrs: IngredientAttrs) => {
-      const snapshot = ingredientFormFromAttrs(attrs)
-      setEditingPos(pos)
-      setIngredientInitial(snapshot)
-      setIngredientDraft(snapshot)
-      setIngredientDialogOpen(true)
-    },
-    []
-  )
+  const handleEditIngredient = useCallback((pos: number, attrs: IngredientAttrs) => {
+    const snapshot = ingredientFormFromAttrs(attrs)
+    setEditingPos(pos)
+    setIngredientInitial(snapshot)
+    setIngredientDraft(snapshot)
+    setIngredientDialogOpen(true)
+  }, [])
 
   const handleEditSection = useCallback((pos: number, title: string) => {
     setEditingSectionPos(pos)
@@ -676,9 +675,15 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       </Dialog>
 
       <ImportMappingDialog
+        applying={mappingApplying}
         catalog={catalog}
+        error={mappingError}
         onApply={() => void applyMapping()}
-        onCancel={() => setMappingOpen(false)}
+        onCancel={() => {
+          setMappingApplying(false)
+          setMappingError(null)
+          setMappingOpen(false)
+        }}
         onUpdateRow={updateMappingRow}
         open={mappingOpen}
         rows={mappingRows}
@@ -839,6 +844,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     options: Omit<PendingImport, 'body' | 'metadata'> & { unmatchedIngredients?: string[] } = {}
   ) {
     const rows = buildMappingRows(nextBody, options.unmatchedIngredients ?? [], catalog)
+    setMappingError(null)
+    setMappingApplying(false)
     setPendingImport({ body: nextBody, metadata, ...options })
     setMappingRows(rows)
     setMappingOpen(true)
@@ -852,38 +859,47 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 
   async function applyMapping() {
-    if (!pendingImport || !mappingCanApply) {
+    if (!pendingImport || !mappingCanApply || mappingApplying) {
       return
     }
 
-    const { body: nextBody } = await applyImportMapping(
-      pendingImport,
-      mappingRows,
-      catalog,
-      refreshCatalog
-    )
+    setMappingApplying(true)
+    setMappingError(null)
+    try {
+      const { body: nextBody } = await applyImportMapping(
+        pendingImport,
+        mappingRows,
+        catalog,
+        refreshCatalog
+      )
 
-    const currentBookmarked = bookmarked
-    const currentTags = tags
-    const currentSource = source
-    applyDocumentState(pendingImport.metadata, nextBody, { skipTags: true })
-    if (pendingImport.preserveBookmarked) {
-      setBookmarked(currentBookmarked)
+      const currentBookmarked = bookmarked
+      const currentTags = tags
+      const currentSource = source
+      applyDocumentState(pendingImport.metadata, nextBody, { skipTags: true })
+      if (pendingImport.preserveBookmarked) {
+        setBookmarked(currentBookmarked)
+      }
+      if (pendingImport.preserveTags) {
+        setTags(currentTags)
+      } else {
+        setTags(getTagsFromMetadata(pendingImport.metadata.tags))
+      }
+      if (pendingImport.preserveSource) {
+        setSource(currentSource)
+      }
+      if (pendingImport.suggestedSlug) {
+        setRecipeSlug(pendingImport.suggestedSlug)
+      }
+      setMappingOpen(false)
+      setPendingImport(null)
+      setActiveTab('recipe')
+    } catch (error) {
+      setMappingError(error instanceof Error ? error.message : 'Could not apply ingredient mapping')
+      setMappingOpen(true)
+    } finally {
+      setMappingApplying(false)
     }
-    if (pendingImport.preserveTags) {
-      setTags(currentTags)
-    } else {
-      setTags(getTagsFromMetadata(pendingImport.metadata.tags))
-    }
-    if (pendingImport.preserveSource) {
-      setSource(currentSource)
-    }
-    if (pendingImport.suggestedSlug) {
-      setRecipeSlug(pendingImport.suggestedSlug)
-    }
-    setMappingOpen(false)
-    setPendingImport(null)
-    setActiveTab('recipe')
   }
 
   function openAddNote() {
@@ -1177,12 +1193,7 @@ function ImageField({ className = '', onUpload, onValueChange, slug, value }: Im
       <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Image</span>
       <div className="mt-1 space-y-2">
         {previewUrl ? (
-          <a
-            className="inline-block"
-            href={previewUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <a className="inline-block" href={previewUrl} rel="noreferrer" target="_blank">
             <img alt="" className="max-h-40 rounded-xl object-cover" src={previewUrl} />
           </a>
         ) : null}
@@ -1376,7 +1387,11 @@ function getString(value: unknown) {
 
 function cleanNoteText(value: string) {
   let text = value.trim()
-  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+  while (
+    text.length >= 2 &&
+    (text.startsWith('"') || text.startsWith("'")) &&
+    text.endsWith('\\')
+  ) {
     text = text.slice(1, -1).trimEnd()
   }
   if (

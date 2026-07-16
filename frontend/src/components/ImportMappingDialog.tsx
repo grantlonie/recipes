@@ -21,6 +21,7 @@ import type { CatalogIngredient } from '../types'
 interface ImportMappingDialogProps {
   applying?: boolean
   catalog: CatalogIngredient[]
+  error?: string | null
   onApply: () => void
   onCancel: () => void
   onUpdateRow: (index: number, patch: Partial<MappingRow>) => void
@@ -31,6 +32,7 @@ interface ImportMappingDialogProps {
 export function ImportMappingDialog({
   applying = false,
   catalog,
+  error = null,
   onApply,
   onCancel,
   onUpdateRow,
@@ -163,6 +165,7 @@ export function ImportMappingDialog({
           Enter an ingredient name for each row, or mark it as not an ingredient.
         </p>
       ) : null}
+      {error ? <p className={`mt-3 text-sm ${errorTextClassName}`}>{error}</p> : null}
       <div className="mt-6 flex justify-end gap-2">
         <Button disabled={applying} onClick={onCancel} type="button" variant="ghost">
           Cancel

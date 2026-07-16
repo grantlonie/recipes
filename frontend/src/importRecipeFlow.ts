@@ -7,6 +7,7 @@ import {
 } from './api'
 import {
   autofillMappingDensities,
+  buildMappedImportContent,
   buildMappingRows,
   parseImportedDocument,
   renderImportDocument,
@@ -60,6 +61,7 @@ export function prepareImportMapping(
     pendingImport: {
       body: parsed.body,
       metadata: parsed.metadata,
+      sourceContent: preview.content,
       suggestedSlug: preview.suggested_slug,
       ...options,
     },
@@ -125,9 +127,21 @@ export function buildImportContent(metadata: Record<string, unknown>, body: stri
   return renderImportDocument(metadata, body)
 }
 
+export function buildImportContentFromPending(pendingImport: PendingImport, body: string): string {
+  return buildMappedImportContent(pendingImport, body)
+}
+
 export async function persistImportedRecipe(recipe: RecipeDetail, sync: () => Promise<void>) {
-  await storeRecipe(recipe)
-  await sync()
+  try {
+    await storeRecipe(recipe)
+  } catch {
+    // Recipe is already on the server; local cache is best-effort.
+  }
+  try {
+    await sync()
+  } catch {
+    // Sync can retry later; don't fail the import after a successful create.
+  }
 }
 
 export { formatImportError }
