@@ -115,3 +115,19 @@ def test_format_grams_value():
 def test_format_metric_small_grams_keep_decimal():
     assert format_amount(12.5, "g", unit_system="metric").format() == "12.5 g"
     assert format_amount(21, "g", unit_system="metric").format() == "21 g"
+
+
+def test_format_amount_from_authored_volume():
+    # 1 cup water → metric grams
+    metric = format_amount(1, "cup", unit_system="metric", density_kg_m3=1000)
+    assert metric.unit == "g"
+    assert abs(float(metric.quantity) - 237) < 1
+
+    # Authored cups stay readable in US when density is present (round-trip)
+    us = format_amount(1, "cup", unit_system="us", density_kg_m3=530)
+    assert us.unit in {"cup", "cups"}
+    assert us.quantity == "1"
+
+    # Without density, keep authored volume
+    authored = format_amount(2, "Tbsp", unit_system="metric")
+    assert authored.format() == "2 Tbsp"

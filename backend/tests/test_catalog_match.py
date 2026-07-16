@@ -281,7 +281,8 @@ def test_apply_catalog_mapping_reinterprets_oz_as_fl_oz_for_cocktails(tmp_path):
 
     body = "Add @simple syrup{1%oz} and @vodka{2%fl oz}."
     mass_mapped, _ = apply_catalog_mapping(body, repository)
-    assert "@simple syrup{28%g}" in mass_mapped
+    assert "@simple syrup{1%oz}" in mass_mapped
+    assert "@vodka{2%fl oz}" in mass_mapped
 
     fluid_mapped, unmatched = apply_catalog_mapping(
         body,
@@ -289,5 +290,5 @@ def test_apply_catalog_mapping_reinterprets_oz_as_fl_oz_for_cocktails(tmp_path):
         reinterpret_oz_as_fl_oz=True,
     )
     assert unmatched == []
-    assert "@simple syrup{39%g}" in fluid_mapped
-    assert "@vodka{56%g}" in fluid_mapped
+    assert "@simple syrup{1%fl oz}" in fluid_mapped
+    assert "@vodka{2%fl oz}" in fluid_mapped

@@ -8,7 +8,7 @@ from app.ingredient_inflection import fold_accents, inflection_forms
 from app.ingredients import IngredientRepository, normalize_ingredient_key
 from app.models import CatalogIngredient
 from app.non_ingredients import is_non_ingredient
-from app.units import format_grams_value, is_volume_unit, normalize_unit, to_grams
+from app.units import normalize_unit
 
 # Words allowed in leftover notes for partial catalog matches.
 _MODIFIER_WORDS = frozenset(
@@ -182,17 +182,15 @@ def apply_catalog_mapping(
         canonical = catalog_match.catalog.name
         merged_note = _merge_notes(catalog_match.note, note)
         quantity, unit, fixed = cooklang.split_amount(amount)
-        converted_amount = _maybe_convert_to_grams(
-            canonical,
+        normalized_amount = _maybe_normalize_amount(
             quantity,
             unit,
             fixed,
             amount,
-            catalog_match.catalog,
             reinterpret_oz_as_fl_oz=reinterpret_oz_as_fl_oz,
         )
-        if converted_amount is not None:
-            amount = converted_amount
+        if normalized_amount is not None:
+            amount = normalized_amount
         return cooklang.format_ingredient_markup(canonical, amount, merged_note)
 
     return cooklang.INGREDIENT_RE.sub(replacer, body), unmatched
@@ -375,34 +373,27 @@ def _merge_notes(left: str, right: str | None) -> str | None:
     return ", ".join(dict.fromkeys(parts))
 
 
-def _maybe_convert_to_grams(
-    name: str,
+def _maybe_normalize_amount(
     quantity: str | None,
     unit: str | None,
     fixed: bool,
     original_amount: str,
-    catalog_item: CatalogIngredient,
     *,
     reinterpret_oz_as_fl_oz: bool = False,
 ) -> str | None:
+    """Normalize unit aliases; optionally reinterpret weight oz as fl oz for drinks.
+
+    Amounts stay in authored units — density is only used at display time.
+    """
     if not quantity or not unit:
         return None
-    number = cooklang.parse_quantity_to_fraction(quantity)
-    if number is None:
+    canonical = normalize_unit(unit)
+    if canonical is None:
         return None
-    density = catalog_item.density_kg_m3
-    convert_unit = unit
-    if (
-        reinterpret_oz_as_fl_oz
-        and normalize_unit(unit) == "oz"
-        and density is not None
-        and density > 0
-    ):
-        convert_unit = "fl oz"
-    if is_volume_unit(convert_unit) and density is None:
-        return None
-    grams = to_grams(float(number), convert_unit, density_kg_m3=density)
-    if grams is None:
-        return None
+    if reinterpret_oz_as_fl_oz and canonical == "oz":
+        canonical = "fl oz"
     prefix = "=" if fixed else ""
-    return f"{prefix}{format_grams_value(grams)}%g"
+    rebuilt = f"{prefix}{quantity}%{canonical}"
+    if rebuilt == original_amount:
+        return None
+    return rebuilt

@@ -7,7 +7,6 @@ import { Dialog } from './Dialog'
 import {
   mappingRowDensityValid,
   mappingRowNeedsCreate,
-  mappingRowNeedsDensity,
   mappingRowsAreValid,
   type MappingRow,
 } from '../importMapping'
@@ -61,8 +60,7 @@ export function ImportMappingDialog({
       <div className="mt-4 max-h-96 space-y-4 overflow-y-auto">
         {rows.map((row, index) => {
           const needsCreate = mappingRowNeedsCreate(row, catalog)
-          const densityRequired = mappingRowNeedsDensity(row, catalog)
-          const densityInvalid = densityRequired && !mappingRowDensityValid(row)
+          const densityInvalid = !mappingRowDensityValid(row)
           return (
             <div
               className={`rounded-2xl p-3 ${
@@ -133,12 +131,12 @@ export function ImportMappingDialog({
                           Create new ingredient
                         </p>
                         <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                          Provide density for volume conversions between US and metric.
+                          Optional density enables volume↔weight conversion when viewing.
                         </p>
                       </div>
                       <label className="block text-sm">
                         <span className="font-semibold text-stone-700 dark:text-stone-200">
-                          Density (kg/m³){densityRequired ? ' *' : ''}
+                          Density (kg/m³)
                         </span>
                         <div className="mt-1 flex items-center gap-1">
                           <input
@@ -146,7 +144,7 @@ export function ImportMappingDialog({
                             onChange={event =>
                               onUpdateRow(index, { createDensity: event.target.value })
                             }
-                            placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
+                            placeholder="Optional"
                             value={row.createDensity}
                           />
                           <DensitySearchLink ingredientName={row.catalogName} />
@@ -162,8 +160,7 @@ export function ImportMappingDialog({
       </div>
       {!mappingCanApply ? (
         <p className={`mt-3 text-sm ${errorTextClassName}`}>
-          Enter an ingredient name for each row, or mark it as not an ingredient. New ingredients
-          with volume measures (cups, ml, L, etc.) need a density.
+          Enter an ingredient name for each row, or mark it as not an ingredient.
         </p>
       ) : null}
       <div className="mt-6 flex justify-end gap-2">

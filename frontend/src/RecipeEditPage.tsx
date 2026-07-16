@@ -40,27 +40,23 @@ import {
 } from './importMapping'
 import { scheduleMappingDensityAutofill } from './importRecipeFlow'
 import { useIngredientCatalog } from './IngredientCatalogContext'
-import { parseQuantity } from './quantities'
+import { formatQuantityDisplay } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { buildLoginUrl, ensureUniqueSlug, slugify } from './shareImport'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
-import type { CatalogIngredient, ImportPreview, UnitSystem } from './types'
+import type { ImportPreview, UnitSystem } from './types'
 import {
   defaultEditorUnit,
-  densityForName,
   editorUnitItems,
-  formatGramsValue,
-  formatIngredientAmount,
   isUsCookingVolumeUnit,
   normalizeUnit,
   prefersFluidVolume,
-  toGrams,
 } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 
-const emptyBody = 'Add @ingredient{100%g}.\n'
+const emptyBody = 'Add @ingredient{1%cup}.\n'
 const MAX_SERVINGS = 12
 
 interface IngredientFormState {
@@ -141,7 +137,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     queryKey: ['recipe', slug],
   })
 
-  const selectedDensity = densityForName(ingredientDraft.name, catalog)
   const unitOptions = useMemo(() => editorUnitItems(unitSystem), [unitSystem])
   const ingredientOptions = useMemo(
     () =>
@@ -238,18 +233,13 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
   const handleEditIngredient = useCallback(
     (pos: number, attrs: IngredientAttrs) => {
-      const snapshot = ingredientFormFromAttrs(
-        attrs,
-        catalog,
-        unitSystem,
-        prefersFluidVolume(tags)
-      )
+      const snapshot = ingredientFormFromAttrs(attrs)
       setEditingPos(pos)
       setIngredientInitial(snapshot)
       setIngredientDraft(snapshot)
       setIngredientDialogOpen(true)
     },
-    [catalog, tags, unitSystem]
+    []
   )
 
   const handleEditSection = useCallback((pos: number, title: string) => {
@@ -534,11 +524,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           Fixed amount (does not scale)
         </label>
         <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
-          Amounts are entered in {unitSystemEntryLabel(unitSystem)} and stored as grams when
-          convertible.
-          {unitSystem === 'us' && selectedDensity == null
-            ? ' No density on this ingredient — volume units are stored as-is (not grams).'
-            : null}
+          Amounts are stored in the units you enter. Unit-system conversion happens when viewing.
         </p>
         <div className="mt-6 flex justify-between gap-2">
           {editingPos !== null ? (
@@ -966,25 +952,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     } else if (!unit) {
       attrs = { fixed: ingredientDraft.fixed, name, note, quantity: quantityText, unit: '' }
     } else {
-      const quantity = parseQuantity(quantityText)
-      const density = densityForName(name, catalog)
-      const grams = quantity === null ? null : toGrams(quantity, unit, density)
-      if (grams == null) {
-        attrs = {
-          fixed: ingredientDraft.fixed,
-          name,
-          note,
-          quantity: quantityText,
-          unit: normalizeUnit(unit) ?? unit,
-        }
-      } else {
-        attrs = {
-          fixed: ingredientDraft.fixed,
-          name,
-          note,
-          quantity: formatGramsValue(grams),
-          unit: 'g',
-        }
+      attrs = {
+        fixed: ingredientDraft.fixed,
+        name,
+        note,
+        quantity: quantityText,
+        unit: normalizeUnit(unit) ?? unit,
       }
     }
 
@@ -1324,24 +1297,13 @@ function newIngredientForm(unitSystem: UnitSystem): IngredientFormState {
   }
 }
 
-function ingredientFormFromAttrs(
-  attrs: IngredientAttrs,
-  catalog: CatalogIngredient[],
-  unitSystem: UnitSystem,
-  preferFluidVolume = false
-): IngredientFormState {
-  const density = densityForName(attrs.name, catalog)
-  const display = formatIngredientAmount(attrs.quantity || null, attrs.unit || null, {
-    densityKgM3: density,
-    preferFluidVolume,
-    unitSystem,
-  })
+function ingredientFormFromAttrs(attrs: IngredientAttrs): IngredientFormState {
   return {
     fixed: attrs.fixed,
     name: attrs.name,
     note: attrs.note,
-    qty: display.quantity || attrs.quantity,
-    units: normalizeUnit(display.unit) ?? '',
+    qty: attrs.quantity ? formatQuantityDisplay(attrs.quantity) : '',
+    units: normalizeUnit(attrs.unit) ?? '',
   }
 }
 
@@ -1474,14 +1436,4 @@ function getTagsFromMetadata(value: unknown) {
 
 function isEmptyArray(value: unknown) {
   return Array.isArray(value) && value.length === 0
-}
-
-function unitSystemEntryLabel(unitSystem: UnitSystem): string {
-  if (unitSystem === 'us') {
-    return 'cup measures'
-  }
-  if (unitSystem === 'us_weight') {
-    return 'lb/oz'
-  }
-  return 'metric units (g/kg)'
 }

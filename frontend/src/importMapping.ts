@@ -7,16 +7,11 @@ import {
   type IngredientToken,
 } from './cooklangTokens'
 import { putIngredientCatalog } from './db'
-import { parseQuantity } from './quantities'
 import type { CatalogIngredient } from './types'
 import {
   findCatalogIngredient,
-  formatGramsValue,
-  isMassUnit,
-  isVolumeUnit,
   matchCatalogIngredient,
   normalizeUnit,
-  toGrams,
   withLearnedAlias,
 } from './units'
 
@@ -188,26 +183,22 @@ export function mappingRowNeedsCreate(row: MappingRow, ingredients: CatalogIngre
   return !findCatalogIngredient(name, ingredients)
 }
 
-export function mappingRowNeedsDensity(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
-  return mappingRowNeedsCreate(row, ingredients) && isVolumeUnit(row.unit)
-}
-
 export function mappingRowDensityValid(row: MappingRow): boolean {
+  if (!row.createDensity.trim()) {
+    return true
+  }
   const density = Number(row.createDensity.trim())
-  return row.createDensity.trim() !== '' && !Number.isNaN(density) && density > 0
+  return !Number.isNaN(density) && density > 0
 }
 
-export function isMappingRowValid(row: MappingRow, ingredients: CatalogIngredient[]): boolean {
+export function isMappingRowValid(row: MappingRow, _ingredients: CatalogIngredient[]): boolean {
   if (row.excluded) {
     return true
   }
   if (!row.catalogName.trim()) {
     return false
   }
-  if (mappingRowNeedsDensity(row, ingredients) && !mappingRowDensityValid(row)) {
-    return false
-  }
-  return true
+  return mappingRowDensityValid(row)
 }
 
 export function mappingRowsAreValid(rows: MappingRow[], ingredients: CatalogIngredient[]): boolean {
@@ -312,26 +303,9 @@ export async function applyImportMapping(
 
 function buildMappedIngredientMarker(row: MappingRow, catalog: CatalogIngredient[]): string {
   const targetName = row.catalogName.trim() || row.originalName
-  const catalogItem = findCatalogIngredient(targetName, catalog)
-  const density = catalogItem?.density_kg_m3
-  let quantity = row.quantity
-  let unit = row.unit
-
-  const parsed = parseQuantity(row.quantity)
-  if (parsed !== null && row.unit) {
-    let grams: number | null = null
-    if (isMassUnit(row.unit)) {
-      grams = toGrams(parsed, row.unit)
-    } else if (isVolumeUnit(row.unit)) {
-      grams = toGrams(parsed, row.unit, density)
-    }
-    if (grams !== null) {
-      quantity = formatGramsValue(grams)
-      unit = 'g'
-    } else {
-      unit = normalizeUnit(row.unit) ?? row.unit
-    }
-  }
+  void catalog
+  const quantity = row.quantity
+  const unit = row.unit ? (normalizeUnit(row.unit) ?? row.unit) : row.unit
 
   return serializeIngredient({
     fixed: row.fixed,

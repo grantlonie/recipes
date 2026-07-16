@@ -302,23 +302,31 @@ def format_amount(
         return DisplayAmount("", normalize_unit(unit))
 
     canonical = normalize_unit(unit)
-    if canonical == "g":
-        has_density = density_kg_m3 is not None and density_kg_m3 > 0
-        if prefer_fluid_volume and has_density:
-            assert density_kg_m3 is not None
-            if unit_system == "metric":
-                return format_metric_volume(quantity, density_kg_m3)
-            return format_us_volume(quantity, density_kg_m3, prefer_fl_oz=True)
-        if unit_system == "us_weight":
-            return format_us_mass(quantity)
-        if unit_system == "us":
-            if has_density:
-                assert density_kg_m3 is not None
-                return format_us_volume(quantity, density_kg_m3)
-            return format_us_mass(quantity)
-        return format_metric_mass(quantity)
+    authored = DisplayAmount(format_fraction(quantity), canonical or unit)
 
-    return DisplayAmount(format_fraction(quantity), canonical or unit)
+    if canonical is None or (
+        canonical not in MASS_TO_GRAMS and canonical not in VOLUME_TO_ML
+    ):
+        return authored
+
+    grams = to_grams(quantity, canonical, density_kg_m3=density_kg_m3)
+    if grams is None:
+        return authored
+
+    has_density = density_kg_m3 is not None and density_kg_m3 > 0
+    if prefer_fluid_volume and has_density:
+        assert density_kg_m3 is not None
+        if unit_system == "metric":
+            return format_metric_volume(grams, density_kg_m3)
+        return format_us_volume(grams, density_kg_m3, prefer_fl_oz=True)
+    if unit_system == "us_weight":
+        return format_us_mass(grams)
+    if unit_system == "us":
+        if has_density:
+            assert density_kg_m3 is not None
+            return format_us_volume(grams, density_kg_m3)
+        return format_us_mass(grams)
+    return format_metric_mass(grams)
 
 
 def format_grams_value(grams: float) -> str:

@@ -26,7 +26,7 @@ Output rules:
 - Prefer decimal quantities in amounts, not fractions.
 - Preserve the source's measurement units (cups, Tbsp, tsp, ml, L, g, oz, fl oz, lb, counts).
   Do not convert between volume and mass (no cups/Tbsp/tsp/ml/fl oz to grams or vice versa).
-  A later step converts volumes to grams using catalog densities.
+  Store amounts in the units from the source.
 - Cocktail / drink liquid "ounces" are fluid ounces, not weight ounces.
   For spirits, liqueurs, juices, syrups, bitters, and other drink pours, emit %fl oz
   (example: 2 ounces vodka → @vodka{{2%fl oz}}).

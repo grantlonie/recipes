@@ -24,7 +24,6 @@ import {
   isMappingRowValid,
   mappingRowDensityValid,
   mappingRowNeedsCreate,
-  mappingRowNeedsDensity,
   type MappingRow,
 } from '../importMapping'
 import { useRecipeSync } from '../RecipeSyncContext'
@@ -685,8 +684,7 @@ function BulkMappingRowCard({
     [catalog]
   )
   const needsCreate = mappingRowNeedsCreate(row, catalog)
-  const densityRequired = mappingRowNeedsDensity(row, catalog)
-  const densityInvalid = densityRequired && !mappingRowDensityValid(row)
+  const densityInvalid = !mappingRowDensityValid(row)
   const canDone = isMappingRowValid(row, catalog)
 
   return (
@@ -751,19 +749,19 @@ function BulkMappingRowCard({
                   Create new ingredient
                 </p>
                 <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
-                  Density needed for volume conversions.
+                  Optional density enables volume↔weight conversion when viewing.
                 </p>
               </div>
               <label className="block text-sm">
                 <span className="font-semibold text-stone-700 dark:text-stone-200">
-                  Density (kg/m³){densityRequired ? ' *' : ''}
+                  Density (kg/m³)
                 </span>
                 <div className="mt-1 flex items-center gap-1">
                   <input
                     className={`${inputClassName} min-w-0 flex-1${densityInvalid ? ' border-red-400 ring-red-400' : ''}`}
                     disabled={disabled || applying}
                     onChange={event => onUpdate({ createDensity: event.target.value })}
-                    placeholder={densityRequired ? 'Required for cup measures' : 'Optional'}
+                    placeholder="Optional"
                     value={row.createDensity}
                   />
                   <DensitySearchLink ingredientName={row.catalogName} />

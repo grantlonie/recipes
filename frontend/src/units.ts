@@ -257,6 +257,33 @@ export function prefersFluidVolume(tags: string[] | null | undefined): boolean {
   return tags.some(tag => FLUID_VOLUME_TAGS.has(tag.trim().toLowerCase()))
 }
 
+function formatAmountFromGrams(
+  grams: number,
+  options: {
+    unitSystem: UnitSystem
+    densityKgM3?: number | null
+    preferFluidVolume?: boolean
+  }
+): DisplayAmount {
+  const hasDensity = options.densityKgM3 != null && options.densityKgM3 > 0
+  if (options.preferFluidVolume && hasDensity) {
+    if (options.unitSystem === 'metric') {
+      return formatMetricVolume(grams, options.densityKgM3 as number)
+    }
+    return formatUsVolume(grams, options.densityKgM3 as number, { preferFlOz: true })
+  }
+  if (options.unitSystem === 'us_weight') {
+    return formatUsMass(grams)
+  }
+  if (options.unitSystem === 'us') {
+    if (hasDensity) {
+      return formatUsVolume(grams, options.densityKgM3 as number)
+    }
+    return formatUsMass(grams)
+  }
+  return formatMetricMass(grams)
+}
+
 export function formatAmount(
   quantity: number | null,
   unit: string | null | undefined,
@@ -271,30 +298,20 @@ export function formatAmount(
   }
 
   const canonical = normalizeUnit(unit)
-  if (canonical === 'g') {
-    const hasDensity = options.densityKgM3 != null && options.densityKgM3 > 0
-    if (options.preferFluidVolume && hasDensity) {
-      if (options.unitSystem === 'metric') {
-        return formatMetricVolume(quantity, options.densityKgM3 as number)
-      }
-      return formatUsVolume(quantity, options.densityKgM3 as number, { preferFlOz: true })
-    }
-    if (options.unitSystem === 'us_weight') {
-      return formatUsMass(quantity)
-    }
-    if (options.unitSystem === 'us') {
-      if (hasDensity) {
-        return formatUsVolume(quantity, options.densityKgM3 as number)
-      }
-      return formatUsMass(quantity)
-    }
-    return formatMetricMass(quantity)
-  }
-
-  return {
+  const authored: DisplayAmount = {
     quantity: formatQuantityDisplay(String(quantity)),
     unit: canonical ?? unit ?? null,
   }
+
+  if (!canonical || (!isMassUnit(canonical) && !isVolumeUnit(canonical))) {
+    return authored
+  }
+
+  const grams = toGrams(quantity, canonical, options.densityKgM3)
+  if (grams == null) {
+    return authored
+  }
+  return formatAmountFromGrams(grams, options)
 }
 
 export function formatDisplayAmount(amount: DisplayAmount): string {
