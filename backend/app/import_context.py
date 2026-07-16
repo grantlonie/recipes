@@ -88,10 +88,13 @@ Output rules:
   gives one overall duration.
 - Use `time` only for a single overall duration when prep/cook are not listed separately.
 - Prefer plain English durations (20 minutes, 1 hour 30 minutes).
-- Always write `title`, `description`, and `introduction` as single-line
-  double-quoted YAML strings. Escape internal double quotes as \\".
-  Apostrophes are fine inside double quotes — do not wrap titles in single quotes.
-  (examples: title: "Dori Sanders' No-Churn Fresh Lemon Ice Cream",
+- `title` is REQUIRED and should be the first front-matter key. Never omit it.
+  Always write title/description/introduction as single-line double-quoted YAML strings.
+  Escape internal double quotes as \\". Apostrophes and & are fine inside double quotes —
+  do not wrap titles in single quotes, and do not use Title: or name: instead of title:.
+  (examples: title: "French Toast",
+  title: "Dori Sanders' No-Churn Fresh Lemon Ice Cream",
+  title: "Grilled Corn & Barley Salad",
   title: "\\"Greek\\" Lamb with Orzo",
   description: "Hearty chili with kidney beans. Leftovers keep 3 days refrigerated.")
   Never wrap these fields across lines without quotes.
@@ -120,6 +123,13 @@ Stir in @tomatoes{28%oz}(crushed) and @kidney beans{2%cup}. Simmer ~{30%minutes}
 """
 
 NEGATIVE_EXAMPLE = """Wrong (do not do this):
+---
+description: "A dip."
+---
+Frank's Redhot Buffalo Chicken Dip
+Combine @cream cheese{}.
+
+Wrong keys: Title: "French Toast" or name: "French Toast" (must be lowercase title:).
 Add @black pepper{1}(green bell, diced) and @vanilla extract{1}(bean).
 Season with @salt{0%g}(to taste). Oil the baking pan{1}.
 Add @fennel seeds{1%tsp} when the source says 1 tbsp fennel seeds.
@@ -130,6 +140,12 @@ If you prefer a softer crust, mix the butter into the batter.
 > If using a non-alcoholic beverage instead of beer, add yeast.
 
 Right:
+---
+title: "Frank's Redhot Buffalo Chicken Dip"
+description: "A spicy buffalo chicken dip."
+---
+Combine @cream cheese{}.
+
 description: "Hearty beer bread. Sift the flour (or spoon into the cup). If not using beer, add a packet of active dry yeast."
 Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
 Season with @salt{}(to taste). Oil the #baking pan{}.
@@ -168,7 +184,11 @@ def build_user_message(
     max_chars: int = DEFAULT_MAX_SOURCE_CHARS,
 ) -> str:
     cleaned = clean_source_text(extracted_text)
-    parts = ["Convert this recipe source into Cooklang.", ""]
+    parts = [
+        "Convert this recipe source into Cooklang.",
+        "The front matter must include title: \"...\" as the first key.",
+        "",
+    ]
     if source_url:
         parts.extend([f"Original source URL: {source_url}", ""])
     parts.extend(["Source text:", truncate_source_text(cleaned, max_chars=max_chars)])

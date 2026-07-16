@@ -15,6 +15,7 @@ from app.cooklang import (
     split_amount,
     trim_cooklang_document,
 )
+from app.importer import _invalid_import_reason
 
 
 def test_split_amount_parses_ml_and_liter_units():
@@ -234,6 +235,137 @@ Cook @onion{1}.
     assert any("invalid source" in note for note in notes)
 
 
+def test_heal_recovers_title_from_Title_alias():
+    raw = """---
+Title: "Frank's Redhot Buffalo Chicken Dip"
+source: source.txt
+description: "A spicy dip."
+---
+
+Preheat #oven{}.
+Combine @cream cheese{1%pkg}.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Frank's Redhot Buffalo Chicken Dip"
+    assert "Title" not in metadata
+    assert "Preheat #oven{}." in body
+    assert any("normalized front-matter key" in note for note in notes)
+    assert _invalid_import_reason(healed) is None
+
+
+def test_heal_recovers_title_from_name_alias():
+    raw = """---
+name: French Toast
+description: "Classic french toast."
+---
+
+Whisk @eggs{2}.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    metadata, _body = parse_document(healed)
+    assert metadata["title"] == "French Toast"
+    assert "name" not in metadata
+    assert any("normalized front-matter key" in note for note in notes)
+
+
+def test_heal_recovers_title_from_body_heading():
+    raw = """---
+source: source.txt
+description: "A spicy dip."
+---
+
+Frank's Redhot Buffalo Chicken Dip
+
+Preheat #oven{}.
+Combine @cream cheese{1%pkg}.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Frank's Redhot Buffalo Chicken Dip"
+    assert "Frank's Redhot" not in body.split("\n")[0]
+    assert "Preheat #oven{}." in body
+    assert any("body heading" in note for note in notes)
+
+
+def test_heal_recovers_title_from_section_heading():
+    raw = """---
+description: "Classic french toast."
+---
+
+==French Toast==
+
+Whisk @eggs{2}.
+"""
+    # Section markers are not used as titles (too often Preparation/Dough).
+    healed, notes = heal_imported_cooklang(raw)
+    metadata, body = parse_document(healed)
+    assert not metadata.get("title")
+    assert "==French Toast==" in body
+    assert not any("body heading" in note for note in notes)
+
+
+def test_heal_prefers_source_title_over_section_heading():
+    raw = """---
+description: "Classic french toast."
+source: source.txt
+---
+
+==Preparation==
+
+Whisk @eggs{2} and @heavy cream{0.5%cup}.
+"""
+    source = """French Toast
+
+https://food52.com/recipes/4611-french-toast
+
+Ingredients
+1 loaf challah
+"""
+    healed, notes = heal_imported_cooklang(raw, source_text=source)
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "French Toast"
+    assert "==Preparation==" in body
+    assert any("from source" in note for note in notes)
+
+
+def test_heal_recovers_title_from_source_text():
+    raw = """---
+description: "Classic french toast."
+source: source.txt
+---
+
+Whisk @eggs{2} and @heavy cream{0.5%cup}.
+"""
+    source = """French Toast
+
+https://food52.com/recipes/4611-french-toast
+
+Ingredients
+1 loaf challah
+"""
+    healed, notes = heal_imported_cooklang(raw, source_text=source)
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "French Toast"
+    assert "Whisk @eggs{2}" in body
+    assert any("from source" in note for note in notes)
+
+
+def test_heal_does_not_treat_step_as_title():
+    raw = """---
+description: "A dip."
+---
+
+Preheat #oven{} to 350°F.
+Combine @cream cheese{1%pkg}.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    metadata, _body = parse_document(healed)
+    assert not metadata.get("title")
+    assert not any("body heading" in note for note in notes)
+    assert _invalid_import_reason(healed) == "missing title"
+
+
 def test_render_front_matter_quotes_import_notes_with_colons():
     content = render_document(
         {
@@ -263,7 +395,7 @@ import_notes:
   - old
 ---
 
-> Import error: Source ingredient may be missing from Cooklang: To finish
+> Import error: Source ingredient may be missing: To finish
 
 Bake @batter{}.
 """

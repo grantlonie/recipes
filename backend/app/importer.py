@@ -316,7 +316,10 @@ def _import_extracted_text(
         raise ImportError(str(error)) from error
 
     raw = cooklang.sanitize_front_matter(raw)
-    raw, heal_notes = cooklang.heal_imported_cooklang(raw)
+    raw, heal_notes = cooklang.heal_imported_cooklang(
+        raw,
+        source_text=extracted_text,
+    )
     for note in heal_notes:
         trace.add(note)
 
@@ -339,14 +342,18 @@ def _import_extracted_text(
                 user_message=(
                     f"{user_message}\n\n"
                     "The previous output was invalid Cooklang. "
-                    "Return only valid Cooklang with YAML front matter."
+                    "Return only valid Cooklang with YAML front matter. "
+                    'Front matter must start with title: "Recipe Name".'
                 ),
                 model=repair_model,
             )
         except LLMError as error:
             raise ImportError(str(error)) from error
         raw = cooklang.sanitize_front_matter(raw)
-        raw, repair_heal_notes = cooklang.heal_imported_cooklang(raw)
+        raw, repair_heal_notes = cooklang.heal_imported_cooklang(
+            raw,
+            source_text=extracted_text,
+        )
         for note in repair_heal_notes:
             trace.add(note)
     else:

@@ -212,6 +212,7 @@ function HomeSearchBar() {
         <label className="min-w-0 flex-1">
           <span className="sr-only">Search recipes</span>
           <input
+            autoFocus
             className="w-full rounded-lg border border-orange-200 bg-orange-50/80 px-3 py-1.5 text-sm outline-none ring-orange-500 placeholder:text-stone-500 focus:ring-2 dark:border-stone-600 dark:bg-stone-800/80 dark:text-stone-100 dark:placeholder:text-stone-400"
             onChange={handleQueryChange}
             onFocus={event => event.target.select()}

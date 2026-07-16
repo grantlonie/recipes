@@ -140,7 +140,7 @@ _PREP_WORDS = frozenset(
 _STRUCTURAL_WARNING_PREFIXES = (
     "Invalid amount for @",
     "Cookware should use #name{}",
-    "Source ingredient may be missing from Cooklang:",
+    "Source ingredient may be missing:",
 )
 
 
@@ -224,7 +224,7 @@ def _missing_source_ingredient_warnings(body: str, source_text: str) -> list[str
             continue
         if _source_line_is_covered(line, cook_names, cook_tokens):
             continue
-        warnings.append(f"Source ingredient may be missing from Cooklang: {line}")
+        warnings.append(f"Source ingredient may be missing: {line}")
     return warnings
 
 

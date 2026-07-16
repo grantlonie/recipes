@@ -377,25 +377,6 @@ export function RecipePage() {
                   <li key={item}>{item}</li>
                 ))}
               </ul>
-              {Array.isArray(recipe.metadata.import_notes) &&
-              recipe.metadata.import_notes.length ? (
-                <details className="mt-2 text-sm text-amber-900 dark:text-amber-200">
-                  <summary className="cursor-pointer font-medium">Import notes</summary>
-                  <ul className="mt-1 list-disc space-y-1 pl-5">
-                    {(recipe.metadata.import_notes as string[]).map(item => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                  {typeof recipe.metadata.import_duration_ms === 'number' ? (
-                    <p className="mt-1 pl-1 text-xs opacity-80">
-                      Import took {recipe.metadata.import_duration_ms} ms
-                      {typeof recipe.metadata.import_time === 'string'
-                        ? ` · ${recipe.metadata.import_time}`
-                        : ''}
-                    </p>
-                  ) : null}
-                </details>
-              ) : null}
             </div>
             {auth.authenticated ? (
               <div className="flex shrink-0 flex-wrap gap-2">

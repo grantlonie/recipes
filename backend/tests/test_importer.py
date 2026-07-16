@@ -210,7 +210,12 @@ Cook @lamb{}.
 """
     with patch("app.importer.complete_cooklang", side_effect=[invalid, invalid]):
         with pytest.raises(ImportError, match="not valid Cooklang"):
-            import_from_text("Recipe text", settings=settings, ingredients=ingredients)
+            # Source starts with Ingredients so heal cannot guess a title.
+            import_from_text(
+                "Ingredients\n1 lb lamb\n\nDirections\nCook the lamb.",
+                settings=settings,
+                ingredients=ingredients,
+            )
 
 
 def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: IngredientRepository):

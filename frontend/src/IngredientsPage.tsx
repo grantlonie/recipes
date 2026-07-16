@@ -151,6 +151,7 @@ export function IngredientsPage() {
           <label className="min-w-0 flex-1">
             <span className="sr-only">Search ingredients</span>
             <input
+              autoFocus
               className={inputClassName}
               onChange={event => setQuery(event.target.value)}
               placeholder="Search ingredients"

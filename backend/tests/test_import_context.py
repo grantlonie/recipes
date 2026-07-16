@@ -11,8 +11,9 @@ def test_build_system_prompt_omits_ingredient_catalog():
     prompt = build_system_prompt()
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
-    assert "Always write `title`, `description`, and `introduction` as single-line" in prompt
-    assert "do not wrap titles in single quotes" in prompt
+    assert "`title` is REQUIRED" in prompt
+    assert "do not use Title: or name:" in prompt
+    assert 'title: "French Toast"' in prompt
     assert 'title: "Dori Sanders\' No-Churn Fresh Lemon Ice Cream"' in prompt
     assert "Do not invent app-owned front-matter keys" in prompt
     assert "Escape internal double quotes" in prompt
@@ -46,6 +47,12 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "> Soft crust: mix melted butter into the batter instead of pouring it over the top." in prompt
     assert "> If the mixture looks dry, add a splash of water before simmering." in prompt
     assert "@pecans{0.5%cup}(optional)" in prompt
+
+
+def test_build_user_message_requires_title_key():
+    message = build_user_message("French Toast\n\nWhisk eggs.")
+    assert 'The front matter must include title: "..." as the first key.' in message
+    assert "French Toast" in message
 
 
 def test_truncate_source_text_limits_length():
@@ -88,7 +95,7 @@ def test_build_quality_repair_message_includes_warnings_and_source():
     message = build_quality_repair_message(
         source_text="Ingredients\n1 onion\n\nDirections\nCook.",
         previous_cooklang="---\ntitle: Soup\n---\n\nCook.\n",
-        warnings=["Source ingredient may be missing from Cooklang: 1 onion"],
+        warnings=["Source ingredient may be missing: 1 onion"],
     )
     assert "Problems to fix:" in message
     assert "1 onion" in message

@@ -520,22 +520,6 @@ export function BulkImportDialog({
               <li key={warning}>{warning}</li>
             ))}
           </ul>
-          {Array.isArray(reviewItem.metadata.import_notes) &&
-          reviewItem.metadata.import_notes.length ? (
-            <details className="mt-3 text-sm text-amber-900 dark:text-amber-200">
-              <summary className="cursor-pointer font-medium">Import notes</summary>
-              <ul className="mt-1 list-disc space-y-1 pl-5">
-                {(reviewItem.metadata.import_notes as string[]).map(note => (
-                  <li key={note}>{note}</li>
-                ))}
-              </ul>
-              {typeof reviewItem.metadata.import_duration_ms === 'number' ? (
-                <p className="mt-1 text-xs opacity-80">
-                  {reviewItem.metadata.import_duration_ms} ms
-                </p>
-              ) : null}
-            </details>
-          ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <Button
               disabled={reviewBusy}

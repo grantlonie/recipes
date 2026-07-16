@@ -12,6 +12,18 @@ FRONT_MATTER_RE = re.compile(r"\A---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 FRONT_MATTER_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):\s*(.*)$")
 QUOTE_DESCRIPTION_KEYS = frozenset({"description", "introduction", "title"})
 QUOTE_LIST_KEYS = frozenset({"review", "import_notes"})
+# LLMs sometimes emit Title:/name: instead of the required lowercase title key.
+TITLE_KEY_ALIASES = frozenset(
+    {
+        "title",
+        "name",
+        "recipe",
+        "recipe_name",
+        "recipe-name",
+        "recipe title",
+        "recipe_title",
+    }
+)
 APP_OWNED_IMPORT_KEYS = frozenset(
     {"review", "import_time", "import_duration_ms", "import_notes"}
 )
@@ -127,7 +139,12 @@ def sanitize_front_matter(content: str) -> str:
     return f"---\n{render_front_matter(loaded)}\n---\n{stripped[match.end() :]}"
 
 
-def heal_imported_cooklang(content: str) -> tuple[str, list[str]]:
+def heal_imported_cooklang(
+    content: str,
+    *,
+    fallback_title: str | None = None,
+    source_text: str | None = None,
+) -> tuple[str, list[str]]:
     """Local repairs that avoid an expensive second LLM call when possible.
 
     Returns (healed_content, heal_notes). Notes describe what was fixed.
@@ -140,12 +157,14 @@ def heal_imported_cooklang(content: str) -> tuple[str, list[str]]:
             cleaned = cleaned[match.start() :].strip()
             notes.append("heal: stripped leading prose before front matter")
 
+    candidate_count = len(_cooklang_document_candidates(cleaned))
     trimmed = trim_cooklang_document(cleaned)
-    if trimmed != cleaned:
+    if candidate_count > 1 or _body_lost_reasoning(cleaned, trimmed):
         notes.append("heal: trimmed trailing LLM reasoning / duplicate document")
-        cleaned = trimmed
+    cleaned = trimmed
 
     cleaned = sanitize_front_matter(cleaned)
+    has_front_matter = bool(FRONT_MATTER_RE.match(cleaned))
     try:
         metadata, body = parse_document(cleaned)
     except Exception:
@@ -154,16 +173,210 @@ def heal_imported_cooklang(content: str) -> tuple[str, list[str]]:
     if not isinstance(metadata, dict):
         metadata = {}
 
+    metadata, alias_note = normalize_title_metadata(metadata)
+    if alias_note:
+        notes.append(alias_note)
+
     for key in ("source", "image"):
         value = parse_ref_value(metadata, key)
         if value and not validate_ref_value(value):
             metadata.pop(key, None)
             notes.append(f"heal: dropped invalid {key} ref ({value})")
 
+    if not metadata.get("title"):
+        # Only inject a title into a real front-matter document — never wrap
+        # broken/partial model output in a new --- block just to invent a title.
+        if not has_front_matter:
+            return cleaned, notes
+        recovered, body, recover_note = recover_missing_title(
+            body,
+            fallback_title=fallback_title,
+            source_text=source_text,
+        )
+        if recovered:
+            metadata = {"title": recovered, **metadata}
+            notes.append(recover_note)
+
     if not metadata.get("title") or not body.strip():
         return cleaned, notes
 
     return render_document(metadata, body), notes
+
+
+def normalize_title_metadata(metadata: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Map Title:/name:/recipe: aliases onto lowercase ``title``."""
+    existing = metadata.get("title")
+    if isinstance(existing, str) and existing.strip():
+        return metadata, None
+
+    alias_keys = {
+        alias.casefold().replace("-", "_").replace(" ", "_") for alias in TITLE_KEY_ALIASES
+    }
+    for key, value in list(metadata.items()):
+        normalized_key = key.casefold().replace("-", "_").replace(" ", "_")
+        if normalized_key not in alias_keys:
+            continue
+        text = str(value).strip() if value not in (None, "") else ""
+        if not text:
+            continue
+        normalized = {k: v for k, v in metadata.items() if k != key and k != "title"}
+        normalized = {"title": text, **normalized}
+        if key == "title":
+            return normalized, None
+        return normalized, f"heal: normalized front-matter key {key!r} → title"
+    return metadata, None
+
+
+def recover_missing_title(
+    body: str,
+    *,
+    fallback_title: str | None = None,
+    source_text: str | None = None,
+) -> tuple[str | None, str, str]:
+    """Recover a missing title from source text, explicit fallback, or body heading.
+
+    Prefer source/fallback over body text: body often starts with ==Section==
+    labels like Preparation, which are not recipe titles.
+    """
+    guessed = (fallback_title or "").strip() or guess_title_from_source_text(source_text or "")
+    if guessed:
+        return guessed, body, "heal: recovered title from source"
+
+    from_body, rest = title_from_body_heading(body)
+    if from_body:
+        return from_body, rest, "heal: recovered title from body heading"
+    return None, body, ""
+
+
+def title_from_body_heading(body: str) -> tuple[str | None, str]:
+    """If the body starts with a plain title line (not a section), lift it into metadata.
+
+    Does not use ==Section== markers — those are usually Preparation/Dough/etc.
+    """
+    stripped = body.lstrip("\n")
+    if not stripped.strip():
+        return None, body
+    lines = stripped.split("\n")
+    first = lines[0].strip()
+    rest = "\n".join(lines[1:]).lstrip("\n")
+
+    if _looks_like_title_line(first):
+        return first, rest if rest else "\n"
+    return None, body
+
+
+def _looks_like_title_line(text: str) -> bool:
+    if not text or len(text) > 120:
+        return False
+    if text.startswith((">", "=", "#", "-", "*", "@", "~")):
+        return False
+    if any(token in text for token in ("@{", "#{", "~{", "{", "}")):
+        return False
+    if text.endswith((".", "!", "?")):
+        return False
+    lowered = text.casefold()
+    step_starters = (
+        "preheat",
+        "combine",
+        "mix",
+        "add",
+        "whisk",
+        "stir",
+        "bake",
+        "cook",
+        "heat",
+        "place",
+        "pour",
+        "slice",
+        "cut",
+        "season",
+        "serve",
+        "bring",
+        "remove",
+        "transfer",
+        "boil",
+        "simmer",
+        "fold",
+        "beat",
+        "roast",
+        "grill",
+        "saute",
+        "sauté",
+        "fry",
+        "drain",
+        "toss",
+        "spread",
+        "brush",
+        "line",
+        "grease",
+        "set ",
+        "let ",
+        "while ",
+        "in a ",
+        "in the ",
+    )
+    if any(lowered.startswith(starter) for starter in step_starters):
+        return False
+    return True
+
+
+def guess_title_from_source_text(source_text: str) -> str | None:
+    """Best-effort title from the first meaningful line of source text."""
+    skip_prefixes = (
+        "http://",
+        "https://",
+        "ingredients",
+        "directions",
+        "instructions",
+        "method",
+        "steps",
+        "serves",
+        "servings",
+        "yield",
+        "yields",
+        "prep time",
+        "cook time",
+        "total time",
+        "makes ",
+        "recipe text",
+    )
+    for raw_line in source_text.splitlines():
+        line = raw_line.strip().strip("*# ").strip()
+        if not line:
+            continue
+        lowered = line.casefold()
+        if any(lowered.startswith(prefix) for prefix in skip_prefixes):
+            continue
+        # Ingredient lines ("1 lb lamb", "½ cup sugar") are not titles.
+        if re.match(r"^[\d¼½¾⅓⅔⅛⅜⅝⅞]", line):
+            continue
+        if len(line) > 120:
+            continue
+        # Strip trailing site noise / trademark marks.
+        cleaned = line.replace("®", "").replace("©", "").replace("™", "").strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return cleaned or None
+    return None
+
+
+def _body_lost_reasoning(before: str, after: str) -> bool:
+    """True when trim removed reasoning prose (not just blank-line normalization)."""
+    try:
+        _, before_body = parse_document(before)
+        _, after_body = parse_document(after)
+    except Exception:
+        return before.strip() != after.strip()
+    before_norm = re.sub(r"\n{3,}", "\n\n", before_body.strip())
+    after_norm = re.sub(r"\n{3,}", "\n\n", after_body.strip())
+    if before_norm == after_norm:
+        return False
+    dropped = before_norm[len(after_norm) :] if before_norm.startswith(after_norm) else before_norm
+    return bool(
+        _LLM_REASONING_START_RE.search(dropped)
+        or _looks_like_llm_reasoning_paragraph(dropped.strip()[:200])
+        or "let me" in dropped.casefold()
+        or "wait," in dropped.casefold()
+    )
 
 
 # Model sometimes keeps "thinking" in the main content channel after a valid .cook doc.
