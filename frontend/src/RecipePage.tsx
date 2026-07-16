@@ -35,7 +35,12 @@ import {
   stepTimerMarkerClassName,
 } from './themeClasses'
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
-import { densityForName, formatDisplayAmount, formatIngredientAmount, prefersFluidVolume } from './units'
+import {
+  densityForName,
+  formatDisplayAmount,
+  formatIngredientAmount,
+  prefersFluidVolume,
+} from './units'
 import { useUnitSystem } from './UnitSystemContext'
 import { isRefFile, resolveRefDisplay } from './importMapping'
 
@@ -515,15 +520,13 @@ export function RecipePage() {
 
                 return (
                   <div
-                    className={`rounded-xl bg-orange-50 p-4 transition-all dark:bg-stone-800/80 ${
+                    className={`rounded-xl bg-orange-50/80 p-4 ring-1 ring-orange-100/80 transition-[padding] duration-300 ease-out dark:bg-stone-700/45 dark:ring-stone-600/50 ${
                       completed ? 'py-2' : ''
                     }`}
                     key={`step-${index}`}
                   >
                     <label
-                      className={`flex cursor-pointer items-center gap-3 text-sm font-semibold text-orange-700 dark:text-orange-300 ${
-                        completed ? '' : 'mb-2'
-                      }`}
+                      className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-orange-700 dark:text-orange-300"
                       htmlFor={checkboxId}
                     >
                       <input
@@ -535,17 +538,27 @@ export function RecipePage() {
                       />
                       <span>Step {stepIndex + 1}</span>
                     </label>
-                    {completed ? null : (
-                      <p className="whitespace-pre-line text-stone-800 dark:text-stone-200">
-                        {renderCooklangStep(
-                        block.text,
-                        unitSystem,
-                        catalog,
-                        isScaled,
-                        fluidVolumePreferred
-                      )}
-                      </p>
-                    )}
+                    <div
+                      className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                        completed ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <p
+                          className={`whitespace-pre-line text-stone-800 transition-opacity duration-300 ease-out dark:text-stone-200 ${
+                            completed ? 'mt-0 opacity-0' : 'mt-2 opacity-100'
+                          }`}
+                        >
+                          {renderCooklangStep(
+                            block.text,
+                            unitSystem,
+                            catalog,
+                            isScaled,
+                            fluidVolumePreferred
+                          )}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )
               })}
@@ -685,7 +698,11 @@ function descriptionNotes(recipe: { metadata?: Record<string, unknown> }): strin
 
 function cleanDescriptionText(value: string) {
   let text = value.trim()
-  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+  while (
+    text.length >= 2 &&
+    (text.startsWith('"') || text.startsWith("'")) &&
+    text.endsWith('\\')
+  ) {
     text = text.slice(1, -1).trimEnd()
   }
   if (

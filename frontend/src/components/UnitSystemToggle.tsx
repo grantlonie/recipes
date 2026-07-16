@@ -11,21 +11,26 @@ const OPTIONS: { label: string; value: UnitSystem }[] = [
   { label: 'lb·oz', value: 'us_weight' },
 ]
 
-const TRIGGER_CLASS =
+const COMPACT_TRIGGER_CLASS =
   'inline-flex items-center gap-1 border-0 bg-transparent py-0.5 text-xs font-semibold text-orange-600 focus:outline-none focus:ring-0 dark:text-orange-300'
+
+const FULL_TRIGGER_CLASS =
+  'flex w-full items-center justify-between gap-2 rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 dark:border-stone-600 dark:bg-stone-900 dark:text-orange-300'
 
 interface UnitSystemToggleProps {
   className?: string
+  fullWidth?: boolean
 }
 
-export function UnitSystemToggle({ className }: UnitSystemToggleProps = {}) {
+export function UnitSystemToggle({ className, fullWidth = false }: UnitSystemToggleProps = {}) {
   const { setUnitSystem, unitSystem } = useUnitSystem()
   const [open, setOpen] = useState(false)
   const currentLabel = OPTIONS.find(option => option.value === unitSystem)?.label ?? 'Metric'
 
   return (
     <Popover
-      align="right"
+      align={fullWidth ? 'left' : 'right'}
+      matchTriggerWidth={fullWidth}
       onClose={() => setOpen(false)}
       open={open}
       trigger={
@@ -33,12 +38,12 @@ export function UnitSystemToggle({ className }: UnitSystemToggleProps = {}) {
           aria-expanded={open}
           aria-haspopup="listbox"
           aria-label="Unit system"
-          className={`${TRIGGER_CLASS} ${className ?? ''}`}
+          className={`${fullWidth ? FULL_TRIGGER_CLASS : COMPACT_TRIGGER_CLASS} ${className ?? ''}`}
           onClick={() => setOpen(current => !current)}
           type="button"
         >
           {currentLabel}
-          <ChevronDownIcon aria-hidden="true" className="h-3.5 w-3.5" />
+          <ChevronDownIcon aria-hidden="true" className={fullWidth ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
         </button>
       }
     >
