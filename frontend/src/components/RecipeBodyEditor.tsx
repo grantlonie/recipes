@@ -155,9 +155,19 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
         return
       }
       const current = serializeCooklangBody(editor.getJSON())
-      if (current !== value) {
-        editor.commands.setContent(parseCooklangBody(value), { emitUpdate: false })
+      if (current === value) {
+        return
       }
+      // TipTap ReactNodeViews call flushSync; defer so we are outside React's commit.
+      queueMicrotask(() => {
+        if (!editor || editor.isDestroyed) {
+          return
+        }
+        if (serializeCooklangBody(editor.getJSON()) === value) {
+          return
+        }
+        editor.commands.setContent(parseCooklangBody(value), { emitUpdate: false })
+      })
     }, [editor, value])
 
     useImperativeHandle(

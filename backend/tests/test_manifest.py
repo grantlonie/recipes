@@ -17,6 +17,6 @@ def test_web_manifest_uses_absolute_share_target_action(monkeypatch):
     manifest = response.json()
     assert manifest["share_target"]["action"] == "https://recipes.example.com/import"
     assert manifest["share_target"]["method"] == "GET"
-    assert "enctype" not in manifest["share_target"]
+    assert manifest["share_target"]["enctype"] == "application/x-www-form-urlencoded"
 
     get_settings.cache_clear()

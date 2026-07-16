@@ -1,4 +1,4 @@
-const CACHE_NAME = 'recipes-app-v6'
+const CACHE_NAME = 'recipes-app-v7'
 const APP_SHELL = [
   '/',
   '/apple-touch-icon.png',

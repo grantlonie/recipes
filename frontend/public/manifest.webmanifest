@@ -33,6 +33,7 @@
   "scope": "/",
   "share_target": {
     "action": "/import",
+    "enctype": "application/x-www-form-urlencoded",
     "method": "GET",
     "params": {
       "text": "text",

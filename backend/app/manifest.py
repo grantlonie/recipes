@@ -38,6 +38,7 @@ def build_web_manifest(settings: Settings) -> dict[str, object]:
         "scope": "/",
         "share_target": {
             "action": f"{base_url}/import",
+            "enctype": "application/x-www-form-urlencoded",
             "method": "GET",
             "params": {
                 "text": "text",
