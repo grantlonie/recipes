@@ -35,7 +35,12 @@ import {
   stepTimerMarkerClassName,
 } from './themeClasses'
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
-import { densityForName, formatDisplayAmount, formatIngredientAmount, prefersFluidVolume } from './units'
+import {
+  densityForName,
+  formatDisplayAmount,
+  formatIngredientAmount,
+  prefersFluidVolume,
+} from './units'
 import { useUnitSystem } from './UnitSystemContext'
 import { isRefFile, resolveRefDisplay } from './importMapping'
 
@@ -693,7 +698,11 @@ function descriptionNotes(recipe: { metadata?: Record<string, unknown> }): strin
 
 function cleanDescriptionText(value: string) {
   let text = value.trim()
-  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+  while (
+    text.length >= 2 &&
+    (text.startsWith('"') || text.startsWith("'")) &&
+    text.endsWith('\\')
+  ) {
     text = text.slice(1, -1).trimEnd()
   }
   if (
