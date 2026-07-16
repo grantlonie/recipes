@@ -21,7 +21,7 @@ import { WebsiteImportDialog } from './WebsiteImportDialog'
 import { useIngredientCatalog } from '../IngredientCatalogContext'
 import { applyImportMapping, type MappingRow, type PendingImport } from '../importMapping'
 import {
-  buildImportContent,
+  buildImportContentFromPending,
   finalizeImportedRecipe,
   formatImportError,
   importRecipeFromFile,
@@ -47,6 +47,8 @@ export function NewRecipeFab() {
   const [importError, setImportError] = useState<string | null>(null)
   const [importErrorDialogOpen, setImportErrorDialogOpen] = useState(false)
   const [cameraDialogOpen, setCameraDialogOpen] = useState(false)
+  const [mappingApplying, setMappingApplying] = useState(false)
+  const [mappingError, setMappingError] = useState<string | null>(null)
   const [mappingOpen, setMappingOpen] = useState(false)
   const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -76,8 +78,10 @@ export function NewRecipeFab() {
       navigate(`/recipes/${recipe.slug}`)
     },
     onError: error => {
-      setImportError(formatImportError(error))
+      const message = formatImportError(error)
+      setImportError(message)
       if (pendingImport) {
+        setMappingError(message)
         setMappingOpen(true)
         return
       }
@@ -115,6 +119,8 @@ export function NewRecipeFab() {
   })
 
   function clearPendingMapping() {
+    setMappingApplying(false)
+    setMappingError(null)
     setMappingOpen(false)
     setMappingRows([])
     setPendingImport(null)
@@ -142,6 +148,7 @@ export function NewRecipeFab() {
       return
     }
 
+    setMappingError(null)
     setPendingSuggestedSlug(result.preview.suggested_slug)
     setPendingSourceFile(result.sourceFile)
     setPendingImport(prepared.pendingImport)
@@ -151,18 +158,30 @@ export function NewRecipeFab() {
   }
 
   async function applyMapping() {
-    if (!pendingImport) {
+    if (!pendingImport || mappingApplying) {
       return
     }
 
-    const { body } = await applyImportMapping(pendingImport, mappingRows, catalog, refreshCatalog)
-    const content = buildImportContent(pendingImport.metadata, body)
-    setMappingOpen(false)
-    await saveMutation.mutateAsync({
-      content,
-      sourceFile: pendingSourceFile,
-      suggestedSlug: pendingSuggestedSlug,
-    })
+    setMappingApplying(true)
+    setMappingError(null)
+    setImportError(null)
+    try {
+      const { body } = await applyImportMapping(pendingImport, mappingRows, catalog, refreshCatalog)
+      const content = buildImportContentFromPending(pendingImport, body)
+      setMappingOpen(false)
+      await saveMutation.mutateAsync({
+        content,
+        sourceFile: pendingSourceFile,
+        suggestedSlug: pendingSuggestedSlug,
+      })
+    } catch (error) {
+      const message = formatImportError(error)
+      setMappingError(message)
+      setImportError(message)
+      setMappingOpen(true)
+    } finally {
+      setMappingApplying(false)
+    }
   }
 
   function closeMenu() {
@@ -233,7 +252,7 @@ export function NewRecipeFab() {
     )
   }
 
-  const busy = importMutation.isPending || saveMutation.isPending
+  const busy = importMutation.isPending || saveMutation.isPending || mappingApplying
 
   return (
     <>
@@ -317,8 +336,9 @@ export function NewRecipeFab() {
       />
 
       <ImportMappingDialog
-        applying={saveMutation.isPending}
+        applying={mappingApplying || saveMutation.isPending}
         catalog={catalog}
+        error={mappingError}
         onApply={() => void applyMapping()}
         onCancel={() => {
           clearPendingMapping()
