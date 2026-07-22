@@ -216,6 +216,10 @@ def test_match_rejects_substance_changing_partial_hits():
     assert match_catalog_ingredient("cubanelle pepper", catalog).catalog.name == "green bell pepper"
     assert match_catalog_ingredient("anaheim pepper", catalog).catalog is None
     assert match_catalog_ingredient("roast beef", catalog).catalog is None
+    # "roasted"/"red" are modifier words, but must not expand pepper → black pepper.
+    assert match_catalog_ingredient("roasted red pepper", catalog).catalog is None
+    assert match_catalog_ingredient("red pepper", catalog).catalog is None
+    assert match_catalog_ingredient("roasted pepper", catalog).catalog is None
 
     assert match_catalog_ingredient("vanilla bean", catalog).catalog.name == "vanilla bean"
     assert (
@@ -249,6 +253,42 @@ def test_match_still_allows_safe_head_noun_notes():
     egg = match_catalog_ingredient("large egg", catalog)
     assert egg.catalog is not None
     assert egg.note == "large"
+
+
+def test_apply_catalog_mapping_maps_roasted_red_pepper_as_own_ingredient(tmp_path):
+    repository = IngredientRepository(catalog_path=tmp_path / "ingredients.json")
+    repository.upsert(
+        CatalogIngredient(name="black pepper", aliases=["pepper", "ground black pepper"])
+    )
+    repository.upsert(
+        CatalogIngredient(
+            name="bell pepper",
+            aliases=["red pepper", "green pepper"],
+        )
+    )
+    repository.upsert(
+        CatalogIngredient(
+            name="roasted red peppers",
+            aliases=["roasted red pepper", "jarred roasted red peppers"],
+        )
+    )
+    repository.upsert(
+        CatalogIngredient(
+            name="red pepper flakes",
+            aliases=["crushed red pepper", "crushed red pepper flakes"],
+        )
+    )
+
+    body = "Dice @roasted red pepper{1} and @chorizo{150%g}."
+    mapped, unmatched = apply_catalog_mapping(body, repository)
+    assert "@roasted red peppers{1}" in mapped
+    assert "@black pepper" not in mapped
+    assert "@bell pepper" not in mapped
+    assert unmatched == []
+
+    flakes_body = "Add @red pepper flakes{1%tsp}."
+    flakes_mapped, _ = apply_catalog_mapping(flakes_body, repository)
+    assert "@red pepper flakes{1%tsp}." in flakes_mapped
 
 
 def test_apply_catalog_mapping_does_not_corrupt_bell_pepper(tmp_path):

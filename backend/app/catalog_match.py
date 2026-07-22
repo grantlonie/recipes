@@ -304,7 +304,9 @@ def _partial_match_is_safe(
     mean the short catalog hit was wrong.
 
     Expanding short aliases (\"pepper\" → \"black pepper\", \"beef\" → \"ground beef\")
-    must not absorb variety names (\"italian frying pepper\", \"roast beef\").
+    must not absorb variety names (\"italian frying pepper\", \"roast beef\",
+    \"roasted red pepper\"). Check that before treating leftover color/cook words
+    as harmless modifiers — \"red\"/\"roasted\" are safe on onions, not on pepper.
     """
     if not note.strip():
         return True
@@ -312,11 +314,14 @@ def _partial_match_is_safe(
     tokens = [token for token in normalize_ingredient_key(note).split() if token]
     if not tokens:
         return True
+
+    # pepper → black pepper with leftover "roasted red" must not count as safe.
+    if _is_expanding_alias(matched_form, catalog_name):
+        return False
+
     if all(token in _MODIFIER_WORDS for token in tokens):
         return True
     if any(token in _SUBSTANCE_CHANGE_TOKENS for token in tokens):
-        return False
-    if _is_expanding_alias(matched_form, catalog_name):
         return False
     if _matched_phrase_is_suffix(imported_name, matched_form):
         return True

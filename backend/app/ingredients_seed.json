@@ -1,62 +1,54 @@
 {
-  "version": 7,
+  "version": 8,
   "ingredients": [
     {
       "name": "00 flour",
-      "density_kg_m3": 490,
+      "density_kg_m3": 490.0,
       "aliases": []
     },
     {
       "name": "absinthe",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "agave nectar",
-      "density_kg_m3": 1420,
-      "aliases": [
-        "agave syrup"
-      ]
+      "density_kg_m3": 1420.0,
+      "aliases": ["agave syrup"]
     },
     {
       "name": "aleppo pepper",
-      "density_kg_m3": 530,
+      "density_kg_m3": 530.0,
       "aliases": []
     },
     {
       "name": "all-purpose flour",
-      "density_kg_m3": 530,
-      "aliases": [
-        "ap flour",
-        "flour",
-        "plain flour"
-      ]
+      "density_kg_m3": 530.0,
+      "aliases": ["ap flour", "flour", "plain flour"]
     },
     {
       "name": "allspice",
-      "density_kg_m3": 450,
-      "aliases": [
-        "ground allspice"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["ground allspice"]
     },
     {
       "name": "almond butter",
-      "density_kg_m3": 1150,
+      "density_kg_m3": 1150.0,
       "aliases": []
     },
     {
       "name": "almond extract",
-      "density_kg_m3": 880,
+      "density_kg_m3": 880.0,
       "aliases": []
     },
     {
       "name": "almond flour",
-      "density_kg_m3": 400,
+      "density_kg_m3": 400.0,
       "aliases": []
     },
     {
       "name": "almond meal",
-      "density_kg_m3": 560,
+      "density_kg_m3": 560.0,
       "aliases": []
     },
     {
@@ -66,17 +58,17 @@
     },
     {
       "name": "almonds",
-      "density_kg_m3": 460,
+      "density_kg_m3": 460.0,
       "aliases": []
     },
     {
       "name": "amaranth flour",
-      "density_kg_m3": 440,
+      "density_kg_m3": 440.0,
       "aliases": []
     },
     {
       "name": "amaro nonino",
-      "density_kg_m3": 1060,
+      "density_kg_m3": 1060.0,
       "aliases": []
     },
     {
@@ -91,29 +83,27 @@
     },
     {
       "name": "anchovy paste",
-      "density_kg_m3": 1210,
+      "density_kg_m3": 1210.0,
       "aliases": []
     },
     {
       "name": "angostura bitters",
-      "density_kg_m3": 940,
-      "aliases": [
-        "angostura"
-      ]
+      "density_kg_m3": 940.0,
+      "aliases": ["angostura"]
     },
     {
       "name": "anise seeds",
-      "density_kg_m3": 500,
+      "density_kg_m3": 500.0,
       "aliases": []
     },
     {
       "name": "apple cider",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
       "name": "apple juice concentrate",
-      "density_kg_m3": 1180,
+      "density_kg_m3": 1180.0,
       "aliases": []
     },
     {
@@ -123,15 +113,13 @@
     },
     {
       "name": "applesauce",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
       "name": "apricot jam",
-      "density_kg_m3": 1300,
-      "aliases": [
-        "apricot preserves"
-      ]
+      "density_kg_m3": 1300.0,
+      "aliases": ["apricot preserves"]
     },
     {
       "name": "apricots",
@@ -145,12 +133,12 @@
     },
     {
       "name": "asiago",
-      "density_kg_m3": 420,
+      "density_kg_m3": 420.0,
       "aliases": []
     },
     {
       "name": "asiago cheese",
-      "density_kg_m3": 1060,
+      "density_kg_m3": 1060.0,
       "aliases": []
     },
     {
@@ -165,15 +153,13 @@
     },
     {
       "name": "baking powder",
-      "density_kg_m3": 930,
+      "density_kg_m3": 930.0,
       "aliases": []
     },
     {
       "name": "baking soda",
-      "density_kg_m3": 970,
-      "aliases": [
-        "bicarbonate of soda"
-      ]
+      "density_kg_m3": 970.0,
+      "aliases": ["bicarbonate of soda"]
     },
     {
       "name": "bananas",
@@ -182,34 +168,32 @@
     },
     {
       "name": "barley",
-      "density_kg_m3": 910,
+      "density_kg_m3": 910.0,
       "aliases": []
     },
     {
       "name": "barley flakes",
-      "density_kg_m3": 390,
+      "density_kg_m3": 390.0,
       "aliases": []
     },
     {
       "name": "barley flour",
-      "density_kg_m3": 360,
+      "density_kg_m3": 360.0,
       "aliases": []
     },
     {
       "name": "barley malt syrup",
-      "density_kg_m3": 1380,
+      "density_kg_m3": 1380.0,
       "aliases": []
     },
     {
       "name": "basil",
-      "density_kg_m3": 280,
-      "aliases": [
-        "dried basil"
-      ]
+      "density_kg_m3": 280.0,
+      "aliases": ["dried basil"]
     },
     {
       "name": "basil pesto",
-      "density_kg_m3": 950,
+      "density_kg_m3": 950.0,
       "aliases": []
     },
     {
@@ -224,14 +208,12 @@
     },
     {
       "name": "beef broth",
-      "density_kg_m3": 1010,
-      "aliases": [
-        "beef stock"
-      ]
+      "density_kg_m3": 1010.0,
+      "aliases": ["beef stock"]
     },
     {
       "name": "beer",
-      "density_kg_m3": 1010,
+      "density_kg_m3": 1010.0,
       "aliases": []
     },
     {
@@ -241,12 +223,12 @@
     },
     {
       "name": "benedictine",
-      "density_kg_m3": 1060,
+      "density_kg_m3": 1060.0,
       "aliases": []
     },
     {
       "name": "berries",
-      "density_kg_m3": 600,
+      "density_kg_m3": 600.0,
       "aliases": []
     },
     {
@@ -256,38 +238,28 @@
     },
     {
       "name": "bisquick",
-      "density_kg_m3": 560,
+      "density_kg_m3": 560.0,
       "aliases": []
     },
     {
       "name": "bittersweet aperitivo",
-      "density_kg_m3": 1040,
-      "aliases": [
-        "aperitivo",
-        "bittersweet orange-red aperitivo"
-      ]
+      "density_kg_m3": 1040.0,
+      "aliases": ["aperitivo", "bittersweet orange-red aperitivo"]
     },
     {
       "name": "black beans",
-      "density_kg_m3": 780,
+      "density_kg_m3": 780.0,
       "aliases": []
     },
     {
       "name": "black pepper",
-      "density_kg_m3": 480,
-      "aliases": [
-        "freshly ground black pepper",
-        "ground black pepper",
-        "ground pepper",
-        "pepper"
-      ]
+      "density_kg_m3": 480.0,
+      "aliases": ["freshly ground black pepper", "ground black pepper", "ground pepper", "pepper"]
     },
     {
       "name": "black peppercorns",
       "density_kg_m3": null,
-      "aliases": [
-        "peppercorns"
-      ]
+      "aliases": ["peppercorns"]
     },
     {
       "name": "blackberries",
@@ -297,14 +269,11 @@
     {
       "name": "block cheese",
       "density_kg_m3": null,
-      "aliases": [
-        "cheddar cheese",
-        "mozzarella cheese"
-      ]
+      "aliases": ["cheddar cheese", "mozzarella cheese"]
     },
     {
       "name": "blue cheese",
-      "density_kg_m3": 980,
+      "density_kg_m3": 980.0,
       "aliases": []
     },
     {
@@ -314,7 +283,7 @@
     },
     {
       "name": "blueberry juice",
-      "density_kg_m3": 1020,
+      "density_kg_m3": 1020.0,
       "aliases": []
     },
     {
@@ -324,20 +293,18 @@
     },
     {
       "name": "bourbon",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "bran cereal",
-      "density_kg_m3": 250,
+      "density_kg_m3": 250.0,
       "aliases": []
     },
     {
       "name": "brandy",
-      "density_kg_m3": 1060,
-      "aliases": [
-        "fruit brandy"
-      ]
+      "density_kg_m3": 1060.0,
+      "aliases": ["fruit brandy"]
     },
     {
       "name": "bread",
@@ -346,25 +313,18 @@
     },
     {
       "name": "bread flour",
-      "density_kg_m3": 540,
-      "aliases": [
-        "strong white flour"
-      ]
+      "density_kg_m3": 540.0,
+      "aliases": ["strong white flour"]
     },
     {
       "name": "breadcrumbs",
-      "density_kg_m3": 460,
-      "aliases": [
-        "bread crumbs",
-        "panko"
-      ]
+      "density_kg_m3": 460.0,
+      "aliases": ["bread crumbs", "panko"]
     },
     {
       "name": "brie cheese",
-      "density_kg_m3": 1000,
-      "aliases": [
-        "brie"
-      ]
+      "density_kg_m3": 1000.0,
+      "aliases": ["brie"]
     },
     {
       "name": "brioche",
@@ -383,22 +343,18 @@
     },
     {
       "name": "brown rice",
-      "density_kg_m3": 800,
+      "density_kg_m3": 800.0,
       "aliases": []
     },
     {
       "name": "brown rice flour",
-      "density_kg_m3": 540,
+      "density_kg_m3": 540.0,
       "aliases": []
     },
     {
       "name": "brown sugar",
-      "density_kg_m3": 930,
-      "aliases": [
-        "dark brown sugar",
-        "light brown sugar",
-        "packed brown sugar"
-      ]
+      "density_kg_m3": 930.0,
+      "aliases": ["dark brown sugar", "light brown sugar", "packed brown sugar"]
     },
     {
       "name": "brussels sprouts",
@@ -412,41 +368,37 @@
     },
     {
       "name": "buckwheat",
-      "density_kg_m3": 720,
+      "density_kg_m3": 720.0,
       "aliases": []
     },
     {
       "name": "buckwheat flour",
-      "density_kg_m3": 510,
+      "density_kg_m3": 510.0,
       "aliases": []
     },
     {
       "name": "buckwheat groats",
-      "density_kg_m3": 620,
+      "density_kg_m3": 620.0,
       "aliases": []
     },
     {
       "name": "bulgur",
-      "density_kg_m3": 600,
+      "density_kg_m3": 600.0,
       "aliases": []
     },
     {
       "name": "butter",
-      "density_kg_m3": 910,
-      "aliases": [
-        "melted butter",
-        "salted butter",
-        "unsalted butter"
-      ]
+      "density_kg_m3": 910.0,
+      "aliases": ["melted butter", "salted butter", "unsalted butter"]
     },
     {
       "name": "buttermilk",
-      "density_kg_m3": 1030,
+      "density_kg_m3": 1030.0,
       "aliases": []
     },
     {
       "name": "buttermilk powder",
-      "density_kg_m3": 610,
+      "density_kg_m3": 610.0,
       "aliases": []
     },
     {
@@ -461,68 +413,62 @@
     },
     {
       "name": "cacao nibs",
-      "density_kg_m3": 510,
+      "density_kg_m3": 510.0,
       "aliases": []
     },
     {
       "name": "cajun seasoning",
-      "density_kg_m3": 650,
-      "aliases": [
-        "cajun spice mix"
-      ]
+      "density_kg_m3": 650.0,
+      "aliases": ["cajun spice mix"]
     },
     {
       "name": "cake flour",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "calvados",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "camembert",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
       "name": "campari",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
       "name": "candied citrus peel",
-      "density_kg_m3": 650,
+      "density_kg_m3": 650.0,
       "aliases": []
     },
     {
       "name": "candied lemon peel",
-      "density_kg_m3": 630,
+      "density_kg_m3": 630.0,
       "aliases": []
     },
     {
       "name": "candied orange peel",
-      "density_kg_m3": 420,
+      "density_kg_m3": 420.0,
       "aliases": []
     },
     {
       "name": "canned pumpkin",
-      "density_kg_m3": 1040,
-      "aliases": [
-        "pumpkin puree"
-      ]
+      "density_kg_m3": 1040.0,
+      "aliases": ["pumpkin puree"]
     },
     {
       "name": "cannellini beans",
-      "density_kg_m3": 780,
-      "aliases": [
-        "white kidney beans"
-      ]
+      "density_kg_m3": 780.0,
+      "aliases": ["white kidney beans"]
     },
     {
       "name": "cantaloupe",
-      "density_kg_m3": 680,
+      "density_kg_m3": 680.0,
       "aliases": []
     },
     {
@@ -532,22 +478,18 @@
     },
     {
       "name": "caramel",
-      "density_kg_m3": 1200,
+      "density_kg_m3": 1200.0,
       "aliases": []
     },
     {
       "name": "caraway seeds",
-      "density_kg_m3": 420,
-      "aliases": [
-        "caraway"
-      ]
+      "density_kg_m3": 420.0,
+      "aliases": ["caraway"]
     },
     {
       "name": "cardamom",
-      "density_kg_m3": 450,
-      "aliases": [
-        "ground cardamom"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["ground cardamom"]
     },
     {
       "name": "carrots",
@@ -556,12 +498,12 @@
     },
     {
       "name": "cashews",
-      "density_kg_m3": 560,
+      "density_kg_m3": 560.0,
       "aliases": []
     },
     {
       "name": "caster sugar",
-      "density_kg_m3": 880,
+      "density_kg_m3": 880.0,
       "aliases": []
     },
     {
@@ -571,11 +513,8 @@
     },
     {
       "name": "cayenne pepper",
-      "density_kg_m3": 450,
-      "aliases": [
-        "cayenne",
-        "ground cayenne"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["cayenne", "ground cayenne"]
     },
     {
       "name": "celery",
@@ -584,12 +523,12 @@
     },
     {
       "name": "celery leaves",
-      "density_kg_m3": 100,
+      "density_kg_m3": 100.0,
       "aliases": []
     },
     {
       "name": "celery seeds",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
@@ -604,29 +543,23 @@
     },
     {
       "name": "cherry concentrate",
-      "density_kg_m3": 1420,
+      "density_kg_m3": 1420.0,
       "aliases": []
     },
     {
       "name": "chia seeds",
-      "density_kg_m3": 630,
+      "density_kg_m3": 630.0,
       "aliases": []
     },
     {
       "name": "chicken breasts",
       "density_kg_m3": null,
-      "aliases": [
-        "chicken"
-      ]
+      "aliases": ["chicken"]
     },
     {
       "name": "chicken broth",
-      "density_kg_m3": 1010,
-      "aliases": [
-        "broth",
-        "chicken stock",
-        "stock"
-      ]
+      "density_kg_m3": 1010.0,
+      "aliases": ["broth", "chicken stock", "stock"]
     },
     {
       "name": "chicken thighs",
@@ -635,39 +568,32 @@
     },
     {
       "name": "chickpea flour",
-      "density_kg_m3": 360,
+      "density_kg_m3": 360.0,
       "aliases": []
     },
     {
       "name": "chickpeas",
-      "density_kg_m3": 800,
-      "aliases": [
-        "garbanzo beans"
-      ]
+      "density_kg_m3": 800.0,
+      "aliases": ["garbanzo beans"]
     },
     {
       "name": "chile sauce",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "chili powder",
-      "density_kg_m3": 480,
-      "aliases": [
-        "chile powder"
-      ]
+      "density_kg_m3": 480.0,
+      "aliases": ["chile powder"]
     },
     {
       "name": "chinese five-spice",
-      "density_kg_m3": 450,
-      "aliases": [
-        "five spice",
-        "five-spice powder"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["five spice", "five-spice powder"]
     },
     {
       "name": "chipotle in adobo",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
@@ -682,7 +608,7 @@
     },
     {
       "name": "chocolate chips",
-      "density_kg_m3": 720,
+      "density_kg_m3": 720.0,
       "aliases": []
     },
     {
@@ -698,39 +624,32 @@
     {
       "name": "cilantro",
       "density_kg_m3": null,
-      "aliases": [
-        "fresh coriander"
-      ]
+      "aliases": ["fresh coriander"]
     },
     {
       "name": "cinnamon sugar",
-      "density_kg_m3": 650,
+      "density_kg_m3": 650.0,
       "aliases": []
     },
     {
       "name": "clam juice",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
       "name": "cloves",
-      "density_kg_m3": 450,
-      "aliases": [
-        "ground cloves"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["ground cloves"]
     },
     {
       "name": "club soda",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
       "name": "cocoa powder",
-      "density_kg_m3": 420,
-      "aliases": [
-        "cocoa",
-        "unsweetened cocoa"
-      ]
+      "density_kg_m3": 420.0,
+      "aliases": ["cocoa", "unsweetened cocoa"]
     },
     {
       "name": "coconut",
@@ -739,55 +658,52 @@
     },
     {
       "name": "coconut aminos",
-      "density_kg_m3": 1070,
+      "density_kg_m3": 1070.0,
       "aliases": []
     },
     {
       "name": "coconut chips",
-      "density_kg_m3": 350,
+      "density_kg_m3": 350.0,
       "aliases": []
     },
     {
       "name": "coconut cream",
-      "density_kg_m3": 1200,
+      "density_kg_m3": 1200.0,
       "aliases": []
     },
     {
       "name": "coconut flakes",
       "density_kg_m3": null,
-      "aliases": [
-        "shredded coconut",
-        "sweetened shredded coconut"
-      ]
+      "aliases": ["shredded coconut", "sweetened shredded coconut"]
     },
     {
       "name": "coconut flour",
-      "density_kg_m3": 540,
+      "density_kg_m3": 540.0,
       "aliases": []
     },
     {
       "name": "coconut milk",
-      "density_kg_m3": 970,
+      "density_kg_m3": 970.0,
       "aliases": []
     },
     {
       "name": "coconut milk powder",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "coconut oil",
-      "density_kg_m3": 920,
+      "density_kg_m3": 920.0,
       "aliases": []
     },
     {
       "name": "coconut sugar",
-      "density_kg_m3": 650,
+      "density_kg_m3": 650.0,
       "aliases": []
     },
     {
       "name": "cognac",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
@@ -797,21 +713,17 @@
     },
     {
       "name": "coriander",
-      "density_kg_m3": 400,
-      "aliases": [
-        "ground coriander"
-      ]
+      "density_kg_m3": 400.0,
+      "aliases": ["ground coriander"]
     },
     {
       "name": "corn",
       "density_kg_m3": null,
-      "aliases": [
-        "corn kernels"
-      ]
+      "aliases": ["corn kernels"]
     },
     {
       "name": "corn syrup",
-      "density_kg_m3": 1440,
+      "density_kg_m3": 1440.0,
       "aliases": []
     },
     {
@@ -821,35 +733,32 @@
     },
     {
       "name": "cornmeal",
-      "density_kg_m3": 640,
+      "density_kg_m3": 640.0,
       "aliases": []
     },
     {
       "name": "cornstarch",
-      "density_kg_m3": 540,
-      "aliases": [
-        "corn starch",
-        "cornflour"
-      ]
+      "density_kg_m3": 540.0,
+      "aliases": ["corn starch", "cornflour"]
     },
     {
       "name": "cotija",
-      "density_kg_m3": 420,
+      "density_kg_m3": 420.0,
       "aliases": []
     },
     {
       "name": "cottage cheese",
-      "density_kg_m3": 960,
+      "density_kg_m3": 960.0,
       "aliases": []
     },
     {
       "name": "couscous",
-      "density_kg_m3": 640,
+      "density_kg_m3": 640.0,
       "aliases": []
     },
     {
       "name": "cracked wheat",
-      "density_kg_m3": 630,
+      "density_kg_m3": 630.0,
       "aliases": []
     },
     {
@@ -859,17 +768,13 @@
     },
     {
       "name": "cranberries",
-      "density_kg_m3": 400,
-      "aliases": [
-        "dried cranberries"
-      ]
+      "density_kg_m3": 400.0,
+      "aliases": ["dried cranberries"]
     },
     {
       "name": "cranberry juice",
-      "density_kg_m3": 1040,
-      "aliases": [
-        "cranberry liquid"
-      ]
+      "density_kg_m3": 1040.0,
+      "aliases": ["cranberry liquid"]
     },
     {
       "name": "cream cheese",
@@ -878,19 +783,17 @@
     },
     {
       "name": "cream of coconut",
-      "density_kg_m3": 1200,
+      "density_kg_m3": 1200.0,
       "aliases": []
     },
     {
       "name": "creme fraiche",
-      "density_kg_m3": 990,
-      "aliases": [
-        "cr\u00e8me fra\u00eeche"
-      ]
+      "density_kg_m3": 990.0,
+      "aliases": ["cr\u00e8me fra\u00eeche"]
     },
     {
       "name": "creole seasoning",
-      "density_kg_m3": 700,
+      "density_kg_m3": 700.0,
       "aliases": []
     },
     {
@@ -910,19 +813,17 @@
     },
     {
       "name": "cumin",
-      "density_kg_m3": 450,
-      "aliases": [
-        "ground cumin"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["ground cumin"]
     },
     {
       "name": "cumin seeds",
-      "density_kg_m3": 530,
+      "density_kg_m3": 530.0,
       "aliases": []
     },
     {
       "name": "currants",
-      "density_kg_m3": 600,
+      "density_kg_m3": 600.0,
       "aliases": []
     },
     {
@@ -932,40 +833,37 @@
     },
     {
       "name": "curry powder",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
       "name": "dates",
-      "density_kg_m3": 700,
+      "density_kg_m3": 700.0,
       "aliases": []
     },
     {
       "name": "demerara sugar",
-      "density_kg_m3": 930,
+      "density_kg_m3": 930.0,
       "aliases": []
     },
     {
       "name": "dend\u00ea oil",
-      "density_kg_m3": 910,
+      "density_kg_m3": 910.0,
       "aliases": []
     },
     {
       "name": "dijon mustard",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "dill",
-      "density_kg_m3": 280,
-      "aliases": [
-        "dill weed",
-        "dried dill"
-      ]
+      "density_kg_m3": 280.0,
+      "aliases": ["dill weed", "dried dill"]
     },
     {
       "name": "doubanjiang",
-      "density_kg_m3": 1150,
+      "density_kg_m3": 1150.0,
       "aliases": []
     },
     {
@@ -980,24 +878,22 @@
     },
     {
       "name": "dried potato flakes",
-      "density_kg_m3": 360,
+      "density_kg_m3": 360.0,
       "aliases": []
     },
     {
       "name": "dry vermouth",
-      "density_kg_m3": 1030,
-      "aliases": [
-        "white vermouth"
-      ]
+      "density_kg_m3": 1030.0,
+      "aliases": ["white vermouth"]
     },
     {
       "name": "dulce de leche",
-      "density_kg_m3": 1300,
+      "density_kg_m3": 1300.0,
       "aliases": []
     },
     {
       "name": "durum flour",
-      "density_kg_m3": 520,
+      "density_kg_m3": 520.0,
       "aliases": []
     },
     {
@@ -1032,81 +928,73 @@
     },
     {
       "name": "english peas",
-      "density_kg_m3": 640,
+      "density_kg_m3": 640.0,
       "aliases": []
     },
     {
       "name": "espresso",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
       "name": "espresso powder",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "farro",
-      "density_kg_m3": 780,
+      "density_kg_m3": 780.0,
       "aliases": []
     },
     {
       "name": "fava beans",
-      "density_kg_m3": 770,
+      "density_kg_m3": 770.0,
       "aliases": []
     },
     {
       "name": "fennel seeds",
-      "density_kg_m3": 420,
-      "aliases": [
-        "fennel"
-      ]
+      "density_kg_m3": 420.0,
+      "aliases": ["fennel"]
     },
     {
       "name": "feta cheese",
       "density_kg_m3": null,
-      "aliases": [
-        "feta"
-      ]
+      "aliases": ["feta"]
     },
     {
       "name": "figs",
-      "density_kg_m3": 630,
+      "density_kg_m3": 630.0,
       "aliases": []
     },
     {
       "name": "fish fillets",
       "density_kg_m3": null,
-      "aliases": [
-        "white flaky fish fillets"
-      ]
+      "aliases": ["white flaky fish fillets"]
     },
     {
       "name": "fish sauce",
-      "density_kg_m3": 1120,
+      "density_kg_m3": 1120.0,
       "aliases": []
     },
     {
       "name": "flax meal",
-      "density_kg_m3": 510,
+      "density_kg_m3": 510.0,
       "aliases": []
     },
     {
       "name": "flaxseed",
-      "density_kg_m3": 590,
+      "density_kg_m3": 590.0,
       "aliases": []
     },
     {
       "name": "fleur de sel",
-      "density_kg_m3": 1220,
+      "density_kg_m3": 1220.0,
       "aliases": []
     },
     {
       "name": "fontina",
       "density_kg_m3": null,
-      "aliases": [
-        "fontina cheese"
-      ]
+      "aliases": ["fontina cheese"]
     },
     {
       "name": "fresh berries",
@@ -1115,17 +1003,17 @@
     },
     {
       "name": "fresh herbs",
-      "density_kg_m3": 300,
+      "density_kg_m3": 300.0,
       "aliases": []
     },
     {
       "name": "fresh spinach leaves",
-      "density_kg_m3": 30,
+      "density_kg_m3": 30.0,
       "aliases": []
     },
     {
       "name": "frozen berries",
-      "density_kg_m3": 610,
+      "density_kg_m3": 610.0,
       "aliases": []
     },
     {
@@ -1135,7 +1023,7 @@
     },
     {
       "name": "garam masala",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
@@ -1145,49 +1033,47 @@
     },
     {
       "name": "garlic powder",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "gelatin",
-      "density_kg_m3": 680,
+      "density_kg_m3": 680.0,
       "aliases": []
     },
     {
       "name": "gew\u00fcrztraminer",
-      "density_kg_m3": 990,
+      "density_kg_m3": 990.0,
       "aliases": []
     },
     {
       "name": "ghee",
-      "density_kg_m3": 910,
+      "density_kg_m3": 910.0,
       "aliases": []
     },
     {
       "name": "gin",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "ginger",
-      "density_kg_m3": 940,
-      "aliases": [
-        "fresh ginger"
-      ]
+      "density_kg_m3": 940.0,
+      "aliases": ["fresh ginger"]
     },
     {
       "name": "ginger syrup",
-      "density_kg_m3": 1330,
+      "density_kg_m3": 1330.0,
       "aliases": []
     },
     {
       "name": "gluten-free flour",
-      "density_kg_m3": 660,
+      "density_kg_m3": 660.0,
       "aliases": []
     },
     {
       "name": "glutinous rice flour",
-      "density_kg_m3": 510,
+      "density_kg_m3": 510.0,
       "aliases": []
     },
     {
@@ -1198,10 +1084,7 @@
     {
       "name": "goat cheese",
       "density_kg_m3": null,
-      "aliases": [
-        "chevre",
-        "ch\u00e8vre"
-      ]
+      "aliases": ["chevre", "ch\u00e8vre"]
     },
     {
       "name": "gochujang",
@@ -1215,7 +1098,7 @@
     },
     {
       "name": "golden syrup",
-      "density_kg_m3": 1420,
+      "density_kg_m3": 1420.0,
       "aliases": []
     },
     {
@@ -1230,20 +1113,17 @@
     },
     {
       "name": "granola",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "granulated sugar",
-      "density_kg_m3": 850,
-      "aliases": [
-        "sugar",
-        "white sugar"
-      ]
+      "density_kg_m3": 850.0,
+      "aliases": ["sugar", "white sugar"]
     },
     {
       "name": "grapefruit juice",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
@@ -1253,21 +1133,17 @@
     },
     {
       "name": "grapeseed oil",
-      "density_kg_m3": 920,
+      "density_kg_m3": 920.0,
       "aliases": []
     },
     {
       "name": "grated parmesan",
-      "density_kg_m3": 420,
-      "aliases": [
-        "parmesan",
-        "parmesan cheese",
-        "parmigiano"
-      ]
+      "density_kg_m3": 420.0,
+      "aliases": ["parmesan", "parmesan cheese", "parmigiano"]
     },
     {
       "name": "gravy",
-      "density_kg_m3": 1030,
+      "density_kg_m3": 1030.0,
       "aliases": []
     },
     {
@@ -1286,6 +1162,8 @@
         "cubanelle pepper",
         "green pepper",
         "italian frying pepper",
+        "red pepper",
+        "red peppers",
         "sweet pepper"
       ]
     },
@@ -1307,63 +1185,47 @@
     {
       "name": "ground beef",
       "density_kg_m3": null,
-      "aliases": [
-        "beef",
-        "minced beef"
-      ]
+      "aliases": ["beef", "minced beef"]
     },
     {
       "name": "ground cinnamon",
-      "density_kg_m3": 450,
-      "aliases": [
-        "cinnamon"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["cinnamon"]
     },
     {
       "name": "ground flaxseed",
-      "density_kg_m3": 490,
+      "density_kg_m3": 490.0,
       "aliases": []
     },
     {
       "name": "ground ginger",
-      "density_kg_m3": 450,
-      "aliases": [
-        "ginger powder"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["ginger powder"]
     },
     {
       "name": "ground lamb",
       "density_kg_m3": null,
-      "aliases": [
-        "lamb"
-      ]
+      "aliases": ["lamb"]
     },
     {
       "name": "ground mace",
-      "density_kg_m3": 400,
+      "density_kg_m3": 400.0,
       "aliases": []
     },
     {
       "name": "ground pork",
       "density_kg_m3": null,
-      "aliases": [
-        "pork"
-      ]
+      "aliases": ["pork"]
     },
     {
       "name": "ground turkey",
       "density_kg_m3": null,
-      "aliases": [
-        "turkey"
-      ]
+      "aliases": ["turkey"]
     },
     {
       "name": "gruyere cheese",
       "density_kg_m3": null,
-      "aliases": [
-        "gruyere",
-        "gruy\u00e8re"
-      ]
+      "aliases": ["gruyere", "gruy\u00e8re"]
     },
     {
       "name": "guajillo chiles",
@@ -1372,7 +1234,7 @@
     },
     {
       "name": "guinness",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
@@ -1387,7 +1249,7 @@
     },
     {
       "name": "half-and-half",
-      "density_kg_m3": 1020,
+      "density_kg_m3": 1020.0,
       "aliases": []
     },
     {
@@ -1397,15 +1259,13 @@
     },
     {
       "name": "hazelnut flour",
-      "density_kg_m3": 380,
+      "density_kg_m3": 380.0,
       "aliases": []
     },
     {
       "name": "hazelnut spread",
-      "density_kg_m3": 1350,
-      "aliases": [
-        "nutella"
-      ]
+      "density_kg_m3": 1350.0,
+      "aliases": ["nutella"]
     },
     {
       "name": "hazelnuts",
@@ -1414,75 +1274,62 @@
     },
     {
       "name": "heavy cream",
-      "density_kg_m3": 990,
-      "aliases": [
-        "cream",
-        "whipped cream",
-        "whipping cream"
-      ]
+      "density_kg_m3": 990.0,
+      "aliases": ["cream", "whipped cream", "whipping cream"]
     },
     {
       "name": "hoisin sauce",
-      "density_kg_m3": 1300,
+      "density_kg_m3": 1300.0,
       "aliases": []
     },
     {
       "name": "honey",
-      "density_kg_m3": 1420,
+      "density_kg_m3": 1420.0,
       "aliases": []
     },
     {
       "name": "hot sauce",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
       "name": "ice",
-      "density_kg_m3": 917,
+      "density_kg_m3": 917.0,
       "aliases": []
     },
     {
       "name": "instant clearjel",
-      "density_kg_m3": 740,
+      "density_kg_m3": 740.0,
       "aliases": []
     },
     {
       "name": "instant vanilla pudding mix",
       "density_kg_m3": null,
-      "aliases": [
-        "instant pudding mix",
-        "vanilla pudding mix"
-      ]
+      "aliases": ["instant pudding mix", "vanilla pudding mix"]
     },
     {
       "name": "instant yeast",
-      "density_kg_m3": 640,
-      "aliases": [
-        "active dry yeast",
-        "fast-action dried yeast",
-        "yeast"
-      ]
+      "density_kg_m3": 640.0,
+      "aliases": ["active dry yeast", "fast-action dried yeast", "yeast"]
     },
     {
       "name": "italian herb seasoning",
-      "density_kg_m3": 470,
+      "density_kg_m3": 470.0,
       "aliases": []
     },
     {
       "name": "italian sausage",
       "density_kg_m3": null,
-      "aliases": [
-        "italian sausage links"
-      ]
+      "aliases": ["italian sausage links"]
     },
     {
       "name": "italian seasoning",
-      "density_kg_m3": 280,
+      "density_kg_m3": 280.0,
       "aliases": []
     },
     {
       "name": "jalapeno brine",
-      "density_kg_m3": 1030,
+      "density_kg_m3": 1030.0,
       "aliases": []
     },
     {
@@ -1497,7 +1344,7 @@
     },
     {
       "name": "kalamata olives",
-      "density_kg_m3": 650,
+      "density_kg_m3": 650.0,
       "aliases": []
     },
     {
@@ -1507,19 +1354,17 @@
     },
     {
       "name": "kecap manis",
-      "density_kg_m3": 1350,
+      "density_kg_m3": 1350.0,
       "aliases": []
     },
     {
       "name": "ketchup",
-      "density_kg_m3": 1140,
-      "aliases": [
-        "catsup"
-      ]
+      "density_kg_m3": 1140.0,
+      "aliases": ["catsup"]
     },
     {
       "name": "key lime juice",
-      "density_kg_m3": 960,
+      "density_kg_m3": 960.0,
       "aliases": []
     },
     {
@@ -1529,12 +1374,12 @@
     },
     {
       "name": "lager",
-      "density_kg_m3": 1010,
+      "density_kg_m3": 1010.0,
       "aliases": []
     },
     {
       "name": "lard",
-      "density_kg_m3": 960,
+      "density_kg_m3": 960.0,
       "aliases": []
     },
     {
@@ -1549,17 +1394,17 @@
     },
     {
       "name": "lemon curd",
-      "density_kg_m3": 960,
+      "density_kg_m3": 960.0,
       "aliases": []
     },
     {
       "name": "lemon extract",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "lemon juice",
-      "density_kg_m3": 1030,
+      "density_kg_m3": 1030.0,
       "aliases": []
     },
     {
@@ -1589,7 +1434,7 @@
     },
     {
       "name": "lemongrass paste",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
@@ -1599,22 +1444,22 @@
     },
     {
       "name": "lentils",
-      "density_kg_m3": 800,
+      "density_kg_m3": 800.0,
       "aliases": []
     },
     {
       "name": "light corn syrup",
-      "density_kg_m3": 1390,
+      "density_kg_m3": 1390.0,
       "aliases": []
     },
     {
       "name": "lillet blanc",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
       "name": "lime juice",
-      "density_kg_m3": 1030,
+      "density_kg_m3": 1030.0,
       "aliases": []
     },
     {
@@ -1624,7 +1469,7 @@
     },
     {
       "name": "limoncello",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
@@ -1634,7 +1479,7 @@
     },
     {
       "name": "macadamia nuts",
-      "density_kg_m3": 630,
+      "density_kg_m3": 630.0,
       "aliases": []
     },
     {
@@ -1644,27 +1489,27 @@
     },
     {
       "name": "madeira",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
       "name": "maggi seasoning",
-      "density_kg_m3": 1200,
+      "density_kg_m3": 1200.0,
       "aliases": []
     },
     {
       "name": "malt syrup",
-      "density_kg_m3": 1450,
+      "density_kg_m3": 1450.0,
       "aliases": []
     },
     {
       "name": "malted milk powder",
-      "density_kg_m3": 590,
+      "density_kg_m3": 590.0,
       "aliases": []
     },
     {
       "name": "malted wheat flakes",
-      "density_kg_m3": 540,
+      "density_kg_m3": 540.0,
       "aliases": []
     },
     {
@@ -1674,32 +1519,32 @@
     },
     {
       "name": "maple cream",
-      "density_kg_m3": 1420,
+      "density_kg_m3": 1420.0,
       "aliases": []
     },
     {
       "name": "maple sugar",
-      "density_kg_m3": 660,
+      "density_kg_m3": 660.0,
       "aliases": []
     },
     {
       "name": "maple syrup",
-      "density_kg_m3": 1330,
+      "density_kg_m3": 1330.0,
       "aliases": []
     },
     {
       "name": "maraschino cherries",
-      "density_kg_m3": 700,
+      "density_kg_m3": 700.0,
       "aliases": []
     },
     {
       "name": "maraschino liqueur",
-      "density_kg_m3": 1080,
+      "density_kg_m3": 1080.0,
       "aliases": []
     },
     {
       "name": "marinara sauce",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
@@ -1709,63 +1554,57 @@
     },
     {
       "name": "marmalade",
-      "density_kg_m3": 1350,
+      "density_kg_m3": 1350.0,
       "aliases": []
     },
     {
       "name": "marshmallows",
-      "density_kg_m3": 180,
+      "density_kg_m3": 180.0,
       "aliases": []
     },
     {
       "name": "marzipan",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "masa harina",
-      "density_kg_m3": 390,
+      "density_kg_m3": 390.0,
       "aliases": []
     },
     {
       "name": "mascarpone cheese",
       "density_kg_m3": null,
-      "aliases": [
-        "mascarpone"
-      ]
+      "aliases": ["mascarpone"]
     },
     {
       "name": "masoor dal",
-      "density_kg_m3": 800,
+      "density_kg_m3": 800.0,
       "aliases": []
     },
     {
       "name": "matcha powder",
-      "density_kg_m3": 410,
+      "density_kg_m3": 410.0,
       "aliases": []
     },
     {
       "name": "mayonnaise",
-      "density_kg_m3": 910,
-      "aliases": [
-        "mayo"
-      ]
+      "density_kg_m3": 910.0,
+      "aliases": ["mayo"]
     },
     {
       "name": "meringue powder",
-      "density_kg_m3": 730,
+      "density_kg_m3": 730.0,
       "aliases": []
     },
     {
       "name": "milk",
-      "density_kg_m3": 1030,
-      "aliases": [
-        "whole milk"
-      ]
+      "density_kg_m3": 1030.0,
+      "aliases": ["whole milk"]
     },
     {
       "name": "millet",
-      "density_kg_m3": 870,
+      "density_kg_m3": 870.0,
       "aliases": []
     },
     {
@@ -1776,18 +1615,16 @@
     {
       "name": "miso",
       "density_kg_m3": null,
-      "aliases": [
-        "miso paste"
-      ]
+      "aliases": ["miso paste"]
     },
     {
       "name": "mixed salad greens",
-      "density_kg_m3": 60,
+      "density_kg_m3": 60.0,
       "aliases": []
     },
     {
       "name": "molasses",
-      "density_kg_m3": 1420,
+      "density_kg_m3": 1420.0,
       "aliases": []
     },
     {
@@ -1798,10 +1635,7 @@
     {
       "name": "mozzarella",
       "density_kg_m3": null,
-      "aliases": [
-        "fresh mozzarella",
-        "shredded mozzarella"
-      ]
+      "aliases": ["fresh mozzarella", "shredded mozzarella"]
     },
     {
       "name": "mushrooms",
@@ -1810,19 +1644,13 @@
     },
     {
       "name": "mustard powder",
-      "density_kg_m3": 450,
-      "aliases": [
-        "dry mustard",
-        "ground mustard"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["dry mustard", "ground mustard"]
     },
     {
       "name": "mustard seeds",
-      "density_kg_m3": 700,
-      "aliases": [
-        "black mustard seeds",
-        "yellow mustard seeds"
-      ]
+      "density_kg_m3": 700.0,
+      "aliases": ["black mustard seeds", "yellow mustard seeds"]
     },
     {
       "name": "naan",
@@ -1831,7 +1659,7 @@
     },
     {
       "name": "nectarine",
-      "density_kg_m3": 600,
+      "density_kg_m3": 600.0,
       "aliases": []
     },
     {
@@ -1846,10 +1674,8 @@
     },
     {
       "name": "nutmeg",
-      "density_kg_m3": 470,
-      "aliases": [
-        "ground nutmeg"
-      ]
+      "density_kg_m3": 470.0,
+      "aliases": ["ground nutmeg"]
     },
     {
       "name": "nuts",
@@ -1858,29 +1684,23 @@
     },
     {
       "name": "oat bran",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
       "name": "oat flour",
-      "density_kg_m3": 390,
+      "density_kg_m3": 390.0,
       "aliases": []
     },
     {
       "name": "old bay seasoning",
-      "density_kg_m3": 450,
-      "aliases": [
-        "old bay"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["old bay"]
     },
     {
       "name": "olive oil",
-      "density_kg_m3": 910,
-      "aliases": [
-        "evoo",
-        "extra virgin olive oil",
-        "oil"
-      ]
+      "density_kg_m3": 910.0,
+      "aliases": ["evoo", "extra virgin olive oil", "oil"]
     },
     {
       "name": "olives",
@@ -1889,7 +1709,7 @@
     },
     {
       "name": "onion powder",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
@@ -1904,29 +1724,23 @@
     },
     {
       "name": "orange bitters",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "orange flower water",
-      "density_kg_m3": 1000,
-      "aliases": [
-        "orange blossom water",
-        "orange-flower water"
-      ]
+      "density_kg_m3": 1000.0,
+      "aliases": ["orange blossom water", "orange-flower water"]
     },
     {
       "name": "orange juice",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
       "name": "orange liqueur",
-      "density_kg_m3": 1100,
-      "aliases": [
-        "cointreau",
-        "triple sec"
-      ]
+      "density_kg_m3": 1100.0,
+      "aliases": ["cointreau", "triple sec"]
     },
     {
       "name": "orange peel",
@@ -1945,26 +1759,22 @@
     },
     {
       "name": "oregano",
-      "density_kg_m3": 320,
-      "aliases": [
-        "dried oregano"
-      ]
+      "density_kg_m3": 320.0,
+      "aliases": ["dried oregano"]
     },
     {
       "name": "orzo",
-      "density_kg_m3": 680,
-      "aliases": [
-        "orzo pasta"
-      ]
+      "density_kg_m3": 680.0,
+      "aliases": ["orzo pasta"]
     },
     {
       "name": "oyster sauce",
-      "density_kg_m3": 1120,
+      "density_kg_m3": 1120.0,
       "aliases": []
     },
     {
       "name": "palm shortening",
-      "density_kg_m3": 760,
+      "density_kg_m3": 760.0,
       "aliases": []
     },
     {
@@ -1974,27 +1784,22 @@
     },
     {
       "name": "paprika",
-      "density_kg_m3": 460,
-      "aliases": [
-        "hungarian paprika",
-        "sweet paprika"
-      ]
+      "density_kg_m3": 460.0,
+      "aliases": ["hungarian paprika", "sweet paprika"]
     },
     {
       "name": "parmigiano-reggiano",
-      "density_kg_m3": 420,
+      "density_kg_m3": 420.0,
       "aliases": []
     },
     {
       "name": "parsley",
-      "density_kg_m3": 220,
-      "aliases": [
-        "dried parsley"
-      ]
+      "density_kg_m3": 220.0,
+      "aliases": ["dried parsley"]
     },
     {
       "name": "parsley leaves",
-      "density_kg_m3": 60,
+      "density_kg_m3": 60.0,
       "aliases": []
     },
     {
@@ -2004,7 +1809,7 @@
     },
     {
       "name": "passion fruit puree",
-      "density_kg_m3": 760,
+      "density_kg_m3": 760.0,
       "aliases": []
     },
     {
@@ -2014,7 +1819,7 @@
     },
     {
       "name": "pastry flour",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
@@ -2024,12 +1829,12 @@
     },
     {
       "name": "peanut butter",
-      "density_kg_m3": 1140,
+      "density_kg_m3": 1140.0,
       "aliases": []
     },
     {
       "name": "peanut chutney",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
@@ -2039,12 +1844,12 @@
     },
     {
       "name": "pear cider",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
       "name": "pearl barley",
-      "density_kg_m3": 700,
+      "density_kg_m3": 700.0,
       "aliases": []
     },
     {
@@ -2059,22 +1864,18 @@
     },
     {
       "name": "pecan meal",
-      "density_kg_m3": 340,
+      "density_kg_m3": 340.0,
       "aliases": []
     },
     {
       "name": "pecans",
-      "density_kg_m3": 430,
-      "aliases": [
-        "walnut or pecan pieces"
-      ]
+      "density_kg_m3": 430.0,
+      "aliases": ["walnut or pecan pieces"]
     },
     {
       "name": "pecorino romano",
       "density_kg_m3": null,
-      "aliases": [
-        "pecorino"
-      ]
+      "aliases": ["pecorino"]
     },
     {
       "name": "penne",
@@ -2083,12 +1884,12 @@
     },
     {
       "name": "peppermint candy",
-      "density_kg_m3": 800,
+      "density_kg_m3": 800.0,
       "aliases": []
     },
     {
       "name": "peppermint extract",
-      "density_kg_m3": 900,
+      "density_kg_m3": 900.0,
       "aliases": []
     },
     {
@@ -2103,12 +1904,12 @@
     },
     {
       "name": "peychaud's bitters",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
       "name": "pico de gallo",
-      "density_kg_m3": 1020,
+      "density_kg_m3": 1020.0,
       "aliases": []
     },
     {
@@ -2119,18 +1920,16 @@
     {
       "name": "pie dough",
       "density_kg_m3": null,
-      "aliases": [
-        "all-purpose pie dough"
-      ]
+      "aliases": ["all-purpose pie dough"]
     },
     {
       "name": "pilsner",
-      "density_kg_m3": 1010,
+      "density_kg_m3": 1010.0,
       "aliases": []
     },
     {
       "name": "pimento bitters",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
@@ -2140,25 +1939,23 @@
     },
     {
       "name": "pineapple",
-      "density_kg_m3": 1080,
+      "density_kg_m3": 1080.0,
       "aliases": []
     },
     {
       "name": "pineapple gum syrup",
-      "density_kg_m3": 1300,
+      "density_kg_m3": 1300.0,
       "aliases": []
     },
     {
       "name": "pistachio paste",
-      "density_kg_m3": 1320,
+      "density_kg_m3": 1320.0,
       "aliases": []
     },
     {
       "name": "pistachios",
-      "density_kg_m3": 510,
-      "aliases": [
-        "pistachio nuts"
-      ]
+      "density_kg_m3": 510.0,
+      "aliases": ["pistachio nuts"]
     },
     {
       "name": "pita",
@@ -2167,12 +1964,12 @@
     },
     {
       "name": "pita chips",
-      "density_kg_m3": 300,
+      "density_kg_m3": 300.0,
       "aliases": []
     },
     {
       "name": "pizza sauce",
-      "density_kg_m3": 960,
+      "density_kg_m3": 960.0,
       "aliases": []
     },
     {
@@ -2182,26 +1979,22 @@
     },
     {
       "name": "polenta",
-      "density_kg_m3": 620,
-      "aliases": [
-        "coarse polenta"
-      ]
+      "density_kg_m3": 620.0,
+      "aliases": ["coarse polenta"]
     },
     {
       "name": "pomegranate arils",
       "density_kg_m3": null,
-      "aliases": [
-        "pomegranate seeds"
-      ]
+      "aliases": ["pomegranate seeds"]
     },
     {
       "name": "pomegranate juice",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
       "name": "poppy seeds",
-      "density_kg_m3": 580,
+      "density_kg_m3": 580.0,
       "aliases": []
     },
     {
@@ -2211,31 +2004,28 @@
     },
     {
       "name": "potato flour",
-      "density_kg_m3": 780,
+      "density_kg_m3": 780.0,
       "aliases": []
     },
     {
       "name": "potato starch",
-      "density_kg_m3": 640,
+      "density_kg_m3": 640.0,
       "aliases": []
     },
     {
       "name": "potatoes",
-      "density_kg_m3": 590,
+      "density_kg_m3": 590.0,
       "aliases": []
     },
     {
       "name": "poultry seasoning",
-      "density_kg_m3": 320,
+      "density_kg_m3": 320.0,
       "aliases": []
     },
     {
       "name": "powdered sugar",
-      "density_kg_m3": 510,
-      "aliases": [
-        "confectioners sugar",
-        "icing sugar"
-      ]
+      "density_kg_m3": 510.0,
+      "aliases": ["confectioners sugar", "icing sugar"]
     },
     {
       "name": "preserved lemons",
@@ -2249,24 +2039,22 @@
     },
     {
       "name": "pumpernickel flour",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
       "name": "pumpkin",
-      "density_kg_m3": 600,
+      "density_kg_m3": 600.0,
       "aliases": []
     },
     {
       "name": "pumpkin pie spice",
-      "density_kg_m3": 450,
-      "aliases": [
-        "pumpkin spice"
-      ]
+      "density_kg_m3": 450.0,
+      "aliases": ["pumpkin spice"]
     },
     {
       "name": "pumpkin seeds",
-      "density_kg_m3": 500,
+      "density_kg_m3": 500.0,
       "aliases": []
     },
     {
@@ -2281,17 +2069,17 @@
     },
     {
       "name": "quick oats",
-      "density_kg_m3": 340,
+      "density_kg_m3": 340.0,
       "aliases": []
     },
     {
       "name": "quinoa",
-      "density_kg_m3": 720,
+      "density_kg_m3": 720.0,
       "aliases": []
     },
     {
       "name": "quinoa flour",
-      "density_kg_m3": 460,
+      "density_kg_m3": 460.0,
       "aliases": []
     },
     {
@@ -2302,21 +2090,17 @@
     {
       "name": "ramen noodles",
       "density_kg_m3": null,
-      "aliases": [
-        "ramen"
-      ]
+      "aliases": ["ramen"]
     },
     {
       "name": "ranch dressing",
-      "density_kg_m3": 980,
+      "density_kg_m3": 980.0,
       "aliases": []
     },
     {
       "name": "raspberries",
       "density_kg_m3": null,
-      "aliases": [
-        "fresh raspberries"
-      ]
+      "aliases": ["fresh raspberries"]
     },
     {
       "name": "red chiles",
@@ -2325,12 +2109,12 @@
     },
     {
       "name": "red curry paste",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "red pepper flakes",
-      "density_kg_m3": 400,
+      "density_kg_m3": 400.0,
       "aliases": [
         "chile flakes",
         "chili flakes",
@@ -2351,24 +2135,18 @@
     },
     {
       "name": "rice",
-      "density_kg_m3": 780,
-      "aliases": [
-        "long-grain rice",
-        "uncooked rice",
-        "white rice"
-      ]
+      "density_kg_m3": 780.0,
+      "aliases": ["long-grain rice", "uncooked rice", "white rice"]
     },
     {
       "name": "rice flour",
-      "density_kg_m3": 580,
+      "density_kg_m3": 580.0,
       "aliases": []
     },
     {
       "name": "ricotta",
       "density_kg_m3": null,
-      "aliases": [
-        "ricotta cheese"
-      ]
+      "aliases": ["ricotta cheese"]
     },
     {
       "name": "ricotta salata",
@@ -2377,20 +2155,17 @@
     },
     {
       "name": "roasted applesauce",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "rolled oats",
-      "density_kg_m3": 380,
-      "aliases": [
-        "oats",
-        "old-fashioned oats"
-      ]
+      "density_kg_m3": 380.0,
+      "aliases": ["oats", "old-fashioned oats"]
     },
     {
       "name": "romano",
-      "density_kg_m3": 420,
+      "density_kg_m3": 420.0,
       "aliases": []
     },
     {
@@ -2400,49 +2175,43 @@
     },
     {
       "name": "rosemary",
-      "density_kg_m3": 320,
-      "aliases": [
-        "dried rosemary"
-      ]
+      "density_kg_m3": 320.0,
+      "aliases": ["dried rosemary"]
     },
     {
       "name": "rum",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "rye chops",
-      "density_kg_m3": 510,
+      "density_kg_m3": 510.0,
       "aliases": []
     },
     {
       "name": "rye flakes",
-      "density_kg_m3": 520,
+      "density_kg_m3": 520.0,
       "aliases": []
     },
     {
       "name": "rye flour",
-      "density_kg_m3": 430,
+      "density_kg_m3": 430.0,
       "aliases": []
     },
     {
       "name": "rye whiskey",
-      "density_kg_m3": 940,
-      "aliases": [
-        "rye whisky"
-      ]
+      "density_kg_m3": 940.0,
+      "aliases": ["rye whisky"]
     },
     {
       "name": "safflower oil",
-      "density_kg_m3": 910,
+      "density_kg_m3": 910.0,
       "aliases": []
     },
     {
       "name": "sage",
-      "density_kg_m3": 280,
-      "aliases": [
-        "dried sage"
-      ]
+      "density_kg_m3": 280.0,
+      "aliases": ["dried sage"]
     },
     {
       "name": "sage leaves",
@@ -2456,12 +2225,8 @@
     },
     {
       "name": "salt",
-      "density_kg_m3": 1220,
-      "aliases": [
-        "kosher salt",
-        "sea salt",
-        "table salt"
-      ]
+      "density_kg_m3": 1220.0,
+      "aliases": ["kosher salt", "sea salt", "table salt"]
     },
     {
       "name": "saltine crackers",
@@ -2470,10 +2235,8 @@
     },
     {
       "name": "sambal oelek",
-      "density_kg_m3": 1100,
-      "aliases": [
-        "sambal"
-      ]
+      "density_kg_m3": 1100.0,
+      "aliases": ["sambal"]
     },
     {
       "name": "san marzano tomatoes",
@@ -2488,48 +2251,37 @@
     {
       "name": "scallions",
       "density_kg_m3": null,
-      "aliases": [
-        "green onion",
-        "green onions",
-        "spring onion",
-        "spring onions"
-      ]
+      "aliases": ["green onion", "green onions", "spring onion", "spring onions"]
     },
     {
       "name": "sea scallops",
       "density_kg_m3": null,
-      "aliases": [
-        "scallops"
-      ]
+      "aliases": ["scallops"]
     },
     {
       "name": "self-rising flour",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "semolina flour",
-      "density_kg_m3": 690,
+      "density_kg_m3": 690.0,
       "aliases": []
     },
     {
       "name": "serrano chiles",
       "density_kg_m3": null,
-      "aliases": [
-        "serrano peppers"
-      ]
+      "aliases": ["serrano peppers"]
     },
     {
       "name": "sesame oil",
-      "density_kg_m3": 920,
+      "density_kg_m3": 920.0,
       "aliases": []
     },
     {
       "name": "sesame seeds",
-      "density_kg_m3": 580,
-      "aliases": [
-        "toasted sesame seeds"
-      ]
+      "density_kg_m3": 580.0,
+      "aliases": ["toasted sesame seeds"]
     },
     {
       "name": "shallots",
@@ -2538,7 +2290,7 @@
     },
     {
       "name": "sherry",
-      "density_kg_m3": 990,
+      "density_kg_m3": 990.0,
       "aliases": []
     },
     {
@@ -2553,38 +2305,32 @@
     },
     {
       "name": "shredded cheese",
-      "density_kg_m3": 480,
-      "aliases": [
-        "cheddar",
-        "mozzarella",
-        "shredded cheddar"
-      ]
+      "density_kg_m3": 480.0,
+      "aliases": ["cheddar", "mozzarella", "shredded cheddar"]
     },
     {
       "name": "shrimp",
       "density_kg_m3": null,
-      "aliases": [
-        "prawns"
-      ]
+      "aliases": ["prawns"]
     },
     {
       "name": "sichuan peppercorns",
-      "density_kg_m3": 430,
+      "density_kg_m3": 430.0,
       "aliases": []
     },
     {
       "name": "simple syrup",
-      "density_kg_m3": 1330,
+      "density_kg_m3": 1330.0,
       "aliases": []
     },
     {
       "name": "sliced almonds",
-      "density_kg_m3": 360,
+      "density_kg_m3": 360.0,
       "aliases": []
     },
     {
       "name": "smoked paprika",
-      "density_kg_m3": 460,
+      "density_kg_m3": 460.0,
       "aliases": []
     },
     {
@@ -2599,7 +2345,7 @@
     },
     {
       "name": "sorghum flour",
-      "density_kg_m3": 580,
+      "density_kg_m3": 580.0,
       "aliases": []
     },
     {
@@ -2609,12 +2355,12 @@
     },
     {
       "name": "sour cherry syrup",
-      "density_kg_m3": 1300,
+      "density_kg_m3": 1300.0,
       "aliases": []
     },
     {
       "name": "sour cream",
-      "density_kg_m3": 970,
+      "density_kg_m3": 970.0,
       "aliases": []
     },
     {
@@ -2624,17 +2370,17 @@
     },
     {
       "name": "soy flour",
-      "density_kg_m3": 590,
+      "density_kg_m3": 590.0,
       "aliases": []
     },
     {
       "name": "soy milk",
-      "density_kg_m3": 1030,
+      "density_kg_m3": 1030.0,
       "aliases": []
     },
     {
       "name": "soy sauce",
-      "density_kg_m3": 1080,
+      "density_kg_m3": 1080.0,
       "aliases": []
     },
     {
@@ -2654,7 +2400,7 @@
     },
     {
       "name": "spelt flour",
-      "density_kg_m3": 420,
+      "density_kg_m3": 420.0,
       "aliases": []
     },
     {
@@ -2664,17 +2410,17 @@
     },
     {
       "name": "sprouted wheat flour",
-      "density_kg_m3": 480,
+      "density_kg_m3": 480.0,
       "aliases": []
     },
     {
       "name": "squash puree",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
       "name": "sriracha",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
@@ -2684,17 +2430,17 @@
     },
     {
       "name": "steel-cut oats",
-      "density_kg_m3": 590,
+      "density_kg_m3": 590.0,
       "aliases": []
     },
     {
       "name": "strawberries",
-      "density_kg_m3": 710,
+      "density_kg_m3": 710.0,
       "aliases": []
     },
     {
       "name": "sumac",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
@@ -2704,22 +2450,22 @@
     },
     {
       "name": "sun-dried tomatoes",
-      "density_kg_m3": 720,
+      "density_kg_m3": 720.0,
       "aliases": []
     },
     {
       "name": "sunflower oil",
-      "density_kg_m3": 920,
+      "density_kg_m3": 920.0,
       "aliases": []
     },
     {
       "name": "sunflower seeds",
-      "density_kg_m3": 590,
+      "density_kg_m3": 590.0,
       "aliases": []
     },
     {
       "name": "sweet chili sauce",
-      "density_kg_m3": 1300,
+      "density_kg_m3": 1300.0,
       "aliases": []
     },
     {
@@ -2729,20 +2475,18 @@
     },
     {
       "name": "sweet vermouth",
-      "density_kg_m3": 990,
+      "density_kg_m3": 990.0,
       "aliases": []
     },
     {
       "name": "sweetened condensed coconut milk",
-      "density_kg_m3": 1220,
+      "density_kg_m3": 1220.0,
       "aliases": []
     },
     {
       "name": "sweetened condensed milk",
-      "density_kg_m3": 1280,
-      "aliases": [
-        "condensed milk"
-      ]
+      "density_kg_m3": 1280.0,
+      "aliases": ["condensed milk"]
     },
     {
       "name": "swiss chard",
@@ -2751,37 +2495,33 @@
     },
     {
       "name": "tahini",
-      "density_kg_m3": 960,
-      "aliases": [
-        "tahini paste"
-      ]
+      "density_kg_m3": 960.0,
+      "aliases": ["tahini paste"]
     },
     {
       "name": "tamarind concentrate",
-      "density_kg_m3": 1310,
+      "density_kg_m3": 1310.0,
       "aliases": []
     },
     {
       "name": "tamarind pulp",
-      "density_kg_m3": 800,
+      "density_kg_m3": 800.0,
       "aliases": []
     },
     {
       "name": "tapioca",
-      "density_kg_m3": 710,
+      "density_kg_m3": 710.0,
       "aliases": []
     },
     {
       "name": "teff flour",
-      "density_kg_m3": 570,
+      "density_kg_m3": 570.0,
       "aliases": []
     },
     {
       "name": "thyme",
-      "density_kg_m3": 320,
-      "aliases": [
-        "dried thyme"
-      ]
+      "density_kg_m3": 320.0,
+      "aliases": ["dried thyme"]
     },
     {
       "name": "tofu",
@@ -2790,22 +2530,22 @@
     },
     {
       "name": "tomato paste",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "tomato sauce",
-      "density_kg_m3": 1040,
+      "density_kg_m3": 1040.0,
       "aliases": []
     },
     {
       "name": "tomatoes",
-      "density_kg_m3": 960,
+      "density_kg_m3": 960.0,
       "aliases": []
     },
     {
       "name": "tortilla chips",
-      "density_kg_m3": 120,
+      "density_kg_m3": 120.0,
       "aliases": []
     },
     {
@@ -2815,15 +2555,13 @@
     },
     {
       "name": "turbinado sugar",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "turmeric",
-      "density_kg_m3": 480,
-      "aliases": [
-        "ground turmeric"
-      ]
+      "density_kg_m3": 480.0,
+      "aliases": ["ground turmeric"]
     },
     {
       "name": "turnip greens",
@@ -2833,60 +2571,46 @@
     {
       "name": "vanilla bean",
       "density_kg_m3": null,
-      "aliases": [
-        "vanilla pod"
-      ]
+      "aliases": ["vanilla pod"]
     },
     {
       "name": "vanilla extract",
-      "density_kg_m3": 880,
-      "aliases": [
-        "vanilla"
-      ]
+      "density_kg_m3": 880.0,
+      "aliases": ["vanilla"]
     },
     {
       "name": "vegetable broth",
-      "density_kg_m3": 1010,
-      "aliases": [
-        "vegetable stock"
-      ]
+      "density_kg_m3": 1010.0,
+      "aliases": ["vegetable stock"]
     },
     {
       "name": "vegetable oil",
-      "density_kg_m3": 920,
-      "aliases": [
-        "canola oil",
-        "neutral oil"
-      ]
+      "density_kg_m3": 920.0,
+      "aliases": ["canola oil", "neutral oil"]
     },
     {
       "name": "vegetable shortening",
-      "density_kg_m3": 900,
+      "density_kg_m3": 900.0,
       "aliases": []
     },
     {
       "name": "vinegar",
-      "density_kg_m3": 1010,
-      "aliases": [
-        "apple cider vinegar",
-        "balsamic vinegar",
-        "red wine vinegar",
-        "white vinegar"
-      ]
+      "density_kg_m3": 1010.0,
+      "aliases": ["apple cider vinegar", "balsamic vinegar", "red wine vinegar", "white vinegar"]
     },
     {
       "name": "vodka",
-      "density_kg_m3": 940,
+      "density_kg_m3": 940.0,
       "aliases": []
     },
     {
       "name": "walnuts",
-      "density_kg_m3": 450,
+      "density_kg_m3": 450.0,
       "aliases": []
     },
     {
       "name": "water",
-      "density_kg_m3": 1000,
+      "density_kg_m3": 1000.0,
       "aliases": []
     },
     {
@@ -2901,17 +2625,17 @@
     },
     {
       "name": "wheat berries",
-      "density_kg_m3": 780,
+      "density_kg_m3": 780.0,
       "aliases": []
     },
     {
       "name": "wheat bran",
-      "density_kg_m3": 270,
+      "density_kg_m3": 270.0,
       "aliases": []
     },
     {
       "name": "wheat germ",
-      "density_kg_m3": 580,
+      "density_kg_m3": 580.0,
       "aliases": []
     },
     {
@@ -2921,73 +2645,58 @@
     },
     {
       "name": "white beans",
-      "density_kg_m3": 780,
+      "density_kg_m3": 780.0,
       "aliases": []
     },
     {
       "name": "white pepper",
-      "density_kg_m3": 480,
-      "aliases": [
-        "ground white pepper"
-      ]
+      "density_kg_m3": 480.0,
+      "aliases": ["ground white pepper"]
     },
     {
       "name": "white-wine vinegar",
-      "density_kg_m3": 1020,
+      "density_kg_m3": 1020.0,
       "aliases": []
     },
     {
       "name": "whole wheat flour",
-      "density_kg_m3": 510,
-      "aliases": [
-        "wholemeal flour"
-      ]
+      "density_kg_m3": 510.0,
+      "aliases": ["wholemeal flour"]
     },
     {
       "name": "wild rice",
-      "density_kg_m3": 540,
-      "aliases": [
-        "wild rice blend"
-      ]
+      "density_kg_m3": 540.0,
+      "aliases": ["wild rice blend"]
     },
     {
       "name": "wine",
-      "density_kg_m3": 990,
-      "aliases": [
-        "dry white wine",
-        "red wine",
-        "white wine"
-      ]
+      "density_kg_m3": 990.0,
+      "aliases": ["dry white wine", "red wine", "white wine"]
     },
     {
       "name": "worcestershire sauce",
-      "density_kg_m3": 1100,
+      "density_kg_m3": 1100.0,
       "aliases": []
     },
     {
       "name": "yellow mung beans",
-      "density_kg_m3": 830,
+      "density_kg_m3": 830.0,
       "aliases": []
     },
     {
       "name": "yellow mustard",
-      "density_kg_m3": 1050,
+      "density_kg_m3": 1050.0,
       "aliases": []
     },
     {
       "name": "yogurt",
-      "density_kg_m3": 1040,
-      "aliases": [
-        "greek yogurt",
-        "plain yogurt"
-      ]
+      "density_kg_m3": 1040.0,
+      "aliases": ["greek yogurt", "plain yogurt"]
     },
     {
       "name": "za'atar",
-      "density_kg_m3": 320,
-      "aliases": [
-        "zaatar"
-      ]
+      "density_kg_m3": 320.0,
+      "aliases": ["zaatar"]
     },
     {
       "name": "zest",
@@ -3008,6 +2717,16 @@
       "name": "zucchini flowers",
       "density_kg_m3": null,
       "aliases": []
+    },
+    {
+      "name": "roasted red peppers",
+      "density_kg_m3": 1000.0,
+      "aliases": [
+        "jarred roasted red peppers",
+        "jarred roasted red pepper",
+        "fire-roasted red peppers",
+        "fire-roasted red pepper"
+      ]
     }
   ]
 }
