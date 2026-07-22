@@ -1,20 +1,16 @@
 import {
   BookmarkIcon as BookmarkIconOutline,
-  ClipboardDocumentCheckIcon,
   TagIcon,
   UserCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
-import {
-  BookmarkIcon as BookmarkIconSolid,
-  ClipboardDocumentCheckIcon as ClipboardDocumentCheckIconSolid,
-} from '@heroicons/react/24/solid'
+import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 import type { ChangeEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
 import { useAuth } from './AuthContext'
-import { getLocalTags } from './db'
+import { getLocalSummaries, getLocalTags } from './db'
 import { HomePage } from './HomePage'
 import { ImportPage } from './ImportPage'
 import { ImportProgressProvider } from './ImportProgressContext'
@@ -25,6 +21,7 @@ import { RecipeDetailHeaderNav, RecipeDetailHeaderProvider } from './RecipeDetai
 import { RecipeListProvider, useRecipeListState } from './RecipeListContext'
 import { RecipePage } from './RecipePage'
 import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
+import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
 import { Popover } from './components/Popover'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
@@ -45,7 +42,9 @@ export function App() {
 
 function AppShell() {
   const { auth, logoutPending, signOut } = useAuth()
+  const { localRevision } = useRecipeSync()
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [needsReviewCount, setNeedsReviewCount] = useState(0)
   const location = useLocation()
   const isHome = location.pathname === '/'
   const isIngredients = location.pathname === '/ingredients'
@@ -53,6 +52,25 @@ function AppShell() {
     location.pathname.startsWith('/recipes/') &&
     !location.pathname.startsWith('/recipes/edit') &&
     location.pathname !== '/recipes/new'
+
+  useEffect(() => {
+    if (!auth.authenticated) {
+      setNeedsReviewCount(0)
+      return
+    }
+    let cancelled = false
+    getLocalSummaries().then(summaries => {
+      if (cancelled) {
+        return
+      }
+      setNeedsReviewCount(
+        summaries.filter(recipe => recipe.review && recipe.review.length > 0).length
+      )
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [auth.authenticated, localRevision])
 
   return (
     <div
@@ -106,6 +124,15 @@ function AppShell() {
                     >
                       Ingredients
                     </Link>
+                    {needsReviewCount > 0 ? (
+                      <Link
+                        className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                        onClick={() => setSettingsOpen(false)}
+                        to="/review"
+                      >
+                        Needs review ({needsReviewCount})
+                      </Link>
+                    ) : null}
                     <button
                       className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
                       disabled={logoutPending}
@@ -152,6 +179,7 @@ function AppShell() {
             <Route element={<LoginPage />} path="/login" />
             <Route element={<SettingsPage />} path="/settings" />
             <Route element={<IngredientsPage />} path="/ingredients" />
+            <Route element={<ReviewPage />} path="/review" />
             <Route element={<ImportPage />} path="/import" />
             <Route element={<RecipeEditPage mode="new" />} path="/recipes/new" />
             <Route element={<RecipeEditPage mode="edit" />} path="/recipes/edit/*" />
@@ -169,16 +197,8 @@ function AppShell() {
 }
 
 function HomeSearchBar() {
-  const {
-    activeTags,
-    bookmarkedOnly,
-    query,
-    reviewOnly,
-    setActiveTags,
-    setBookmarkedOnly,
-    setQuery,
-    setReviewOnly,
-  } = useRecipeListState()
+  const { activeTags, bookmarkedOnly, query, setActiveTags, setBookmarkedOnly, setQuery } =
+    useRecipeListState()
   const { localRevision } = useRecipeSync()
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState(query)
@@ -263,18 +283,6 @@ function HomeSearchBar() {
             </p>
           )}
         </Popover>
-        <button
-          aria-label={reviewOnly ? 'Show all recipes' : 'Show recipes needing review'}
-          className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300"
-          onClick={() => setReviewOnly(!reviewOnly)}
-          type="button"
-        >
-          {reviewOnly ? (
-            <ClipboardDocumentCheckIconSolid aria-hidden="true" className="h-5 w-5" />
-          ) : (
-            <ClipboardDocumentCheckIcon aria-hidden="true" className="h-5 w-5" />
-          )}
-        </button>
         <button
           aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
           className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300"
