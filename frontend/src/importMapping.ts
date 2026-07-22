@@ -1,4 +1,9 @@
-import { estimateIngredientDensities, getIngredientCatalog, upsertIngredient } from './api'
+import {
+  estimateIngredientDensities,
+  getIngredientCatalog,
+  updateRecipe,
+  upsertIngredient,
+} from './api'
 import {
   extractTokens,
   ingredientToPlainText,
@@ -6,7 +11,8 @@ import {
   serializeIngredient,
   type IngredientToken,
 } from './cooklangTokens'
-import { putIngredientCatalog } from './db'
+import { getLocalRecipe, putIngredientCatalog } from './db'
+import { storeRecipe } from './sync'
 import type { CatalogIngredient } from './types'
 import {
   findCatalogIngredient,
@@ -231,13 +237,19 @@ export async function upsertCatalogFromMappingRows(
         density_kg_m3: density,
         name: catalogName,
       }
-      const ingredient = await upsertIngredient(withLearnedAlias(base, row.originalName) ?? base)
+      // Only learn original name as alias when details are empty; otherwise
+      // the extra wording is stored as a recipe note, not a catalog alias.
+      const toSave = row.note.trim() ? base : (withLearnedAlias(base, row.originalName) ?? base)
+      const ingredient = await upsertIngredient(toSave)
       catalogUpdates.push(ingredient)
       continue
     }
 
     const existing = findCatalogIngredient(catalogName, catalog)
     if (!existing) {
+      continue
+    }
+    if (row.note.trim()) {
       continue
     }
     const learned = withLearnedAlias(existing, row.originalName)
@@ -299,6 +311,45 @@ export async function applyImportMapping(
   const workingCatalog = await upsertCatalogFromMappingRows(mappingRows, catalog, refreshCatalog)
   const body = applyMappingRowsToBody(pendingImport.body, mappingRows, workingCatalog)
   return { body, catalog: workingCatalog }
+}
+
+/** Apply mapping rows to already-saved recipes (deferred ingredient review). */
+export async function applyMappingToSavedRecipes(
+  mappingRows: MappingRow[],
+  catalog: CatalogIngredient[],
+  recipeSlugs: string[],
+  refreshCatalog: () => Promise<void>
+): Promise<{ catalog: CatalogIngredient[]; updatedSlugs: string[] }> {
+  const workingCatalog = await upsertCatalogFromMappingRows(mappingRows, catalog, refreshCatalog)
+  const needsBodyRewrite = mappingRows.some(row => {
+    if (row.excluded) {
+      return true
+    }
+    const target = row.catalogName.trim() || row.originalName
+    return target.toLowerCase() !== row.originalName.toLowerCase() || Boolean(row.note.trim())
+  })
+
+  if (!needsBodyRewrite) {
+    return { catalog: workingCatalog, updatedSlugs: [] }
+  }
+
+  const updatedSlugs: string[] = []
+  for (const slug of recipeSlugs) {
+    const local = await getLocalRecipe(slug)
+    if (!local) {
+      continue
+    }
+    const parsed = parseImportedDocument(local.content)
+    const nextBody = applyMappingRowsToBody(parsed.body, mappingRows, workingCatalog)
+    if (nextBody === parsed.body) {
+      continue
+    }
+    const content = renderImportDocument(parsed.metadata, nextBody)
+    const updated = await updateRecipe(slug, content)
+    await storeRecipe(updated)
+    updatedSlugs.push(slug)
+  }
+  return { catalog: workingCatalog, updatedSlugs }
 }
 
 function buildMappedIngredientMarker(row: MappingRow, catalog: CatalogIngredient[]): string {
@@ -436,7 +487,11 @@ function cleanMetadataNotes(metadata: Record<string, unknown>) {
 
 function cleanNoteText(value: string) {
   let text = value.trim()
-  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+  while (
+    text.length >= 2 &&
+    (text.startsWith('"') || text.startsWith("'")) &&
+    text.endsWith('\\')
+  ) {
     text = text.slice(1, -1).trimEnd()
   }
   if (

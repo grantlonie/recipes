@@ -17,8 +17,6 @@ import { Button } from './components/Button'
 import { CameraCaptureDialog, isCameraCaptureSupported } from './components/CameraCaptureDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Dialog } from './components/Dialog'
-import { ImportingDialog } from './components/ImportingDialog'
-import { ImportMappingDialog } from './components/ImportMappingDialog'
 import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/RecipeBodyEditor'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
@@ -28,17 +26,13 @@ import { timerUnitSelectValue, type TimerAttrs, type TimerUnit } from './cooklan
 import type { IngredientAttrs } from './cooklangTokens'
 import { deleteRecipes, getLocalRecipe, getLocalTags } from './db'
 import {
-  applyImportMapping,
-  buildMappingRows,
   isRefFile,
-  mappingRowsAreValid,
   mergePreservedImage,
   parseImportedDocument,
   resolveRefDisplay,
-  type MappingRow,
   type PendingImport,
 } from './importMapping'
-import { scheduleMappingDensityAutofill } from './importRecipeFlow'
+import { useImportProgress } from './ImportProgressContext'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { formatQuantityDisplay } from './quantities'
 import { useRecipeListState } from './RecipeListContext'
@@ -91,7 +85,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const { localRevision, sync } = useRecipeSync()
   const { addRecentRecipe } = useRecipeListState()
   const { unitSystem } = useUnitSystem()
-  const { ingredients: catalog, refresh: refreshCatalog } = useIngredientCatalog()
+  const { ingredients: catalog } = useIngredientCatalog()
+  const { startImport, updateProgress, completeImport, failImport } = useImportProgress()
   const bodyEditorRef = useRef<RecipeBodyEditorHandle | null>(null)
   const [activeTab, setActiveTab] = useState('info')
   const [baseMetadata, setBaseMetadata] = useState<Record<string, unknown>>({})
@@ -116,9 +111,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [editingCookwarePos, setEditingCookwarePos] = useState<number | null>(null)
   const [cookwareInitial, setCookwareInitial] = useState<CookwareFormState>(emptyCookwareForm)
   const [cookwareDraft, setCookwareDraft] = useState<CookwareFormState>(emptyCookwareForm)
-  const [mappingOpen, setMappingOpen] = useState(false)
-  const [mappingRows, setMappingRows] = useState<MappingRow[]>([])
-  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const [reimportConfirmOpen, setReimportConfirmOpen] = useState(false)
   const [recipeSlug, setRecipeSlug] = useState(mode === 'new' ? 'new-recipe' : slug)
   const [servings, setServings] = useState(4)
@@ -145,10 +137,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         value: item.name,
       })),
     [catalog]
-  )
-  const mappingCanApply = useMemo(
-    () => mappingRowsAreValid(mappingRows, catalog),
-    [mappingRows, catalog]
   )
   const ingredientDirty = editingPos !== null && !isEqual(ingredientInitial, ingredientDraft)
   const timerDirty = editingTimerPos !== null && !isEqual(timerInitial, timerDraft)
@@ -193,9 +181,20 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   })
   const importMutation = useMutation({
     mutationFn: (url: string) => importRecipe(url),
+    onMutate: () => {
+      startImport({ title: 'Importing recipe', total: 1 })
+      updateProgress({ status: 'Fetching and parsing…' })
+    },
     onSuccess: preview => {
       handleImportPreview(preview, { suggestedSlug: preview.suggested_slug })
       setImportUrl('')
+      completeImport({
+        saved: 1,
+        unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
+      })
+    },
+    onError: error => {
+      failImport(error instanceof Error ? error.message : 'Import failed')
     },
   })
   const reimportMutation = useMutation({
@@ -205,6 +204,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       }
       return importRecipe(source.trim())
     },
+    onMutate: () => {
+      startImport({ title: 'Re-importing recipe', total: 1 })
+      updateProgress({ status: 'Fetching and parsing…' })
+    },
     onSuccess: preview => {
       handleImportPreview(preview, {
         preserveBookmarked: true,
@@ -212,6 +215,13 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         preserveSource: true,
         preserveTags: true,
       })
+      completeImport({
+        saved: 1,
+        unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
+      })
+    },
+    onError: error => {
+      failImport(error instanceof Error ? error.message : 'Re-import failed')
     },
   })
 
@@ -231,16 +241,13 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     }
   }, [recipeQuery.data])
 
-  const handleEditIngredient = useCallback(
-    (pos: number, attrs: IngredientAttrs) => {
-      const snapshot = ingredientFormFromAttrs(attrs)
-      setEditingPos(pos)
-      setIngredientInitial(snapshot)
-      setIngredientDraft(snapshot)
-      setIngredientDialogOpen(true)
-    },
-    []
-  )
+  const handleEditIngredient = useCallback((pos: number, attrs: IngredientAttrs) => {
+    const snapshot = ingredientFormFromAttrs(attrs)
+    setEditingPos(pos)
+    setIngredientInitial(snapshot)
+    setIngredientDraft(snapshot)
+    setIngredientDialogOpen(true)
+  }, [])
 
   const handleEditSection = useCallback((pos: number, title: string) => {
     setEditingSectionPos(pos)
@@ -442,8 +449,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           <p className={`mt-2 text-sm ${errorTextClassName}`}>{saveMutation.error.message}</p>
         ) : null}
       </div>
-
-      <ImportingDialog open={importMutation.isPending || reimportMutation.isPending} />
 
       <ConfirmDialog
         confirmLabel="Re-import"
@@ -674,15 +679,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </div>
         </div>
       </Dialog>
-
-      <ImportMappingDialog
-        catalog={catalog}
-        onApply={() => void applyMapping()}
-        onCancel={() => setMappingOpen(false)}
-        onUpdateRow={updateMappingRow}
-        open={mappingOpen}
-        rows={mappingRows}
-      />
     </section>
   )
 
@@ -800,7 +796,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     options: Omit<PendingImport, 'body' | 'metadata'> = {}
   ) {
     const parsed = parseImportedDocument(preview.content)
-    const unmatched = preview.unmatched_ingredients ?? []
     const importedImage =
       preview.image_url?.trim() ||
       getString(parsed.metadata.image) ||
@@ -811,78 +806,22 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     if (options.preserveSource) {
       metadata = { ...metadata, source: source.trim() || undefined }
     }
-    if (unmatched.length === 0) {
-      const currentBookmarked = bookmarked
-      const currentTags = tags
-      const currentSource = source
-      applyDocumentState(metadata, parsed.body, { skipTags: Boolean(options.preserveTags) })
-      if (options.preserveBookmarked) {
-        setBookmarked(currentBookmarked)
-      }
-      if (options.preserveTags) {
-        setTags(currentTags)
-      }
-      if (options.preserveSource) {
-        setSource(currentSource)
-      }
-      if (options.suggestedSlug) {
-        setRecipeSlug(options.suggestedSlug)
-      }
-      return
-    }
-    openMapping(metadata, parsed.body, { ...options, unmatchedIngredients: unmatched })
-  }
-
-  function openMapping(
-    metadata: Record<string, unknown>,
-    nextBody: string,
-    options: Omit<PendingImport, 'body' | 'metadata'> & { unmatchedIngredients?: string[] } = {}
-  ) {
-    const rows = buildMappingRows(nextBody, options.unmatchedIngredients ?? [], catalog)
-    setPendingImport({ body: nextBody, metadata, ...options })
-    setMappingRows(rows)
-    setMappingOpen(true)
-    scheduleMappingDensityAutofill(rows, catalog, setMappingRows)
-  }
-
-  function updateMappingRow(index: number, patch: Partial<MappingRow>) {
-    setMappingRows(current =>
-      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row))
-    )
-  }
-
-  async function applyMapping() {
-    if (!pendingImport || !mappingCanApply) {
-      return
-    }
-
-    const { body: nextBody } = await applyImportMapping(
-      pendingImport,
-      mappingRows,
-      catalog,
-      refreshCatalog
-    )
-
     const currentBookmarked = bookmarked
     const currentTags = tags
     const currentSource = source
-    applyDocumentState(pendingImport.metadata, nextBody, { skipTags: true })
-    if (pendingImport.preserveBookmarked) {
+    applyDocumentState(metadata, parsed.body, { skipTags: Boolean(options.preserveTags) })
+    if (options.preserveBookmarked) {
       setBookmarked(currentBookmarked)
     }
-    if (pendingImport.preserveTags) {
+    if (options.preserveTags) {
       setTags(currentTags)
-    } else {
-      setTags(getTagsFromMetadata(pendingImport.metadata.tags))
     }
-    if (pendingImport.preserveSource) {
+    if (options.preserveSource) {
       setSource(currentSource)
     }
-    if (pendingImport.suggestedSlug) {
-      setRecipeSlug(pendingImport.suggestedSlug)
+    if (options.suggestedSlug) {
+      setRecipeSlug(options.suggestedSlug)
     }
-    setMappingOpen(false)
-    setPendingImport(null)
     setActiveTab('recipe')
   }
 
@@ -1177,12 +1116,7 @@ function ImageField({ className = '', onUpload, onValueChange, slug, value }: Im
       <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Image</span>
       <div className="mt-1 space-y-2">
         {previewUrl ? (
-          <a
-            className="inline-block"
-            href={previewUrl}
-            rel="noreferrer"
-            target="_blank"
-          >
+          <a className="inline-block" href={previewUrl} rel="noreferrer" target="_blank">
             <img alt="" className="max-h-40 rounded-xl object-cover" src={previewUrl} />
           </a>
         ) : null}
@@ -1376,7 +1310,11 @@ function getString(value: unknown) {
 
 function cleanNoteText(value: string) {
   let text = value.trim()
-  while (text.length >= 2 && (text.startsWith('"') || text.startsWith("'")) && text.endsWith('\\')) {
+  while (
+    text.length >= 2 &&
+    (text.startsWith('"') || text.startsWith("'")) &&
+    text.endsWith('\\')
+  ) {
     text = text.slice(1, -1).trimEnd()
   }
   if (
@@ -1436,4 +1374,11 @@ function getTagsFromMetadata(value: unknown) {
 
 function isEmptyArray(value: unknown) {
   return Array.isArray(value) && value.length === 0
+}
+
+function uniqueUnmatchedCount(names: string[] | undefined): number {
+  if (!names?.length) {
+    return 0
+  }
+  return new Set(names.map(name => name.toLowerCase())).size
 }

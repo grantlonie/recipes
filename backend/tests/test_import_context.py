@@ -26,6 +26,7 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Do not convert between volume and mass" in prompt
     assert "@vodka{2%fl oz}" in prompt
     assert "tags: [cocktail]" in prompt
+    assert "Old Fashioned" in prompt
     assert "Omit tags from front matter" not in prompt
     assert "@kidney beans{2%cup}" in prompt
     assert "Prefer grams" not in prompt

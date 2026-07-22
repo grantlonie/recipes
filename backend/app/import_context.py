@@ -33,6 +33,8 @@ Output rules:
   Keep weight %oz only for true mass (meat, cheese, chocolate, canned goods by weight).
 - Tag drink recipes in front matter as tags: [cocktail] or tags: [mocktail] when the
   source is a cocktail, mocktail, or mixed drink. Do not invent other tags.
+  Do not tag baked goods or cooked dishes as cocktail/mocktail just because a drink
+  name appears in the title or description (example: "Old Fashioned" chocolate cake).
 - Tablespoon vs teaspoon is size, not casing: 1 tablespoon ≠ 1 teaspoon.
   Treat source spellings tbsp / tbs / tablespoon(s) (any case) as tablespoon → emit Tbsp.
   Treat source spellings tsp / teaspoon(s) (any case) as teaspoon → emit tsp.
@@ -191,7 +193,7 @@ def build_user_message(
     cleaned = clean_source_text(extracted_text)
     parts = [
         "Convert this recipe source into Cooklang.",
-        "The front matter must include title: \"...\" as the first key.",
+        'The front matter must include title: "..." as the first key.',
         "",
     ]
     if source_url:

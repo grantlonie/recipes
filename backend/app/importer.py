@@ -409,7 +409,7 @@ def _finalize_import(
     content = cooklang.render_document(metadata, body)
     content = cooklang.prepare_imported_content(content)
     metadata, body = cooklang.parse_document(content)
-    _ensure_drink_tags(metadata)
+    _ensure_drink_tags(metadata, body)
     fluid_volume = prefers_fluid_volume(cooklang.metadata_tags(metadata))
     mapped_body, unmatched = apply_catalog_mapping(
         body,
@@ -420,7 +420,7 @@ def _finalize_import(
     metadata, body = cooklang.parse_document(content)
     # Re-apply after normalize in case front-matter repair dropped image.
     _apply_import_image(metadata, image_url=image_url)
-    _ensure_drink_tags(metadata)
+    _ensure_drink_tags(metadata, body)
     content = cooklang.render_document(metadata, body)
     validation = validate_imported_cooklang(
         content,
@@ -473,9 +473,7 @@ def _maybe_quality_repair(
     warning_summary = "; ".join(validation.warnings[:4])
     if len(validation.warnings) > 4:
         warning_summary += f"; +{len(validation.warnings) - 4} more"
-    trace.add(
-        f"pass2: quality repair via {_model_label(repair_model)} — {warning_summary}"
-    )
+    trace.add(f"pass2: quality repair via {_model_label(repair_model)} — {warning_summary}")
     try:
         repaired = complete_cooklang(
             settings=settings,
@@ -522,7 +520,9 @@ def _with_import_metadata(preview: ImportPreview, *, trace: ImportTrace) -> Impo
         if len(preview.validation_warnings) > 4:
             remaining += f"; +{len(preview.validation_warnings) - 4} more"
         notes.append(f"remaining warnings: {remaining}")
-        metadata["review"] = [warning.strip() for warning in preview.validation_warnings if warning.strip()]
+        metadata["review"] = [
+            warning.strip() for warning in preview.validation_warnings if warning.strip()
+        ]
     else:
         metadata.pop("review", None)
 
@@ -546,11 +546,7 @@ def _log_advanced_processing(
     source_url: str | None = None,
 ) -> None:
     title_match = re.search(r"^title:\s*(?P<title>.+)$", content, re.MULTILINE)
-    label = (
-        title_match.group("title").strip()
-        if title_match
-        else (source_url or "unknown recipe")
-    )
+    label = title_match.group("title").strip() if title_match else (source_url or "unknown recipe")
     message = (
         f"Recipe import required more advanced processing ({reason}): {label}\n"
         f"{content.rstrip() or '(empty)'}"
@@ -560,31 +556,71 @@ def _log_advanced_processing(
     logger.warning("%s", message)
 
 
-def _ensure_drink_tags(metadata: dict) -> None:
-    """Tag cocktails/mocktails so fluid ounces convert and display correctly."""
+# Food / cooking signals that mean this is not a mixed drink (even if a drink
+# name like "Old Fashioned" appears in the description).
+_FOOD_VETO_RE = re.compile(
+    r"\b(?:"
+    r"cakes?|cupcakes?|cookies?|brownies?|breads?|muffins?|pies?|"
+    r"pancakes?|waffles?|biscuits?|scones?|frosting|buttercream|"
+    r"roast(?:ed|ing)?|bak(?:e|ed|ing)|oven|grill(?:ed|ing)?|"
+    r"saut[eé](?:ed|ing)?|simmer(?:ed|ing)?|stew(?:ed|ing)?|"
+    r"casserole|lasagna|lasagne|pasta|pizza|soup|curry"
+    r")\b",
+    re.IGNORECASE,
+)
+_DRINK_EXPLICIT_RE = re.compile(r"\b(?:cocktails?|mocktails?|mixed drinks?)\b", re.IGNORECASE)
+_DRINK_TECHNIQUE_RE = re.compile(
+    r"\b(?:"
+    r"shake(?:n)?|stir(?:red)?|strain(?:ed)?|muddl(?:e|ed|ing)|"
+    r"garnish(?:ed)?|over ice|on the rocks|"
+    r"mixing glass|rocks glass|cocktail shaker|build in"
+    r")\b",
+    re.IGNORECASE,
+)
+_FLUID_POUR_UNITS = frozenset({"fl oz", "ml", "cl"})
+_DRINK_TAGS = frozenset({"cocktail", "drink", "mocktail"})
+
+
+def _ensure_drink_tags(metadata: dict, body: str = "") -> None:
+    """Tag cocktails/mocktails so fluid ounces convert and display correctly.
+
+    Prefers an existing LLM tag, strips it when food/cooking vetoes apply, and
+    otherwise infers from explicit drink wording or mixed-drink structure
+    (fluid pours + technique) — never from cocktail-name substrings alone.
+    """
     tags = cooklang.metadata_tags(metadata)
+    meta_blob = " ".join(
+        str(metadata.get(key) or "") for key in ("title", "description", "servings")
+    )
+    scan_blob = f"{meta_blob}\n{body}"
+    if _FOOD_VETO_RE.search(scan_blob):
+        cleaned = [tag for tag in tags if tag.strip().casefold() not in _DRINK_TAGS]
+        if cleaned != tags:
+            if cleaned:
+                metadata["tags"] = cleaned
+            else:
+                metadata.pop("tags", None)
+        return
     if prefers_fluid_volume(tags):
         return
-    blob = " ".join(
-        str(metadata.get(key) or "")
-        for key in ("title", "description", "servings")
-    ).casefold()
-    markers = (
-        "cocktail",
-        "mocktail",
-        "gimlet",
-        "margarita",
-        "martini",
-        "negroni",
-        "daiquiri",
-        "mojito",
-        "old fashioned",
-        "highball",
-    )
-    if not any(marker in blob for marker in markers):
+    explicit = _DRINK_EXPLICIT_RE.search(meta_blob)
+    if not explicit and not _looks_like_mixed_drink(body):
         return
-    tag = "mocktail" if "mocktail" in blob else "cocktail"
+    tag = "mocktail" if re.search(r"\bmocktails?\b", meta_blob, re.IGNORECASE) else "cocktail"
     metadata["tags"] = sorted({*tags, tag}, key=str.casefold)
+
+
+def _looks_like_mixed_drink(body: str) -> bool:
+    """True when the body looks like a shaken/stirred drink, not a one-off spirit."""
+    if not body.strip():
+        return False
+    techniques = len(_DRINK_TECHNIQUE_RE.findall(body))
+    pours = 0
+    for ingredient in cooklang.parse_ingredients(body):
+        unit = (ingredient.unit or "").casefold()
+        if unit in _FLUID_POUR_UNITS:
+            pours += 1
+    return (pours >= 2 and techniques >= 1) or pours >= 3
 
 
 def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:

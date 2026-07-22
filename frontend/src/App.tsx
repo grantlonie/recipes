@@ -17,6 +17,7 @@ import { useAuth } from './AuthContext'
 import { getLocalTags } from './db'
 import { HomePage } from './HomePage'
 import { ImportPage } from './ImportPage'
+import { ImportProgressProvider } from './ImportProgressContext'
 import { IngredientsPage } from './IngredientsPage'
 import { LoginPage } from './LoginPage'
 import { RecipeEditPage } from './RecipeEditPage'
@@ -33,7 +34,9 @@ export function App() {
     <RecipeSyncProvider>
       <RecipeListProvider>
         <RecipeDetailHeaderProvider>
-          <AppShell />
+          <ImportProgressProvider>
+            <AppShell />
+          </ImportProgressProvider>
         </RecipeDetailHeaderProvider>
       </RecipeListProvider>
     </RecipeSyncProvider>

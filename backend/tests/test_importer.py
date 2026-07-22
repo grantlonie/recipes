@@ -3,11 +3,11 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-
-from app.config import Settings
 from app import cooklang as cooklang_mod
+from app.config import Settings
 from app.importer import (
     ImportError,
+    _ensure_drink_tags,
     import_from_file,
     import_from_text,
     import_from_url,
@@ -15,7 +15,6 @@ from app.importer import (
 )
 from app.ingredients import IngredientRepository
 from app.models import CatalogIngredient
-
 
 SAMPLE_COOKLANG = """---
 title: Chicken & bacon pasta
@@ -75,9 +74,7 @@ title: Kebabs
 
 Season with @salt{}(to taste). Add @olive oil{1%Tbsp}.
 """
-    with patch(
-        "app.importer.complete_cooklang", side_effect=[cooklang, repaired]
-    ) as mock_complete:
+    with patch("app.importer.complete_cooklang", side_effect=[cooklang, repaired]) as mock_complete:
         preview = import_from_text(
             "Ingredients\n1/2 teaspoon salt\n1 tablespoon olive oil\n\nDirections\nSeason.",
             settings=settings,
@@ -193,9 +190,7 @@ Cook @lamb{}.
 
     assert mock_complete.call_count == 1
     assert '"Greek" Lamb with Orzo' in preview.content or "Greek" in preview.content
-    metadata_line = next(
-        line for line in preview.content.splitlines() if line.startswith("title:")
-    )
+    metadata_line = next(line for line in preview.content.splitlines() if line.startswith("title:"))
     assert "Greek" in metadata_line
     assert preview.suggested_slug
 
@@ -269,7 +264,9 @@ def test_import_from_url_raises_helpful_message_on_403(
             )
 
 
-def test_import_from_url_sends_browser_headers(settings: Settings, ingredients: IngredientRepository):
+def test_import_from_url_sends_browser_headers(
+    settings: Settings, ingredients: IngredientRepository
+):
     recipe_url = "https://example.com/recipe"
     captured_kwargs: dict = {}
 
@@ -419,6 +416,7 @@ def test_import_from_html_file_extracts_page_image(
     assert preview.image_url == image_url
     assert "source: source.html" in preview.content
 
+
 def test_import_from_text_file_scrapes_embedded_website_url(
     settings: Settings,
     ingredients: IngredientRepository,
@@ -513,3 +511,80 @@ def test_import_from_file_normalizes_legacy_source_path(
 
     assert "source: source.txt" in preview.content
     assert "recipes/" not in preview.content
+
+
+def test_ensure_drink_tags_ignores_old_fashioned_cake():
+    metadata = {
+        "title": "The Best Chocolate Cake Recipe Ever",
+        "description": "Based on the Old Fashioned Hershey's recipe with espresso powder.",
+        "servings": 12,
+    }
+    body = (
+        "Preheat the oven to 350°F. Add @flour{2%cup} and @cocoa powder{0.75%cup}. "
+        "Bake ~{30%minutes}."
+    )
+    _ensure_drink_tags(metadata, body)
+    assert "tags" not in metadata
+
+
+def test_ensure_drink_tags_strips_cocktail_tag_from_baked_goods():
+    metadata = {
+        "title": "Old Fashioned Chocolate Cake",
+        "description": "A rich cake.",
+        "tags": ["cocktail"],
+    }
+    body = "Bake the cake in the oven until done."
+    _ensure_drink_tags(metadata, body)
+    assert "tags" not in metadata
+
+
+def test_ensure_drink_tags_keeps_llm_cocktail_tag():
+    metadata = {
+        "title": "Negroni",
+        "description": "Classic Italian aperitivo.",
+        "tags": ["cocktail"],
+    }
+    body = (
+        "Stir @gin{1%fl oz}, @campari{1%fl oz}, and @sweet vermouth{1%fl oz} "
+        "with ice. Strain into a rocks glass."
+    )
+    _ensure_drink_tags(metadata, body)
+    assert metadata["tags"] == ["cocktail"]
+
+
+def test_ensure_drink_tags_infers_from_explicit_word():
+    metadata = {
+        "title": "House Sour",
+        "description": "A bright whiskey cocktail.",
+    }
+    _ensure_drink_tags(metadata, "Shake and strain.")
+    assert metadata["tags"] == ["cocktail"]
+
+
+def test_ensure_drink_tags_infers_mocktail_from_explicit_word():
+    metadata = {
+        "title": "Citrus Spritz",
+        "description": "A refreshing mocktail.",
+    }
+    _ensure_drink_tags(metadata, "Build over ice.")
+    assert metadata["tags"] == ["mocktail"]
+
+
+def test_ensure_drink_tags_infers_from_mixed_drink_structure():
+    metadata = {"title": "House Sour", "description": "Bright and citrusy."}
+    body = (
+        "Shake @bourbon{2%fl oz}, @lemon juice{1%fl oz}, and @simple syrup{0.75%fl oz} "
+        "with ice. Strain into a coupe. Garnish with a cherry."
+    )
+    _ensure_drink_tags(metadata, body)
+    assert metadata["tags"] == ["cocktail"]
+
+
+def test_ensure_drink_tags_ignores_single_spirit_in_food():
+    metadata = {
+        "title": "Bourbon Glaze",
+        "description": "For roasted pork.",
+    }
+    body = "Simmer @bourbon{2%fl oz} with @brown sugar{0.5%cup} until thick."
+    _ensure_drink_tags(metadata, body)
+    assert "tags" not in metadata

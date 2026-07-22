@@ -2,8 +2,8 @@ import { InformationCircleIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { isEqual } from 'lodash-es'
 import type { FormEvent } from 'react'
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   deleteIngredient,
@@ -17,12 +17,16 @@ import { Button } from './components/Button'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DensitySearchLink } from './components/DensitySearchLink'
 import { Dialog } from './components/Dialog'
+import { UnmatchedReviewDialog } from './components/UnmatchedReviewDialog'
 import { putIngredientCatalog } from './db'
 import { titleCaseIngredient } from './ingredientDisplay'
+import { applyMappingToSavedRecipes, type MappingRow } from './importMapping'
 import { useIngredientCatalog } from './IngredientCatalogContext'
+import { useRecipeSync } from './RecipeSyncContext'
 import { runSync } from './sync'
 import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
 import type { CatalogIngredient } from './types'
+import { scanUnmatchedIngredients, type UnmatchedIngredientRow } from './unmatchedIngredients'
 
 const INGREDIENT_NOTES = [
   'Densities are stored as kg/m³.',
@@ -55,11 +59,18 @@ function ingredientFormFromCatalog(item: CatalogIngredient): IngredientFormState
 
 export function IngredientsPage() {
   const { auth } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const { ingredients, refresh } = useIngredientCatalog()
+  const { localRevision, notifyLocalChange } = useRecipeSync()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [infoOpen, setInfoOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewApplying, setReviewApplying] = useState(false)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [unmatched, setUnmatched] = useState<UnmatchedIngredientRow[]>([])
   const [editing, setEditing] = useState<CatalogIngredient | null>(null)
   const [initial, setInitial] = useState<IngredientFormState>(emptyIngredientForm)
   const [draft, setDraft] = useState<IngredientFormState>(emptyIngredientForm)
@@ -67,6 +78,38 @@ export function IngredientsPage() {
 
   const dirty = editing !== null && !isEqual(initial, draft)
   const { aliases, density, name } = draft
+
+  const refreshUnmatched = useCallback(async () => {
+    const rows = await scanUnmatchedIngredients(ingredients)
+    setUnmatched(rows)
+    return rows
+  }, [ingredients])
+
+  useEffect(() => {
+    if (!auth.authenticated) {
+      return
+    }
+    void refreshUnmatched()
+  }, [auth.authenticated, ingredients, localRevision, refreshUnmatched])
+
+  useEffect(() => {
+    if (!auth.authenticated) {
+      return
+    }
+    if (!searchParams.has('review')) {
+      return
+    }
+    navigate('/ingredients', { replace: true })
+    let cancelled = false
+    void refreshUnmatched().then(rows => {
+      if (!cancelled && rows.length > 0) {
+        setReviewOpen(true)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [auth.authenticated, navigate, refreshUnmatched, searchParams])
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -115,6 +158,27 @@ export function IngredientsPage() {
     },
   })
 
+  async function handleReviewConfirm(row: MappingRow, item: UnmatchedIngredientRow) {
+    setReviewApplying(true)
+    setReviewError(null)
+    try {
+      const result = await applyMappingToSavedRecipes([row], ingredients, item.recipeSlugs, refresh)
+      if (result.updatedSlugs.length) {
+        notifyLocalChange()
+        await queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      }
+      const remaining = await scanUnmatchedIngredients(result.catalog)
+      setUnmatched(remaining)
+      if (remaining.length === 0) {
+        setReviewOpen(false)
+      }
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : 'Could not save ingredient')
+    } finally {
+      setReviewApplying(false)
+    }
+  }
+
   if (!auth.authenticated) {
     return (
       <section className={`mx-auto max-w-md ${cardClassName}`}>
@@ -146,6 +210,24 @@ export function IngredientsPage() {
             <InformationCircleIcon aria-hidden="true" className="h-6 w-6" />
           </button>
         </div>
+
+        {unmatched.length > 0 ? (
+          <button
+            className="mt-4 w-full rounded-2xl bg-amber-50 px-4 py-3 text-left ring-1 ring-amber-200 transition hover:bg-amber-100 dark:bg-amber-950/40 dark:ring-amber-900 dark:hover:bg-amber-950/60"
+            onClick={() => {
+              setReviewError(null)
+              setReviewOpen(true)
+            }}
+            type="button"
+          >
+            <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+              {unmatched.length} unmatched ingredient{unmatched.length === 1 ? '' : 's'}
+            </p>
+            <p className="mt-0.5 text-xs text-amber-900/80 dark:text-amber-200/80">
+              Review to add density or map to the catalog.
+            </p>
+          </button>
+        ) : null}
 
         <div className="mt-6 flex items-center gap-2">
           <label className="min-w-0 flex-1">
@@ -274,9 +356,7 @@ export function IngredientsPage() {
             </span>
             <input
               className={`${inputClassName} mt-1`}
-              onChange={event =>
-                setDraft(current => ({ ...current, aliases: event.target.value }))
-              }
+              onChange={event => setDraft(current => ({ ...current, aliases: event.target.value }))}
               placeholder="flour, ap flour"
               value={aliases}
             />
@@ -326,6 +406,19 @@ export function IngredientsPage() {
           </div>
         </form>
       </Dialog>
+
+      <UnmatchedReviewDialog
+        applying={reviewApplying}
+        catalog={ingredients}
+        error={reviewError}
+        onClose={() => {
+          setReviewOpen(false)
+          setReviewError(null)
+        }}
+        onConfirm={(row, item) => void handleReviewConfirm(row, item)}
+        open={reviewOpen}
+        unmatched={unmatched}
+      />
 
       <ConfirmDialog
         confirmLabel="Delete"

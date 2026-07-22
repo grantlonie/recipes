@@ -2,14 +2,13 @@ import { getRecipes, importRecipeUpload } from './api'
 import { extractTokens } from './cooklangTokens'
 import {
   applyMappingRowsToBody,
-  buildMappingRows,
   parseImportedDocument,
   renderImportDocument,
-  upsertCatalogFromMappingRows,
   type MappingRow,
 } from './importMapping'
 import { finalizeImportedRecipe } from './importRecipeFlow'
 import { sourceUrlKey } from './shareImport'
+import { storeRecipe } from './sync'
 import type { CatalogIngredient, ImportPreview, RecipeSummary } from './types'
 import { matchCatalogIngredient, normalizeUnit } from './units'
 
@@ -37,11 +36,6 @@ export interface BulkImportItem {
   suggestedSlug: string
   unmatchedNames: string[]
   validationWarnings: string[]
-}
-
-export interface BulkUnmatchedRow extends MappingRow {
-  recipeCount: number
-  recipeIds: string[]
 }
 
 export interface BulkExistingIndex {
@@ -206,94 +200,11 @@ export function withReadyStatus(item: BulkImportItem): BulkImportItem {
   if (item.status !== 'pending' && item.status !== 'ready') {
     return item
   }
+  // Unmatched ingredients are reviewed later on the Ingredients page.
   return {
     ...item,
-    status: item.unmatchedNames.length === 0 ? 'ready' : 'pending',
+    status: 'ready',
   }
-}
-
-export function buildBulkUnmatchedQueue(
-  items: BulkImportItem[],
-  catalog: CatalogIngredient[]
-): BulkUnmatchedRow[] {
-  const byKey = new Map<string, BulkUnmatchedRow>()
-
-  for (const item of items) {
-    if (item.status !== 'pending' && item.status !== 'ready') {
-      continue
-    }
-    if (!item.body || item.unmatchedNames.length === 0) {
-      continue
-    }
-
-    const rows = buildMappingRows(item.body, item.unmatchedNames, catalog)
-    for (const row of rows) {
-      const key = `${row.originalName.toLowerCase()}|${row.unit.toLowerCase()}`
-      const existing = byKey.get(key)
-      if (existing) {
-        if (!existing.recipeIds.includes(item.id)) {
-          existing.recipeIds.push(item.id)
-          existing.recipeCount += 1
-        }
-        continue
-      }
-      byKey.set(key, {
-        ...row,
-        recipeCount: 1,
-        recipeIds: [item.id],
-      })
-    }
-  }
-
-  return [...byKey.values()].sort((left, right) => {
-    if (right.recipeCount !== left.recipeCount) {
-      return right.recipeCount - left.recipeCount
-    }
-    return left.originalName.localeCompare(right.originalName, undefined, { sensitivity: 'base' })
-  })
-}
-
-export function applyBulkMappingRows(
-  items: BulkImportItem[],
-  mappingRows: MappingRow[],
-  catalog: CatalogIngredient[]
-): BulkImportItem[] {
-  if (!mappingRows.length) {
-    return items
-  }
-
-  const originalNames = new Set(mappingRows.map(row => row.originalName.toLowerCase()))
-
-  return items.map(item => {
-    if (item.status !== 'pending' && item.status !== 'ready') {
-      return item
-    }
-    if (!item.body) {
-      return item
-    }
-
-    const touched = item.unmatchedNames.some(name => originalNames.has(name))
-    if (!touched) {
-      return withReadyStatus(item)
-    }
-
-    return withReadyStatus({
-      ...item,
-      body: applyMappingRowsToBody(item.body, mappingRows, catalog),
-      unmatchedNames: item.unmatchedNames.filter(name => !originalNames.has(name)),
-    })
-  })
-}
-
-export async function commitBulkMappingRows(
-  items: BulkImportItem[],
-  mappingRows: MappingRow[],
-  catalog: CatalogIngredient[],
-  refreshCatalog: () => Promise<void>
-): Promise<{ catalog: CatalogIngredient[]; items: BulkImportItem[] }> {
-  const nextCatalog = await upsertCatalogFromMappingRows(mappingRows, catalog, refreshCatalog)
-  const nextItems = applyBulkMappingRows(items, mappingRows, nextCatalog)
-  return { catalog: nextCatalog, items: nextItems }
 }
 
 export function buildBulkItemContent(item: BulkImportItem): string {
@@ -466,6 +377,7 @@ export async function saveBulkImportItem(
   const recipe = await finalizeImportedRecipe(content, slug, item.file, {
     skipUniqueSlugCheck: true,
   })
+  await storeRecipe(recipe)
   options.existing.bySlug.add(recipe.slug)
   options.usedSlugs.add(recipe.slug)
   if (recipe.original_url) {
@@ -508,15 +420,6 @@ export async function loadExistingIndex(): Promise<BulkExistingIndex> {
     bySourceUrl.set(sourceUrlKey(recipe.original_url), recipe)
   }
   return { bySlug, bySourceUrl }
-}
-
-export function markItemsReadyIgnoringUnmatched(items: BulkImportItem[]): BulkImportItem[] {
-  return items.map(item => {
-    if (item.status !== 'pending') {
-      return item
-    }
-    return { ...item, status: 'ready', unmatchedNames: [] }
-  })
 }
 
 export function isZipFile(file: File): boolean {

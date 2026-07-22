@@ -1,11 +1,8 @@
-import { useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 
-import { BulkImportDialog } from './BulkImportDialog'
 import { BulkImportPickerDialog } from './BulkImportPickerDialog'
-import { useIngredientCatalog } from '../IngredientCatalogContext'
-import { useRecipeSync } from '../RecipeSyncContext'
+import { useImportProgress } from '../ImportProgressContext'
 
 interface BulkImportControlsProps {
   children?: (actions: { openFiles: () => void }) => ReactNode
@@ -13,12 +10,8 @@ interface BulkImportControlsProps {
 }
 
 export function BulkImportControls({ children, onSingleFile }: BulkImportControlsProps) {
-  const queryClient = useQueryClient()
-  const { sync } = useRecipeSync()
-  const { ingredients: catalog, refresh: refreshCatalog } = useIngredientCatalog()
+  const { startBulkImport } = useImportProgress()
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [bulkFiles, setBulkFiles] = useState<File[]>([])
-  const [bulkOpen, setBulkOpen] = useState(false)
 
   function openFiles() {
     setPickerOpen(true)
@@ -30,19 +23,7 @@ export function BulkImportControls({ children, onSingleFile }: BulkImportControl
       onSingleFile(files[0])
       return
     }
-    setBulkFiles(files)
-    setBulkOpen(true)
-  }
-
-  function closeBulkImport() {
-    setBulkOpen(false)
-    setBulkFiles([])
-  }
-
-  async function completeBulkImport() {
-    closeBulkImport()
-    await sync()
-    await queryClient.invalidateQueries({ queryKey: ['recipes'] })
+    startBulkImport(files)
   }
 
   return (
@@ -53,16 +34,6 @@ export function BulkImportControls({ children, onSingleFile }: BulkImportControl
         onCancel={() => setPickerOpen(false)}
         onSelect={handlePickerSelect}
         open={pickerOpen}
-      />
-
-      <BulkImportDialog
-        catalog={catalog}
-        files={bulkFiles}
-        onClose={closeBulkImport}
-        onComplete={() => void completeBulkImport()}
-        open={bulkOpen}
-        refreshCatalog={refreshCatalog}
-        sync={sync}
       />
     </>
   )
