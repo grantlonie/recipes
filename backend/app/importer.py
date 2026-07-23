@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
 from fastapi import UploadFile
 
 from app import cooklang
@@ -31,27 +30,16 @@ from app.import_context import (
 from app.import_validate import validate_imported_cooklang
 from app.ingredients import IngredientRepository
 from app.models import ImportPreview
+from app.page_fetch import (
+    PageFetchError,
+    fetch_page_image_url,
+    fetch_recipe_page,
+    first_http_url,
+)
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
 from app.units import prefers_fluid_volume
 
-DEFAULT_TIMEOUT_SECONDS = 90.0
 logger = logging.getLogger(__name__)
-SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
-BROWSER_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Connection": "keep-alive",
-    "DNT": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Upgrade-Insecure-Requests": "1",
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-}
 
 
 class ImportError(RuntimeError):
@@ -84,29 +72,15 @@ def import_from_url(
     if not recipe_url:
         raise ImportError("Recipe URL is required")
 
-    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
     try:
-        with httpx.Client(
-            follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS
-        ) as client:
-            response = client.get(recipe_url)
-            response.raise_for_status()
-            html = response.text
-            extracted = extract_html_text(html)
-            image_url = extract_page_image_url(html, str(response.url))
-    except httpx.TimeoutException as error:
-        raise ImportError("Recipe import timed out") from error
-    except httpx.HTTPStatusError as error:
-        raise ImportError(_fetch_error_message(error)) from error
-    except httpx.HTTPError as error:
-        raise ImportError(f"Recipe import failed: {error}") from error
-    except ExtractError as error:
+        page = fetch_recipe_page(recipe_url, settings=settings)
+    except PageFetchError as error:
         raise ImportError(str(error)) from error
 
     return _import_extracted_text(
-        extracted,
+        page.extracted_text,
         source_url=recipe_url,
-        image_url=image_url,
+        image_url=page.image_url,
         settings=settings,
         ingredients=ingredients,
     )
@@ -146,6 +120,7 @@ def import_from_file(
     if extension in image_extensions:
         preview = _import_image_file(path, settings=settings, ingredients=ingredients)
     else:
+        image_scrape_note: str | None = None
         try:
             if extension in {".html", ".htm"}:
                 html = path.read_text(encoding="utf-8", errors="replace")
@@ -156,11 +131,14 @@ def import_from_file(
         except ExtractError as error:
             raise ImportError(str(error)) from error
         if not page_image_url:
-            page_image_url = _image_url_from_source_text(extracted)
+            page_image_url, image_scrape_note = _image_url_from_source_text(
+                extracted, settings=settings
+            )
         preview = _import_extracted_text(
             extracted,
             source_url=source_path,
             image_url=page_image_url,
+            image_scrape_note=image_scrape_note,
             settings=settings,
             ingredients=ingredients,
         )
@@ -286,6 +264,7 @@ def _import_image_file(
             settings=settings,
             ingredients=ingredients,
             source_text=None,
+            trace=trace,
         ),
         trace=trace,
     )
@@ -296,10 +275,13 @@ def _import_extracted_text(
     *,
     source_url: str | None,
     image_url: str | None = None,
+    image_scrape_note: str | None = None,
     settings: Settings,
     ingredients: IngredientRepository,
 ) -> ImportPreview:
     trace = ImportTrace()
+    if image_scrape_note:
+        trace.add(image_scrape_note)
     primary_model = settings.import_model_text
     system_prompt = build_system_prompt()
     user_message = build_user_message(
@@ -371,6 +353,7 @@ def _import_extracted_text(
         settings=settings,
         ingredients=ingredients,
         source_text=extracted_text,
+        trace=trace,
     )
     return _with_import_metadata(
         _maybe_quality_repair(
@@ -395,6 +378,7 @@ def _finalize_import(
     settings: Settings,
     ingredients: IngredientRepository,
     source_text: str | None = None,
+    trace: ImportTrace | None = None,
 ) -> ImportPreview:
     if not _is_valid_import(raw):
         raise ImportError("Imported content is not valid Cooklang")
@@ -404,7 +388,8 @@ def _finalize_import(
         metadata["source"] = source_url
     elif source_url and cooklang.is_ref_file(source_url):
         metadata["source"] = source_url
-    _apply_import_image(metadata, image_url=image_url)
+    image_notes: list[str] = []
+    _apply_import_image(metadata, image_url=image_url, settings=settings, notes=image_notes)
 
     content = cooklang.render_document(metadata, body)
     content = cooklang.prepare_imported_content(content)
@@ -419,7 +404,7 @@ def _finalize_import(
     content = cooklang.prepare_imported_content(cooklang.render_document(metadata, mapped_body))
     metadata, body = cooklang.parse_document(content)
     # Re-apply after normalize in case front-matter repair dropped image.
-    _apply_import_image(metadata, image_url=image_url)
+    _apply_import_image(metadata, image_url=image_url, settings=settings, notes=image_notes)
     _ensure_drink_tags(metadata, body)
     content = cooklang.render_document(metadata, body)
     validation = validate_imported_cooklang(
@@ -427,6 +412,9 @@ def _finalize_import(
         source_text=source_text,
         catalog=ingredients.list_ingredients(),
     )
+    if trace is not None:
+        for note in image_notes:
+            trace.add(note)
 
     slug_source = source_url or metadata.get("title", "imported-recipe")
     if isinstance(slug_source, str) and cooklang.is_ref_file(slug_source):
@@ -502,6 +490,7 @@ def _maybe_quality_repair(
         settings=settings,
         ingredients=ingredients,
         source_text=extracted_text,
+        trace=trace,
     )
     # Prefer the repaired result even if some soft warnings remain.
     return repaired_preview
@@ -623,7 +612,13 @@ def _looks_like_mixed_drink(body: str) -> bool:
     return (pours >= 2 and techniques >= 1) or pours >= 3
 
 
-def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:
+def _apply_import_image(
+    metadata: dict,
+    *,
+    image_url: str | None,
+    settings: Settings,
+    notes: list[str] | None = None,
+) -> None:
     """Set image from scrape unless a local asset file is already present."""
     if cooklang.metadata_image_file(metadata):
         return
@@ -634,24 +629,27 @@ def _apply_import_image(metadata: dict, *, image_url: str | None) -> None:
         return
     source = metadata.get("source")
     if isinstance(source, str) and cooklang.is_ref_url(source):
-        scraped = _fetch_source_image_url(source)
+        scraped = fetch_page_image_url(source, settings=settings)
         if scraped:
             metadata["image"] = scraped
+            return
+        note = f"Could not scrape image from {source}"
+        if notes is not None and note not in notes:
+            notes.append(note)
 
 
-def _image_url_from_source_text(text: str) -> str | None:
-    """Scrape og:image from the first website URL embedded in source text."""
+def _image_url_from_source_text(text: str, *, settings: Settings) -> tuple[str | None, str | None]:
+    """Scrape og:image from the first website URL embedded in source text.
+
+    Returns (image_url, soft_warning).
+    """
     web_url = first_http_url(text)
     if not web_url:
-        return None
-    return _fetch_source_image_url(web_url)
-
-
-def first_http_url(text: str) -> str | None:
-    match = SOURCE_HTTP_URL_RE.search(text)
-    if not match:
-        return None
-    return match.group(0).rstrip(".,);]>\"'")
+        return None, None
+    image_url = fetch_page_image_url(web_url, settings=settings)
+    if image_url:
+        return image_url, None
+    return None, f"Could not scrape image from {web_url}"
 
 
 def _has_usable_image(metadata: dict) -> bool:
@@ -660,19 +658,6 @@ def _has_usable_image(metadata: dict) -> bool:
         return False
     value = image.strip()
     return bool(value) and (cooklang.is_ref_url(value) or cooklang.is_ref_file(value))
-
-
-def _fetch_source_image_url(url: str) -> str | None:
-    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
-    try:
-        with httpx.Client(
-            follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS
-        ) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            return extract_page_image_url(response.text, str(response.url))
-    except httpx.HTTPError:
-        return None
 
 
 def _is_valid_import(content: str) -> bool:
@@ -701,13 +686,3 @@ def _find_source_file(recipe_root: Path, slug: str) -> Path | None:
         return None
     matches = sorted(assets_dir.glob("source.*"))
     return matches[0] if matches else None
-
-
-def _fetch_error_message(error: httpx.HTTPStatusError) -> str:
-    status = error.response.status_code
-    if status == 403:
-        return (
-            "This site blocked automated access. Try copying the recipe text "
-            "or saving the page and importing the HTML file instead."
-        )
-    return f"Recipe import failed: {error}"

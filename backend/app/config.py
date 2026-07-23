@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     import_model_repair: str = "accounts/fireworks/models/gpt-oss-120b"
     import_model_text: str = "accounts/fireworks/models/qwen3p7-plus"
     import_model_vision: str = "accounts/fireworks/models/qwen3p7-plus"
+    page_fetch_concurrency: int = 1
+    page_fetch_fallback_enabled: bool = True
+    page_fetch_max_retries: int = 2
+    page_fetch_min_interval_seconds: float = 0.75
     recipe_editor_password: str = "recipes"
     recipe_editor_username: str = "editor"
     session_secret: str = Field(default="change-me", min_length=8)

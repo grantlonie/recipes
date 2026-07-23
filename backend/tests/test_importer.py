@@ -30,6 +30,9 @@ def settings() -> Settings:
     return Settings(
         fireworks_api_key="test-key",
         data_root=Path("/tmp/recipes-test"),
+        page_fetch_fallback_enabled=False,
+        page_fetch_max_retries=0,
+        page_fetch_min_interval_seconds=0,
     )
 
 
@@ -231,7 +234,7 @@ def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: In
     transport = httpx.MockTransport(handler)
     with patch("app.importer.extract_html_text", return_value="Chicken bacon pasta recipe"):
         with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG):
-            with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+            with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
                 preview = import_from_url(recipe_url, settings=settings, ingredients=ingredients)
 
     assert preview.suggested_slug == "chicken-bacon-pasta"
@@ -244,7 +247,7 @@ def test_import_from_url_raises_on_fetch_failure(
     settings: Settings, ingredients: IngredientRepository
 ):
     transport = httpx.MockTransport(lambda request: httpx.Response(404, text="not found"))
-    with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+    with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
         with pytest.raises(ImportError, match="Recipe import failed"):
             import_from_url(
                 "https://example.com/recipe", settings=settings, ingredients=ingredients
@@ -255,10 +258,23 @@ def test_import_from_url_raises_helpful_message_on_403(
     settings: Settings, ingredients: IngredientRepository
 ):
     transport = httpx.MockTransport(lambda request: httpx.Response(403, text="forbidden"))
-    with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+    with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
         with pytest.raises(ImportError, match="blocked automated access"):
             import_from_url(
                 "https://www.allrecipes.com/recipe/example/",
+                settings=settings,
+                ingredients=ingredients,
+            )
+
+
+def test_import_from_url_raises_helpful_message_on_429(
+    settings: Settings, ingredients: IngredientRepository
+):
+    transport = httpx.MockTransport(lambda request: httpx.Response(429, text="slow down"))
+    with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with pytest.raises(ImportError, match="rate-limiting imports"):
+            import_from_url(
+                "https://food52.com/recipes/example/",
                 settings=settings,
                 ingredients=ingredients,
             )
@@ -282,7 +298,7 @@ def test_import_from_url_sends_browser_headers(
 
     with patch("app.importer.extract_html_text", return_value="Recipe text"):
         with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG):
-            with patch("app.importer.httpx.Client", client_factory):
+            with patch("app.page_fetch.httpx.Client", client_factory):
                 import_from_url(recipe_url, settings=settings, ingredients=ingredients)
 
     headers = captured_kwargs.get("headers", {})
@@ -316,7 +332,7 @@ Add @chicken{} and @bacon{}.
 
     transport = httpx.MockTransport(handler)
     with patch("app.importer.complete_cooklang", return_value=cooklang):
-        with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
             preview = import_from_text(
                 "Recipe text",
                 settings=settings,
@@ -339,7 +355,7 @@ Add @chicken{} and @bacon{}.
 """
 
     with patch("app.importer.complete_cooklang", return_value=cooklang):
-        with patch("app.importer._fetch_source_image_url") as mock_fetch:
+        with patch("app.importer.fetch_page_image_url") as mock_fetch:
             preview = import_from_text(
                 "Recipe text",
                 settings=settings,
@@ -378,7 +394,7 @@ Add @chicken{} and @bacon{}.
 
     transport = httpx.MockTransport(handler)
     with patch("app.importer.complete_cooklang", return_value=cooklang):
-        with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
             preview = import_from_url(page_url, settings=settings, ingredients=ingredients)
 
     assert "image: image.jpg" in preview.content
@@ -448,7 +464,7 @@ def test_import_from_text_file_scrapes_embedded_website_url(
         "app.importer.complete_cooklang",
         return_value="---\ntitle: Brownies\n---\n\nBake @batter{}.\n",
     ):
-        with patch("app.importer.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
             preview = import_from_file(
                 source_file,
                 settings=settings,

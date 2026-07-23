@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+from openai import APIStatusError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
@@ -24,9 +25,9 @@ from app.fireworks_llm import (  # noqa: E402
     normalize_model_output,
 )
 from app.import_context import build_system_prompt, build_user_message  # noqa: E402
-from app.importer import BROWSER_HEADERS, _finalize_import, _is_valid_import  # noqa: E402
+from app.importer import _finalize_import, _is_valid_import  # noqa: E402
 from app.ingredients import IngredientRepository  # noqa: E402
-from openai import APIStatusError  # noqa: E402
+from app.page_fetch import BROWSER_HEADERS  # noqa: E402
 
 
 def write_text(path: Path, content: str) -> None:
