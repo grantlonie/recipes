@@ -95,7 +95,10 @@ Output rules:
   gives one overall duration.
 - Use `time` only for a single overall duration when prep/cook are not listed separately.
 - Prefer plain English durations (20 minutes, 1 hour 30 minutes).
-- `title` is REQUIRED and should be the first front-matter key. Never omit it.
+- `title` is REQUIRED and must be the first front-matter key. Never omit it.
+  Copy the recipe name from the source — usually the first non-empty line, or the
+  page headline before the URL/Ingredients list (example: source starts with
+  "Espresso Tonic" → title: "Espresso Tonic").
   Always write title/description/introduction as single-line double-quoted YAML strings.
   Escape internal double quotes as \\". Apostrophes and & are fine inside double quotes —
   do not wrap titles in single quotes, and do not use Title: or name: instead of title:.
@@ -105,6 +108,11 @@ Output rules:
   title: "\\"Greek\\" Lamb with Orzo",
   description: "Hearty chili with kidney beans. Leftovers keep 3 days refrigerated.")
   Never wrap these fields across lines without quotes.
+- Never write @salt and pepper{{}} or @salt & pepper{{}}. Those are two ingredients —
+  emit @salt{{}}(to taste) and @black pepper{{}}(to taste) (or with amounts when given).
+- `>` notes are only short cook tips for the reader. Never put your own reasoning,
+  checklists, rule debates, or "let me reconsider" self-talk in `>` notes or the body.
+  Return the finished recipe only — no thinking out loud.
 - source and image must be flat strings: either an http(s) URL or omitted if unknown.
 
 Language: {output_language}
@@ -137,6 +145,7 @@ Frank's Redhot Buffalo Chicken Dip
 Combine @cream cheese{}.
 
 Wrong keys: Title: "French Toast" or name: "French Toast" (must be lowercase title:).
+Season with @salt and pepper{} (wrong — split into two ingredients).
 Add @black pepper{1}(green bell, diced) and @vanilla extract{1}(bean).
 Season with @salt{0%g}(to taste). Oil the baking pan{1}.
 Add @fennel seeds{1%tsp} when the source says 1 tbsp fennel seeds.
@@ -144,6 +153,7 @@ Use @granulated sugar{}(confectioners') for powdered sugar.
 If using juice instead of beer, add @instant yeast{}(dry active).
 If you prefer a softer crust, mix the butter into the batter.
 > Sifting flour is essential.
+> Let me re-check the celery amount and finalize the document.
 > If using a non-alcoholic beverage instead of beer, add yeast.
 
 Right:
@@ -155,7 +165,7 @@ Combine @cream cheese{}.
 
 description: "Hearty beer bread. Sift the flour (or spoon into the cup). If not using beer, add a packet of active dry yeast."
 Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
-Season with @salt{}(to taste). Oil the #baking pan{}.
+Season with @salt{}(to taste) and @black pepper{}(to taste). Oil the #baking pan{}.
 Add @fennel seeds{1%Tbsp} when the source says 1 tbsp fennel seeds.
 Dust with @powdered sugar{}(as needed).
 > Soft crust: mix melted butter into the batter instead of pouring it over the top.
@@ -193,7 +203,10 @@ def build_user_message(
     cleaned = clean_source_text(extracted_text)
     parts = [
         "Convert this recipe source into Cooklang.",
-        'The front matter must include title: "..." as the first key.',
+        'Front matter MUST start with title: "Recipe Name" — copy the name from the',
+        "source (usually the first non-empty line / headline). Title is required.",
+        'Never emit @salt and pepper{}; use @salt{} and @black pepper{} instead.',
+        "Return only the finished .cook document — no reasoning or checklists.",
         "",
     ]
     if source_url:

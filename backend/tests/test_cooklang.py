@@ -366,6 +366,63 @@ Combine @cream cheese{1%pkg}.
     assert _invalid_import_reason(healed) == "missing title"
 
 
+def test_heal_strips_self_talk_from_cooklang_notes():
+    raw = """---
+title: "Tabouli"
+---
+
+Season with @salt{}(to taste).
+
+> Top with @feta cheese{0.5%cup}(optional) if desired.
+
+> Hmm, wait. Let me re-check a few things:
+
+> 1. "6 inner stalks of celery" - I'll use @celery{6}.
+
+> Let me finalize the document now.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Tabouli"
+    assert "Top with @feta cheese" in body
+    assert "Let me re-check" not in body
+    assert "Let me finalize" not in body
+    assert any(
+        "self-talk" in note or "trimmed trailing LLM reasoning" in note for note in notes
+    )
+
+
+def test_heal_splits_salt_and_pepper_marker():
+    raw = """---
+title: "Steak"
+---
+
+Season with @salt and pepper{}(to taste).
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    _meta, body = parse_document(healed)
+    assert "@salt{}(to taste)" in body
+    assert "@black pepper{}(to taste)" in body
+    assert "@salt and pepper" not in body
+    assert any("salt and pepper" in note for note in notes)
+
+
+def test_heal_recovers_title_without_front_matter_when_body_has_ingredients():
+    raw = """Here is Flat Bread
+
+Mix @bread flour{3%cup} with @water{1%cup}.
+"""
+    healed, notes = heal_imported_cooklang(
+        raw,
+        source_text="Flat Bread\n\nhttps://example.com\n\nIngredients\n3 cups flour\n",
+    )
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Flat Bread"
+    assert "Mix @bread flour{3%cup}" in body
+    assert any("from source" in note for note in notes)
+    assert _invalid_import_reason(healed) is None
+
+
 def test_render_front_matter_quotes_import_notes_with_colons():
     content = render_document(
         {

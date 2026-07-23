@@ -184,23 +184,84 @@ def heal_imported_cooklang(
             notes.append(f"heal: dropped invalid {key} ref ({value})")
 
     if not metadata.get("title"):
-        # Only inject a title into a real front-matter document — never wrap
-        # broken/partial model output in a new --- block just to invent a title.
-        if not has_front_matter:
-            return cleaned, notes
         recovered, body, recover_note = recover_missing_title(
             body,
             fallback_title=fallback_title,
             source_text=source_text,
         )
-        if recovered:
-            metadata = {"title": recovered, **metadata}
+        if recovered and (has_front_matter or INGREDIENT_RE.search(body)):
+            if not has_front_matter:
+                body = _strip_broken_front_matter_prefix(body)
+            metadata = {"title": recovered, **{k: v for k, v in metadata.items() if k != "title"}}
             notes.append(recover_note)
+        elif not recovered or not has_front_matter:
+            return cleaned, notes
 
     if not metadata.get("title") or not body.strip():
         return cleaned, notes
 
+    cleaned_body, split_salt = split_salt_and_pepper_markers(body)
+    if split_salt:
+        body = cleaned_body
+        notes.append("heal: split @salt and pepper into @salt and @black pepper")
+
+    cleaned_body, dropped_notes = strip_llm_reasoning_notes(body)
+    if dropped_notes:
+        body = cleaned_body
+        notes.append("heal: removed LLM self-talk from notes")
+
     return render_document(metadata, body), notes
+
+
+def split_salt_and_pepper_markers(body: str) -> tuple[str, bool]:
+    """Rewrite combined salt-and-pepper markers into two catalog-friendly ingredients."""
+
+    def replacer(match: re.Match[str]) -> str:
+        amount = (match.group(1) or "").strip()
+        note = (match.group(2) or "").strip() or "to taste"
+        note_markup = f"({note})"
+        if amount:
+            return (
+                f"@salt{{{amount}}}{note_markup} and @black pepper{{{amount}}}{note_markup}"
+            )
+        return f"@salt{{}}{note_markup} and @black pepper{{}}{note_markup}"
+
+    updated, count = _SALT_AND_PEPPER_RE.subn(replacer, body)
+    return updated, count > 0
+
+
+def strip_llm_reasoning_notes(body: str) -> tuple[str, bool]:
+    """Drop note/prose blocks that are model self-talk, not cook tips."""
+    parts = re.split(r"\n\s*\n", body)
+    kept: list[str] = []
+    dropped = False
+    for part in parts:
+        text = part.strip()
+        if not text:
+            continue
+        if _is_llm_reasoning_block(text):
+            dropped = True
+            continue
+        kept.append(part)
+    if not kept:
+        return (body if not dropped else "\n"), dropped
+    result = "\n\n".join(kept).rstrip() + "\n"
+    return result, dropped or result != body.rstrip() + "\n"
+
+
+def _strip_broken_front_matter_prefix(body: str) -> str:
+    """If body still starts with a broken --- block, keep only the recipe body."""
+    stripped = body.lstrip("\n")
+    match = FRONT_MATTER_RE.match(stripped)
+    if match:
+        return stripped[match.end() :]
+    if stripped.startswith("---"):
+        rest = re.sub(r"\A---\s*\n?", "", stripped, count=1)
+        closer = re.search(r"(?m)^---\s*$", rest)
+        if closer:
+            return rest[closer.end() :].lstrip("\n")
+        return rest
+    return body
 
 
 def normalize_title_metadata(metadata: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
@@ -382,11 +443,20 @@ def _body_lost_reasoning(before: str, after: str) -> bool:
 # Model sometimes keeps "thinking" in the main content channel after a valid .cook doc.
 _LLM_REASONING_START_RE = re.compile(
     r"(?im)^(?:"
-    r"Wait,?\s+I\b|Actually,?\s+(?:wait|let me|I)\b|Let me (?:reconsider|finalize|also|check)\b|"
-    r"Hmm,|I (?:need to|should|think|decided|will)\b|Looking at this\b|"
-    r"My (?:description|revised|final)\b|Revised description\b|"
-    r"One more thing\b|I'll go with\b|I'?m overcomplicating\b"
+    r"Wait,?\s+I\b|Wait[,.]?\s*$|Hmm,?\b|Actually,?\s+(?:wait|let me|I)\b|"
+    r"Let me (?:reconsider|finalize|also|check|re-check|write|think|just)\b|"
+    r"I (?:need to|should|think|decided|will|realize|want to)\b|Looking at (?:this|the)\b|"
+    r"My (?:description|revised|final|draft)\b|Revised description\b|"
+    r"One more thing\b|I'll (?:go with|use|keep|tag|include)\b|I'?m overcomplicating\b|"
+    r"The rules say\b|Per the rules\b|Actually,?\s+looking\b|"
+    r"\d+\.\s+\""  # numbered self-review: 1. "6 inner stalks...
     r")"
+)
+
+_SALT_AND_PEPPER_RE = re.compile(
+    r"@salt\s*(?:and|&)\s*(?:freshly\s+ground\s+)?(?:black\s+)?pepper"
+    r"\{([^}]*)\}(?:\(([^)]*)\))?",
+    re.IGNORECASE,
 )
 
 
@@ -479,9 +549,7 @@ def _strip_trailing_llm_reasoning(body: str) -> str:
         text = part.strip()
         if not text:
             continue
-        if kept and _LLM_REASONING_START_RE.match(text):
-            break
-        if kept and _looks_like_llm_reasoning_paragraph(text):
+        if kept and _is_llm_reasoning_block(text):
             break
         kept.append(part)
     if not kept:
@@ -489,29 +557,75 @@ def _strip_trailing_llm_reasoning(body: str) -> str:
     return "\n\n".join(kept).rstrip() + "\n"
 
 
+def _is_llm_reasoning_block(text: str) -> bool:
+    """True for self-talk paragraphs, including those wrapped as `>` notes."""
+    unwrapped = _unwrap_cooklang_note_paragraph(text)
+    if not unwrapped.strip():
+        return False
+    if _LLM_REASONING_START_RE.match(unwrapped.strip()):
+        return True
+    return _looks_like_llm_reasoning_paragraph(unwrapped)
+
+
+def _unwrap_cooklang_note_paragraph(text: str) -> str:
+    lines: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(">"):
+            stripped = stripped.lstrip(">").strip()
+        lines.append(stripped)
+    return "\n".join(lines)
+
+
 def _looks_like_llm_reasoning_paragraph(text: str) -> bool:
     """Heuristic for mid-document self-talk that isn't a cook tip note."""
-    if text.startswith(">"):
+    unwrapped = _unwrap_cooklang_note_paragraph(text).strip()
+    if not unwrapped:
         return False
-    if text.startswith("==") and text.endswith("=="):
+    if unwrapped.startswith("==") and unwrapped.endswith("=="):
         return False
-    if "@" in text or "#{" in text or "~{" in text:
-        return False
-    lowered = text.casefold()
+    lowered = unwrapped.casefold()
     markers = (
         "the rules say",
+        "per the rules",
         "i decided to",
         "if i strictly follow",
         "let me finalize",
         "let me also reconsider",
+        "let me re-check",
+        "let me reconsider",
+        "let me write the final",
+        "let me just use",
         "overcomplicating",
         "don't invent",
         "do not invent",
         "yaml should handle",
         "i'll leave it unquoted",
         "revised description",
+        "looking at the source",
+        "looking at the rules",
+        "looking at the examples",
+        "one more review",
+        "my draft",
+        "i'll tag",
+        "i should tag",
+        "i should still tag",
+        "i'll use @",
+        "i'll keep",
+        "hmm,",
+        "hmm.",
+        "wait -",
+        "wait,",
+        "actually, i",
+        "actually looking",
+        "re-check a few things",
     )
-    return any(marker in lowered for marker in markers)
+    if any(marker in lowered for marker in markers):
+        return True
+    # Numbered self-audit lines quoting ingredient text.
+    if re.search(r'(?m)^\d+\.\s+".+"\s+-\s+', unwrapped):
+        return True
+    return False
 
 
 def format_yaml_quoted_string(value: str) -> str:
@@ -1079,6 +1193,8 @@ def normalize_document(content: str) -> str:
 def prepare_imported_content(content: str) -> str:
     metadata, body = parse_document(trim_cooklang_document(content))
     strip_app_owned_import_keys(metadata)
+    body, _ = split_salt_and_pepper_markers(body)
+    body, _ = strip_llm_reasoning_notes(body)
     body = normalize_ingredient_amounts(strip_import_error_notes(body))
     return normalize_document(render_document(metadata, body))
 

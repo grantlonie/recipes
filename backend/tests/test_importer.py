@@ -199,13 +199,13 @@ def test_import_from_text_raises_when_repair_still_invalid(
     settings: Settings, ingredients: IngredientRepository
 ):
     invalid = """---
+description: "Broken"
 ---
 
-Cook @lamb{}.
 """
     with patch("app.importer.complete_cooklang", side_effect=[invalid, invalid]):
         with pytest.raises(ImportError, match="not valid Cooklang"):
-            # Source starts with Ingredients so heal cannot guess a title.
+            # No guessable title line; empty body stays invalid after heal.
             import_from_text(
                 "Ingredients\n1 lb lamb\n\nDirections\nCook the lamb.",
                 settings=settings,

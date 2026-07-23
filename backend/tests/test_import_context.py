@@ -13,6 +13,9 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
     assert "`title` is REQUIRED" in prompt
+    assert "Copy the recipe name from the source" in prompt
+    assert "Never write @salt and pepper{}" in prompt
+    assert "Never put your own reasoning" in prompt
     assert "do not use Title: or name:" in prompt
     assert 'title: "French Toast"' in prompt
     assert 'title: "Dori Sanders\' No-Churn Fresh Lemon Ice Cream"' in prompt
@@ -56,7 +59,8 @@ def test_build_system_prompt_omits_ingredient_catalog():
 
 def test_build_user_message_requires_title_key():
     message = build_user_message("French Toast\n\nWhisk eggs.")
-    assert 'The front matter must include title: "..." as the first key.' in message
+    assert 'Front matter MUST start with title: "Recipe Name"' in message
+    assert "Never emit @salt and pepper{}" in message
     assert "French Toast" in message
 
 
