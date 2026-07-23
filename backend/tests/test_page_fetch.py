@@ -21,6 +21,13 @@ def _reset_throttle():
     reset_fetch_throttle_for_tests()
 
 
+@pytest.fixture(autouse=True)
+def _disable_curl_cffi():
+    # Keep unit tests on the mocked httpx path.
+    with patch("app.page_fetch._get_page_curl_cffi", return_value=None):
+        yield
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
@@ -103,12 +110,14 @@ def test_fetch_recipe_page_retries_429_then_succeeds(settings: Settings):
 def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
     page_url = "https://food52.com/recipes/example"
     image_url = "https://images.food52.com/dish.jpg"
+    jina_headers: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if url == page_url:
             return httpx.Response(429, text="slow down", headers={"Retry-After": "0"})
         if url.startswith("https://r.jina.ai/"):
+            jina_headers.update({key.lower(): value for key, value in request.headers.items()})
             return httpx.Response(
                 200,
                 text=(
@@ -126,6 +135,34 @@ def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
     assert page.used_fallback is True
     assert "Greek Lamb" in page.extracted_text
     assert page.image_url == image_url
+    # Browser-like header sets make Jina return 403.
+    assert "sec-fetch-mode" not in jina_headers
+    assert "mozilla" not in jina_headers.get("user-agent", "").lower()
+
+
+def test_fetch_recipe_page_rejects_jina_challenge_page(settings: Settings):
+    page_url = "https://food52.com/recipes/example"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == page_url:
+            return httpx.Response(403, text="forbidden")
+        if url.startswith("https://r.jina.ai/"):
+            return httpx.Response(
+                200,
+                text=(
+                    "Title: Vercel Security Checkpoint\n"
+                    "Warning: Target URL returned 403\n"
+                    "Enable JavaScript and cookies to continue\n"
+                ),
+            )
+        raise AssertionError(f"Unexpected request: {url}")
+
+    transport = httpx.MockTransport(handler)
+    with patch("app.page_fetch.time.sleep"):
+        with _patch_client(transport):
+            with pytest.raises(PageFetchError, match="blocked automated access"):
+                fetch_recipe_page(page_url, settings=settings)
 
 
 def test_fetch_page_image_url_uses_microlink_when_page_fetch_fails(settings: Settings):

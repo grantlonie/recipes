@@ -15,6 +15,7 @@ DEFAULT_TIMEOUT_SECONDS = 90.0
 JINA_READER_PREFIX = "https://r.jina.ai/"
 MICROLINK_API = "https://api.microlink.io/"
 RETRYABLE_STATUS = frozenset({403, 429})
+CURL_CFFI_IMPERSONATE = "chrome131"
 
 BROWSER_HEADERS = {
     "Accept": (
@@ -34,8 +35,22 @@ BROWSER_HEADERS = {
     ),
 }
 
+# Jina rejects browser-like header sets with 403; keep this minimal.
+JINA_HEADERS = {
+    "Accept": "text/plain,text/markdown,*/*;q=0.8",
+    "User-Agent": "recipes-importer/1.0",
+}
+
 SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
 MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^)\s]+)\)")
+CHALLENGE_MARKERS = (
+    "vercel security checkpoint",
+    "just a moment...",
+    "cf-browser-verification",
+    "attention required",
+    "enable javascript and cookies",
+    "checking your browser",
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +72,14 @@ class FetchedPage:
     final_url: str
     image_url: str | None
     used_fallback: bool = False
+
+
+@dataclass(frozen=True)
+class _RawResponse:
+    status_code: int
+    text: str
+    url: str
+    headers: dict[str, str]
 
 
 def first_http_url(text: str) -> str | None:
@@ -109,64 +132,116 @@ def rate_limit_message(status_code: int | None = None) -> str:
 
 
 def _fetch_direct(url: str, *, settings: Settings) -> FetchedPage:
-    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
     attempts = max(1, settings.page_fetch_max_retries + 1)
     last_error: PageFetchError | None = None
 
-    with httpx.Client(follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS) as client:
-        for attempt in range(attempts):
-            try:
-                response = client.get(url)
-            except httpx.TimeoutException as error:
-                raise PageFetchError("Recipe import timed out") from error
-            except httpx.HTTPError as error:
-                raise PageFetchError(f"Recipe import failed: {error}") from error
+    for attempt in range(attempts):
+        try:
+            response = _get_page(url)
+        except httpx.TimeoutException as error:
+            raise PageFetchError("Recipe import timed out") from error
+        except httpx.HTTPError as error:
+            raise PageFetchError(f"Recipe import failed: {error}") from error
 
-            if response.status_code in RETRYABLE_STATUS:
-                last_error = PageFetchError(
-                    rate_limit_message(response.status_code),
-                    status_code=response.status_code,
-                )
-                if attempt + 1 < attempts:
-                    _sleep_before_retry(response, attempt)
-                    continue
-                raise last_error
-
-            try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as error:
-                raise PageFetchError(
-                    _status_error_message(error),
-                    status_code=error.response.status_code,
-                ) from error
-
-            html = response.text
-            final_url = str(response.url)
-            try:
-                extracted = extract_html_text(html)
-            except ExtractError as error:
-                raise PageFetchError(str(error)) from error
-            return FetchedPage(
-                extracted_text=extracted,
-                final_url=final_url,
-                image_url=extract_page_image_url(html, final_url),
-                used_fallback=False,
+        if response.status_code in RETRYABLE_STATUS:
+            last_error = PageFetchError(
+                rate_limit_message(response.status_code),
+                status_code=response.status_code,
             )
+            if attempt + 1 < attempts:
+                _sleep_before_retry(response.headers, attempt)
+                continue
+            raise last_error
+
+        if response.status_code >= 400:
+            raise PageFetchError(
+                rate_limit_message(response.status_code)
+                if response.status_code in RETRYABLE_STATUS
+                else f"Recipe import failed: {response.status_code} for url '{url}'",
+                status_code=response.status_code,
+            )
+
+        html = response.text
+        if _looks_like_challenge_page(html):
+            last_error = PageFetchError(
+                rate_limit_message(403),
+                status_code=403,
+            )
+            if attempt + 1 < attempts:
+                _sleep_before_retry(response.headers, attempt)
+                continue
+            raise last_error
+
+        final_url = response.url
+        try:
+            extracted = extract_html_text(html)
+        except ExtractError as error:
+            raise PageFetchError(str(error)) from error
+        return FetchedPage(
+            extracted_text=extracted,
+            final_url=final_url,
+            image_url=extract_page_image_url(html, final_url),
+            used_fallback=False,
+        )
 
     assert last_error is not None
     raise last_error
 
 
+def _get_page(url: str) -> _RawResponse:
+    """Prefer Chrome TLS impersonation; fall back to plain httpx."""
+    curl_response = _get_page_curl_cffi(url)
+    if curl_response is not None:
+        return curl_response
+    return _get_page_httpx(url)
+
+
+def _get_page_curl_cffi(url: str) -> _RawResponse | None:
+    try:
+        from curl_cffi import requests as curl_requests
+    except ImportError:
+        return None
+
+    try:
+        response = curl_requests.get(
+            url,
+            impersonate=CURL_CFFI_IMPERSONATE,
+            timeout=DEFAULT_TIMEOUT_SECONDS,
+            allow_redirects=True,
+            headers={
+                "Accept": BROWSER_HEADERS["Accept"],
+                "Accept-Language": BROWSER_HEADERS["Accept-Language"],
+            },
+        )
+    except Exception as error:  # noqa: BLE001 - fall back to httpx
+        logger.info("curl_cffi fetch failed for %s (%s); using httpx", url, error)
+        return None
+
+    return _RawResponse(
+        status_code=int(response.status_code),
+        text=response.text or "",
+        url=str(response.url),
+        headers={str(key): str(value) for key, value in response.headers.items()},
+    )
+
+
+def _get_page_httpx(url: str) -> _RawResponse:
+    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
+    with httpx.Client(follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS) as client:
+        response = client.get(url)
+        return _RawResponse(
+            status_code=response.status_code,
+            text=response.text,
+            url=str(response.url),
+            headers=dict(response.headers),
+        )
+
+
 def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
     timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
     reader_url = f"{JINA_READER_PREFIX}{url}"
-    headers = {
-        **BROWSER_HEADERS,
-        "Accept": "text/plain,text/markdown,*/*;q=0.8",
-        "X-Return-Format": "markdown",
-    }
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
+        with httpx.Client(follow_redirects=True, timeout=timeout, headers=JINA_HEADERS) as client:
             response = client.get(reader_url)
             response.raise_for_status()
             text = response.text.strip()
@@ -184,6 +259,8 @@ def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
 
     if not text:
         raise PageFetchError("Recipe import failed: empty reader response")
+    if _looks_like_challenge_page(text):
+        raise PageFetchError(rate_limit_message(403), status_code=403)
 
     image_url = _image_url_from_markdown(text, base_url=url)
     if not image_url:
@@ -233,7 +310,6 @@ def _image_url_from_markdown(text: str, *, base_url: str) -> str | None:
             )
             if resolved:
                 return resolved
-    # Fall back to first http URL that looks like an image path.
     for match in SOURCE_HTTP_URL_RE.finditer(text):
         candidate = match.group(0).rstrip(".,);]>\"'")
         lowered = candidate.lower()
@@ -244,15 +320,13 @@ def _image_url_from_markdown(text: str, *, base_url: str) -> str | None:
     return None
 
 
-def _status_error_message(error: httpx.HTTPStatusError) -> str:
-    status = error.response.status_code
-    if status in RETRYABLE_STATUS:
-        return rate_limit_message(status)
-    return f"Recipe import failed: {error}"
+def _looks_like_challenge_page(text: str) -> bool:
+    lowered = text[:4000].lower()
+    return any(marker in lowered for marker in CHALLENGE_MARKERS)
 
 
-def _sleep_before_retry(response: httpx.Response, attempt: int) -> None:
-    retry_after = response.headers.get("Retry-After")
+def _sleep_before_retry(headers: dict[str, str], attempt: int) -> None:
+    retry_after = headers.get("Retry-After") or headers.get("retry-after")
     delay: float
     if retry_after:
         try:

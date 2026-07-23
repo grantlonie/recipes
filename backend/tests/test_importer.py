@@ -36,6 +36,12 @@ def settings() -> Settings:
     )
 
 
+@pytest.fixture(autouse=True)
+def _disable_curl_cffi():
+    with patch("app.page_fetch._get_page_curl_cffi", return_value=None):
+        yield
+
+
 @pytest.fixture
 def ingredients(tmp_path: Path) -> IngredientRepository:
     repository = IngredientRepository(catalog_path=tmp_path / "ingredients.json")
@@ -232,9 +238,10 @@ def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: In
         raise AssertionError(f"Unexpected request: {request.url}")
 
     transport = httpx.MockTransport(handler)
+    client = httpx.Client(transport=transport)
     with patch("app.importer.extract_html_text", return_value="Chicken bacon pasta recipe"):
         with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG):
-            with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
+            with patch("app.page_fetch.httpx.Client", return_value=client):
                 preview = import_from_url(recipe_url, settings=settings, ingredients=ingredients)
 
     assert preview.suggested_slug == "chicken-bacon-pasta"
