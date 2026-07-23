@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
@@ -14,6 +14,7 @@ import {
 
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
+import { AddCatalogIngredientDialog } from './components/AddCatalogIngredientDialog'
 import { BookmarkButton } from './components/BookmarkButton'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Popover } from './components/Popover'
@@ -37,8 +38,11 @@ import {
 import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
 import {
   densityForName,
+  detectRecipeUnitSystem,
   formatDisplayAmount,
   formatIngredientAmount,
+  hasUsableDensity,
+  ingredientNeedsDensity,
   prefersFluidVolume,
 } from './units'
 import { useUnitSystem } from './UnitSystemContext'
@@ -86,7 +90,7 @@ export function RecipePage() {
   const queryClient = useQueryClient()
   const { addRecentRecipe, removeRecentRecipe } = useRecipeListState()
   const { notifyLocalChange, revision, sync } = useRecipeSync()
-  const { unitSystem } = useUnitSystem()
+  const { unitSystem, setUnitSystem } = useUnitSystem()
   const { ingredients: catalog } = useIngredientCatalog()
   const { setTitle, setTitleInHeader } = useRecipeDetailHeader()
   const titleRef = useRef<HTMLHeadingElement>(null)
@@ -101,6 +105,8 @@ export function RecipePage() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
+  const [manualUnitSystem, setManualUnitSystem] = useState<UnitSystem | null>(null)
+  const [densityGapName, setDensityGapName] = useState<string | null>(null)
   const baseServings = recipeQuery.data?.servings ?? 1
   const targetServings = baseServings * scaleFactor
   const isScaled = scaleFactor !== 1
@@ -135,6 +141,41 @@ export function RecipePage() {
   })
   const recipe = scaledQuery.data ?? recipeQuery.data
   const fluidVolumePreferred = prefersFluidVolume(recipe?.tags)
+  const originalUnitSystem = useMemo(
+    () => (recipe ? detectRecipeUnitSystem(recipe.ingredients) : null),
+    [recipe]
+  )
+  const preferredNeedsDensity = useMemo(() => {
+    if (!recipe) {
+      return [] as Ingredient[]
+    }
+    return recipe.ingredients.filter(ingredient =>
+      ingredientNeedsDensity(ingredient.unit, unitSystem, fluidVolumePreferred)
+    )
+  }, [fluidVolumePreferred, recipe, unitSystem])
+  const shouldOverrideToOriginal =
+    manualUnitSystem == null &&
+    originalUnitSystem != null &&
+    preferredNeedsDensity.length > 0 &&
+    !preferredNeedsDensity.some(ingredient => hasUsableDensity(ingredient.name, catalog))
+  const effectiveUnitSystem: UnitSystem =
+    manualUnitSystem ??
+    (shouldOverrideToOriginal && originalUnitSystem ? originalUnitSystem : unitSystem)
+  const densityGapNames = useMemo(() => {
+    if (!recipe) {
+      return new Set<string>()
+    }
+    const names = new Set<string>()
+    for (const ingredient of recipe.ingredients) {
+      if (
+        ingredientNeedsDensity(ingredient.unit, effectiveUnitSystem, fluidVolumePreferred) &&
+        !hasUsableDensity(ingredient.name, catalog)
+      ) {
+        names.add(ingredient.name)
+      }
+    }
+    return names
+  }, [catalog, effectiveUnitSystem, fluidVolumePreferred, recipe])
 
   useEffect(() => {
     if (recipeQuery.data) {
@@ -145,6 +186,8 @@ export function RecipePage() {
 
   useEffect(() => {
     setCompletedSteps(new Set())
+    setManualUnitSystem(null)
+    setDensityGapName(null)
   }, [slug])
 
   useLayoutEffect(() => {
@@ -419,6 +462,12 @@ export function RecipePage() {
         title="Delete recipe?"
       />
 
+      <AddCatalogIngredientDialog
+        ingredientName={densityGapName}
+        onClose={() => setDensityGapName(null)}
+        open={densityGapName != null}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
           <section className={panelClassName}>
@@ -433,28 +482,64 @@ export function RecipePage() {
               </output>
               <div className="flex items-center gap-5">
                 <ScalePopover onChange={setScaleFactor} value={scaleFactor} />
-                <UnitSystemToggle />
+                <UnitSystemToggle
+                  onChange={system => {
+                    setManualUnitSystem(system)
+                    setUnitSystem(system)
+                  }}
+                  originalUnitSystem={originalUnitSystem}
+                  value={effectiveUnitSystem}
+                />
               </div>
             </div>
             <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-              {recipe.ingredients.map((ingredient, index) => (
-                <Fragment key={`${ingredient.name}-${index}`}>
-                  <span
-                    className={`tabular-nums ${isScaled ? SCALED_TEXT_CLASS : 'text-stone-600 dark:text-stone-400'}`}
-                  >
-                    {formatIngredientListAmount(
-                      ingredient,
-                      unitSystem,
-                      catalog,
-                      fluidVolumePreferred
+              {recipe.ingredients.map((ingredient, index) => {
+                const needsDensity = densityGapNames.has(ingredient.name)
+                const nameClass = needsDensity
+                  ? 'text-amber-800 underline decoration-amber-500/80 decoration-dotted underline-offset-2 dark:text-amber-200'
+                  : isScaled
+                    ? SCALED_TEXT_CLASS
+                    : undefined
+                return (
+                  <Fragment key={`${ingredient.name}-${index}`}>
+                    <span
+                      className={`tabular-nums ${
+                        needsDensity
+                          ? 'text-amber-800 dark:text-amber-200'
+                          : isScaled
+                            ? SCALED_TEXT_CLASS
+                            : 'text-stone-600 dark:text-stone-400'
+                      }`}
+                    >
+                      {formatIngredientListAmount(
+                        ingredient,
+                        effectiveUnitSystem,
+                        catalog,
+                        fluidVolumePreferred
+                      )}
+                      {ingredient.fixed ? ' fixed' : ''}
+                    </span>
+                    {needsDensity ? (
+                      <button
+                        className={`text-left ${nameClass}`}
+                        onClick={() => setDensityGapName(ingredient.name)}
+                        title="Add density to convert units"
+                        type="button"
+                      >
+                        {titleCaseIngredient(
+                          formatIngredientLabel(ingredient.name, ingredient.note)
+                        )}
+                      </button>
+                    ) : (
+                      <span className={nameClass}>
+                        {titleCaseIngredient(
+                          formatIngredientLabel(ingredient.name, ingredient.note)
+                        )}
+                      </span>
                     )}
-                    {ingredient.fixed ? ' fixed' : ''}
-                  </span>
-                  <span className={isScaled ? SCALED_TEXT_CLASS : undefined}>
-                    {titleCaseIngredient(formatIngredientLabel(ingredient.name, ingredient.note))}
-                  </span>
-                </Fragment>
-              ))}
+                  </Fragment>
+                )
+              })}
             </ul>
           </section>
 
@@ -505,7 +590,7 @@ export function RecipePage() {
                     >
                       {renderCooklangStep(
                         block.text,
-                        unitSystem,
+                        effectiveUnitSystem,
                         catalog,
                         isScaled,
                         fluidVolumePreferred
@@ -551,7 +636,7 @@ export function RecipePage() {
                         >
                           {renderCooklangStep(
                             block.text,
-                            unitSystem,
+                            effectiveUnitSystem,
                             catalog,
                             isScaled,
                             fluidVolumePreferred

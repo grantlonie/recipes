@@ -12,6 +12,7 @@ interface RecipeListState {
   recentRecipes: RecipeSummary[]
   scrollTop: number
   addRecentRecipe: (recipe: RecipeSummary) => void
+  pruneRecentRecipes: (existingSlugs: ReadonlySet<string>) => void
   removeRecentRecipe: (slug: string) => void
   setActiveTags: (tags: string[]) => void
   setBookmarkedOnly: (value: boolean) => void
@@ -49,6 +50,13 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
     setRecentRecipes(current => current.filter(item => item.slug !== slug))
   }, [])
 
+  const pruneRecentRecipes = useCallback((existingSlugs: ReadonlySet<string>) => {
+    setRecentRecipes(current => {
+      const next = current.filter(item => existingSlugs.has(item.slug))
+      return next.length === current.length ? current : next
+    })
+  }, [])
+
   const setActiveTags = useCallback((tags: string[]) => {
     setActiveTagsState(tags)
     setScrollTop(0)
@@ -70,6 +78,7 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
         activeTags,
         addRecentRecipe,
         bookmarkedOnly,
+        pruneRecentRecipes,
         removeRecentRecipe,
         query,
         recentRecipes,

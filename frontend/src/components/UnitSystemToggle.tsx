@@ -20,12 +20,28 @@ const FULL_TRIGGER_CLASS =
 interface UnitSystemToggleProps {
   className?: string
   fullWidth?: boolean
+  /** When set, marks that option with “(original)” in the menu. */
+  originalUnitSystem?: UnitSystem | null
+  /** Controlled selection; falls back to the global unit-system preference. */
+  value?: UnitSystem
+  onChange?: (system: UnitSystem) => void
 }
 
-export function UnitSystemToggle({ className, fullWidth = false }: UnitSystemToggleProps = {}) {
+export function UnitSystemToggle({
+  className,
+  fullWidth = false,
+  originalUnitSystem = null,
+  value,
+  onChange,
+}: UnitSystemToggleProps = {}) {
   const { setUnitSystem, unitSystem } = useUnitSystem()
   const [open, setOpen] = useState(false)
-  const currentLabel = OPTIONS.find(option => option.value === unitSystem)?.label ?? 'Metric'
+  const selected = value ?? unitSystem
+  const currentLabel = optionLabel(
+    OPTIONS.find(option => option.value === selected)?.label ?? 'Metric',
+    selected,
+    originalUnitSystem
+  )
 
   return (
     <Popover
@@ -50,24 +66,39 @@ export function UnitSystemToggle({ className, fullWidth = false }: UnitSystemTog
       <div className="py-1" role="listbox">
         {OPTIONS.map(option => (
           <button
-            aria-selected={option.value === unitSystem}
+            aria-selected={option.value === selected}
             className={`block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-orange-50 dark:hover:bg-stone-700 ${
-              option.value === unitSystem
+              option.value === selected
                 ? 'font-semibold text-orange-700 dark:text-orange-300'
                 : 'text-stone-700 dark:text-stone-200'
             }`}
             key={option.value}
             onClick={() => {
-              setUnitSystem(option.value)
+              if (onChange) {
+                onChange(option.value)
+              } else {
+                setUnitSystem(option.value)
+              }
               setOpen(false)
             }}
             role="option"
             type="button"
           >
-            {option.label}
+            {optionLabel(option.label, option.value, originalUnitSystem)}
           </button>
         ))}
       </div>
     </Popover>
   )
+}
+
+function optionLabel(
+  label: string,
+  value: UnitSystem,
+  originalUnitSystem: UnitSystem | null | undefined
+): string {
+  if (originalUnitSystem && value === originalUnitSystem) {
+    return `${label} (original)`
+  }
+  return label
 }

@@ -23,8 +23,15 @@ interface BookmarkInput {
 
 export function HomePage({ isVisible }: HomePageProps) {
   const { localRevision, notifyLocalChange, status, sync } = useRecipeSync()
-  const { activeTags, bookmarkedOnly, query, recentRecipes, scrollTop, setScrollTop } =
-    useRecipeListState()
+  const {
+    activeTags,
+    bookmarkedOnly,
+    pruneRecentRecipes,
+    query,
+    recentRecipes,
+    scrollTop,
+    setScrollTop,
+  } = useRecipeListState()
   const scrollRestoringRef = useRef(false)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
   const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
@@ -56,10 +63,13 @@ export function HomePage({ isVisible }: HomePageProps) {
     [activeTags, summaries]
   )
   const displayRecentRecipes = useMemo(() => {
+    if (!localReady) {
+      return []
+    }
     const bySlug = new Map(summaries.map(summary => [summary.slug, summary]))
     return recentRecipes
-      .map(recipe => bySlug.get(recipe.slug) ?? recipe)
-      .filter(recipe => !localReady || bySlug.has(recipe.slug))
+      .map(recipe => bySlug.get(recipe.slug))
+      .filter((recipe): recipe is RecipeSummary => recipe != null)
   }, [localReady, recentRecipes, summaries])
   const taggedRecipes = useMemo(
     () => filterRecipes(summaries, { activeTags }),
@@ -89,11 +99,12 @@ export function HomePage({ isVisible }: HomePageProps) {
       setSummaries(nextSummaries)
       setDetails(stored.map(record => record.recipe))
       setLocalReady(true)
+      pruneRecentRecipes(new Set(nextSummaries.map(summary => summary.slug)))
     })
     return () => {
       cancelled = true
     }
-  }, [localRevision])
+  }, [localRevision, pruneRecentRecipes])
 
   useLayoutEffect(() => {
     if (!isVisible) {
@@ -162,6 +173,8 @@ export function HomePage({ isVisible }: HomePageProps) {
               No recipes match these tags.
             </p>
           )
+        ) : !localReady ? (
+          <p className="text-stone-600 dark:text-stone-400">Loading recipes...</p>
         ) : summaries.length || displayRecentRecipes.length ? (
           <CompactRecipeGrid
             bookmarkPendingSlug={

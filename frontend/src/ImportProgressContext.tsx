@@ -372,14 +372,6 @@ function ImportProgressAlert() {
             <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
               {state.title}
             </p>
-            {isRunning && state.status ? (
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">{state.status}</p>
-            ) : null}
-            {state.phase === 'complete' ? (
-              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
-                {summarizeComplete(state)}
-              </p>
-            ) : null}
             {isError && state.error ? (
               <p className="mt-0.5 text-xs text-red-700 dark:text-red-300">{state.error}</p>
             ) : null}
@@ -447,27 +439,4 @@ function uniqueUnmatchedCount(items: BulkImportItem[]): number {
     }
   }
   return names.size
-}
-
-function summarizeComplete(state: ImportProgressState): string {
-  const parts: string[] = []
-  if (state.total <= 1) {
-    if (state.failed > 0) {
-      return 'Import failed'
-    }
-    if (state.skipped > 0) {
-      return 'Already imported'
-    }
-    return 'Saved'
-  }
-  if (state.saved > 0) {
-    parts.push(`${state.saved} saved`)
-  }
-  if (state.skipped > 0) {
-    parts.push(`${state.skipped} skipped`)
-  }
-  if (state.failed > 0) {
-    parts.push(`${state.failed} failed`)
-  }
-  return parts.join(' · ') || 'Done'
 }

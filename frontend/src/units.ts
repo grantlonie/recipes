@@ -884,6 +884,94 @@ export function densityForName(
   return findCatalogIngredient(name, catalog)?.density_kg_m3
 }
 
+export function hasUsableDensity(name: string, catalog: CatalogIngredient[]): boolean {
+  const density = densityForName(name, catalog)
+  return density != null && density > 0
+}
+
+const METRIC_UNITS = new Set(['g', 'kg', 'ml', 'l'])
+const METRIC_VOLUME_UNITS = new Set(['ml', 'l'])
+const US_MASS_UNITS = new Set(['oz', 'lb'])
+const US_VOLUME_UNITS = new Set(['cup', 'Tbsp', 'tsp', 'fl oz', 'quart', 'pint', 'gallon'])
+
+/** Majority vote over convertible ingredient units; null on empty or tie. */
+export function detectRecipeUnitSystem(
+  ingredients: Array<{ unit?: string | null }>
+): UnitSystem | null {
+  let us = 0
+  let usWeight = 0
+  let metric = 0
+
+  for (const ingredient of ingredients) {
+    const canonical = normalizeUnit(ingredient.unit)
+    if (!canonical) {
+      continue
+    }
+    if (US_VOLUME_UNITS.has(canonical)) {
+      us += 1
+    } else if (US_MASS_UNITS.has(canonical)) {
+      usWeight += 1
+    } else if (METRIC_UNITS.has(canonical)) {
+      metric += 1
+    }
+  }
+
+  const max = Math.max(us, usWeight, metric)
+  if (max === 0) {
+    return null
+  }
+  const winners: UnitSystem[] = []
+  if (us === max) {
+    winners.push('us')
+  }
+  if (usWeight === max) {
+    winners.push('us_weight')
+  }
+  if (metric === max) {
+    winners.push('metric')
+  }
+  return winners.length === 1 ? winners[0] : null
+}
+
+/**
+ * True when converting the authored unit into the selected system needs density
+ * (volume↔mass, or cross-family volume). Count / unknown units never need it.
+ */
+export function ingredientNeedsDensity(
+  unit: string | null | undefined,
+  unitSystem: UnitSystem,
+  preferFluidVolume = false
+): boolean {
+  const canonical = normalizeUnit(unit)
+  if (!canonical || (!isMassUnit(canonical) && !isVolumeUnit(canonical))) {
+    return false
+  }
+
+  if (preferFluidVolume) {
+    if (isMassUnit(canonical)) {
+      return true
+    }
+    if (unitSystem === 'metric') {
+      return !METRIC_VOLUME_UNITS.has(canonical)
+    }
+    return !US_VOLUME_UNITS.has(canonical)
+  }
+
+  if (unitSystem === 'metric') {
+    return isVolumeUnit(canonical)
+  }
+
+  if (unitSystem === 'us_weight') {
+    return isVolumeUnit(canonical)
+  }
+
+  // Cups: mass→volume needs density; non-US volume→cups needs density.
+  if (isMassUnit(canonical)) {
+    return true
+  }
+  return !US_VOLUME_UNITS.has(canonical)
+}
+
 const UNIT_DISPLAY_LABELS: Record<string, string> = {
   cup: 'cups',
   'fl oz': 'fl oz',
