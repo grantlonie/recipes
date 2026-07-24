@@ -285,3 +285,94 @@ Shake.
     )
     assert with_catalog.warnings == []
     assert not with_catalog.needs_repair
+
+
+def test_validate_ignores_allrecipes_page_chrome():
+    """Nav 'Ingredients' + ## headings must not dump the whole page into review."""
+    content = """---
+title: Indian Chicken Curry
+---
+
+Brown @chicken thighs{1.5%lb}(cubed) in #large skillet{}.
+Stir in @onion{1}(diced), @garlic{2%cloves}(minced), and @yogurt{0.5%cup}(plain).
+"""
+    source = """
+Ingredients
+Occasions
+Cuisines
+In the Kitchen
+News
+Community
+1,212 Reviews
+154 Photos
+Submitted by Amanda Fetters
+20 mins
+25 mins
+## Allrecipes Community Tips and Praise
+## Ingredients
+Oops! Something went wrong. Our team is working on it.
+### Local Offers
+1 ½ pounds chicken thighs, cut into bite size pieces
+1 onion, diced
+2 cloves garlic, minced
+½ cup plain yogurt
+## Directions
+Photographer: Jacob Fox
+1. Cook the chicken.
+5. Serve hot and enjoy!
+## Nutrition Facts (per serving)
+349 Calories
+## Ask the Community (13)
+Asked by jhsheetz
+## Reviews (1,212)
+Most helpful positive review
+Read More
+![Image 18](https://example.com/photo.jpg)
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    joined = "\n".join(result.warnings)
+    assert "Occasions" not in joined
+    assert "1,212 Reviews" not in joined
+    assert "Photographer" not in joined
+    assert "Nutrition Facts" not in joined
+    assert "Ask the Community" not in joined
+    assert "Read More" not in joined
+    assert "Oops!" not in joined
+    assert not any("Source ingredient may be missing" in w for w in result.warnings)
+
+
+def test_validate_handles_markdown_ingredient_headings():
+    content = """---
+title: Soup
+---
+
+Add @onion{1}.
+"""
+    source = """## Ingredients
+1 onion
+2 cloves garlic
+
+## Directions
+Cook.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert any("garlic" in warning for warning in result.warnings)
+    assert not any("onion" in warning.lower() for warning in result.warnings)
+
+
+def test_validate_for_the_subsection_still_works():
+    content = """---
+title: Cake
+---
+
+Mix @flour{2%cup}.
+"""
+    source = """For the batter:
+2 cups flour
+1 cup sugar
+
+Directions
+Bake.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert any("sugar" in warning for warning in result.warnings)

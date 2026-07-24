@@ -107,6 +107,7 @@ export function RecipePage() {
   const [overflowOpen, setOverflowOpen] = useState(false)
   const [manualUnitSystem, setManualUnitSystem] = useState<UnitSystem | null>(null)
   const [densityGapName, setDensityGapName] = useState<string | null>(null)
+  const [imageFailed, setImageFailed] = useState(false)
   const baseServings = recipeQuery.data?.servings ?? 1
   const targetServings = baseServings * scaleFactor
   const isScaled = scaleFactor !== 1
@@ -140,6 +141,9 @@ export function RecipePage() {
     },
   })
   const recipe = scaledQuery.data ?? recipeQuery.data
+  useEffect(() => {
+    setImageFailed(false)
+  }, [recipe?.image])
   const fluidVolumePreferred = prefersFluidVolume(recipe?.tags)
   const originalUnitSystem = useMemo(
     () => (recipe ? detectRecipeUnitSystem(recipe.ingredients) : null),
@@ -282,12 +286,23 @@ export function RecipePage() {
       <section className={`${cardClassName} overflow-hidden p-0!`}>
         {recipe.image ? (
           <div className="relative">
-            <img
-              alt=""
-              className="h-[250px] w-full object-cover sm:h-auto sm:max-h-[420px]"
-              referrerPolicy="no-referrer"
-              src={recipe.image}
-            />
+            {imageFailed ? (
+              <div className="flex h-[250px] w-full items-center justify-center bg-orange-100 sm:h-[320px] dark:bg-stone-800">
+                <img
+                  alt=""
+                  className="h-24 w-24 object-contain opacity-90"
+                  src="/web-app-icon-512.png"
+                />
+              </div>
+            ) : (
+              <img
+                alt=""
+                className="h-[250px] w-full object-cover sm:h-auto sm:max-h-[420px]"
+                onError={() => setImageFailed(true)}
+                referrerPolicy="no-referrer"
+                src={recipe.image}
+              />
+            )}
             <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-full bg-black/55 p-1 backdrop-blur-sm">
               {sourceHref ? (
                 <a

@@ -27,7 +27,35 @@ _TRAILING_TAG_CLOUD_RE = re.compile(
 )
 _SKIP_SOURCE_LINE_RE = re.compile(
     r"(?i)^(serving suggestions?|notes?|yield|makes|serves|set a timer|tools?|"
-    r"nutrition|related|per serving)\b|^\*"
+    r"nutrition|related|per serving|save|rate|print|share|jump to|keep screen|"
+    r"oops|something went wrong|photo by|photographer:|read more|load more|"
+    r"my rating|my review|my answer|view answers|asked by|cancel|submit|"
+    r"filter|sort|most helpful|featured|local offers|cookies? settings|"
+    r"newsletter|follow us|i made it)\b|^\*|!\[|^\[.*\]\(https?://"
+)
+# Strip markdown heading / list markers before section matching.
+_SECTION_PREFIX_RE = re.compile(r"^(?:#{1,6}\s+|(?:\d+[.)]|[-*+])\s+)+")
+_INGREDIENTS_START_RE = re.compile(r"^(?:ingredients)\b", re.IGNORECASE)
+_FOR_THE_SUBSECTION_RE = re.compile(r"^for the\b.+:$", re.IGNORECASE)
+_INGREDIENTS_END_RE = re.compile(
+    r"^(?:directions|instructions|method|preparation|steps|procedure|how to|"
+    r"nutrition(?:\s+facts)?|reviews?|related|community|ask the community|"
+    r"you.?ll also|most-?saved|tips and praise|editorial contributions)\b",
+    re.IGNORECASE,
+)
+_QUANTITY_START_RE = re.compile(
+    r"^(?:"
+    r"\d+(?:[./]\d+)?"
+    r"|[½¼¾⅓⅔⅛⅜⅝⅞]"
+    r"|(?:one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b"
+    r")",
+    re.IGNORECASE,
+)
+_NOT_INGREDIENT_LINE_RE = re.compile(
+    r"(?i)^(?:\d[\d,.]*\s+(?:reviews?|ratings?|photos?|answers?|replies?|stars?)\b|"
+    r"\d+\s*(?:mins?|minutes?|hrs?|hours?|secs?|seconds?)\s*$|"
+    r"updated on\b|submitted by\b|tested by\b|out of\s+\d|"
+    r"calories?\b|daily value\b)"
 )
 _UNIT_WORDS = frozenset(
     {
@@ -277,28 +305,94 @@ def _missing_prep_note_warnings(body: str, source_text: str) -> list[str]:
 
 
 def _source_ingredient_lines(source_text: str) -> list[str]:
-    lines = source_text.splitlines()
+    """Extract shopping-list lines from the ingredients section of source text.
+
+    Site chrome (nav labels, markdown headings, reviews) must not be treated as
+    ingredients — Allrecipes-style pages often have a bare "Ingredients" nav
+    item and ``## Directions`` headings that older matching missed.
+    """
+    sections = _ingredient_section_candidates(source_text)
+    if not sections:
+        return []
+    # Prefer the section with the most quantity-led lines (real recipe block).
+    best = max(sections, key=lambda lines: (_quantity_line_count(lines), len(lines)))
+    if _quantity_line_count(best) == 0 and len(best) > 12:
+        # Nav / chrome dump with no real quantities — ignore entirely.
+        return []
+    return best
+
+
+def _ingredient_section_candidates(source_text: str) -> list[list[str]]:
+    sections: list[list[str]] = []
     in_ingredients = False
-    collected: list[str] = []
-    for raw in lines:
+    current: list[str] = []
+    for raw in source_text.splitlines():
         line = raw.strip()
-        if re.match(r"^(ingredients|for the)\b", line, re.IGNORECASE):
+        if not line:
+            continue
+        section = _normalize_section_label(line)
+        if _is_ingredients_start(section, line):
+            if current:
+                sections.append(current)
+            current = []
             in_ingredients = True
             continue
-        if in_ingredients and re.match(
-            r"^(directions|instructions|method|preparation|steps|procedure|how to)\b",
-            line,
-            re.IGNORECASE,
-        ):
-            break
-        if not in_ingredients or not line:
+        if in_ingredients and _INGREDIENTS_END_RE.match(section):
+            if current:
+                sections.append(current)
+            current = []
+            in_ingredients = False
+            continue
+        if not in_ingredients:
             continue
         if line.endswith(":") and len(line) < 40:
             continue
-        if re.match(r"^(nutrition|tools|related)\b", line, re.IGNORECASE):
+        if _SKIP_SOURCE_LINE_RE.search(line):
             continue
-        collected.append(line)
-    return collected
+        if not _looks_like_ingredient_line(line):
+            continue
+        current.append(line)
+    if current:
+        sections.append(current)
+    return sections
+
+
+def _normalize_section_label(line: str) -> str:
+    return _SECTION_PREFIX_RE.sub("", line).strip()
+
+
+def _is_ingredients_start(section: str, original_line: str) -> bool:
+    if _INGREDIENTS_START_RE.match(section):
+        # Bare nav label "Ingredients" with no other words — allow; scoring
+        # later drops chrome-only sections.
+        return True
+    # "For the sauce:" subsections start an ingredients block when there is no
+    # top-level Ingredients header. Require a short labeled heading.
+    if _FOR_THE_SUBSECTION_RE.match(section) and len(original_line) < 40:
+        return True
+    return False
+
+
+def _quantity_line_count(lines: list[str]) -> int:
+    return sum(1 for line in lines if _QUANTITY_START_RE.match(line.strip()))
+
+
+def _looks_like_ingredient_line(line: str) -> bool:
+    """Reject UI chrome that slipped between Ingredients and Directions."""
+    if len(line) > 160:
+        return False
+    if re.search(r"https?://", line, re.IGNORECASE):
+        return False
+    if re.search(r"!\[", line):
+        return False
+    if _NOT_INGREDIENT_LINE_RE.search(line):
+        return False
+    if _QUANTITY_START_RE.match(line):
+        return True
+    # Unquantified pantry lines ("Salt", "Black pepper") — keep short plain text.
+    if len(line) <= 60 and not re.search(r"[|#]", line):
+        return True
+    return False
 
 
 def _source_prep_words(line: str) -> list[str]:
