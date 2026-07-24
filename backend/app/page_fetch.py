@@ -106,7 +106,16 @@ def fetch_recipe_page(url: str, *, settings: Settings) -> FetchedPage:
             logger.info(
                 "Direct fetch failed for %s (%s); trying reader fallback", recipe_url, error
             )
-            return _fetch_via_jina(recipe_url, settings=settings)
+            try:
+                return _fetch_via_jina(recipe_url, settings=settings)
+            except PageFetchError as fallback_error:
+                logger.warning(
+                    "Reader fallback failed for %s (%s); surfacing original error",
+                    recipe_url,
+                    fallback_error,
+                )
+                # Prefer the site-facing error over raw r.jina.ai auth failures.
+                raise error from fallback_error
 
 
 def fetch_page_image_url(url: str, *, settings: Settings) -> str | None:
@@ -127,6 +136,11 @@ def rate_limit_message(status_code: int | None = None) -> str:
         return (
             "This site blocked automated access. Try copying the recipe text "
             "or saving the page and importing the HTML file instead."
+        )
+    if status_code == 401:
+        return (
+            "Reader fallback needs authentication. Set JINA_API_KEY in the server "
+            "environment, or import via pasted text/HTML instead."
         )
     return "Recipe import failed"
 
@@ -240,19 +254,24 @@ def _get_page_httpx(url: str) -> _RawResponse:
 def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
     timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
     reader_url = f"{JINA_READER_PREFIX}{url}"
+    headers = dict(JINA_HEADERS)
+    api_key = settings.jina_api_key.strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers=JINA_HEADERS) as client:
+        with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
             response = client.get(reader_url)
             response.raise_for_status()
             text = response.text.strip()
     except httpx.TimeoutException as error:
         raise PageFetchError("Recipe import timed out") from error
     except httpx.HTTPStatusError as error:
+        status = error.response.status_code
+        if status in RETRYABLE_STATUS or status == 401:
+            raise PageFetchError(rate_limit_message(status), status_code=status) from error
         raise PageFetchError(
-            rate_limit_message(error.response.status_code)
-            if error.response.status_code in RETRYABLE_STATUS
-            else f"Recipe import failed: {error}",
-            status_code=error.response.status_code,
+            f"Recipe import failed: {error}",
+            status_code=status,
         ) from error
     except httpx.HTTPError as error:
         raise PageFetchError(f"Recipe import failed: {error}") from error

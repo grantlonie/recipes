@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     import_model_repair: str = "accounts/fireworks/models/gpt-oss-120b"
     import_model_text: str = "accounts/fireworks/models/qwen3p7-plus"
     import_model_vision: str = "accounts/fireworks/models/qwen3p7-plus"
+    jina_api_key: str = ""
     page_fetch_concurrency: int = 1
     page_fetch_fallback_enabled: bool = True
     page_fetch_max_retries: int = 2

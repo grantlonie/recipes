@@ -111,6 +111,7 @@ def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
     page_url = "https://food52.com/recipes/example"
     image_url = "https://images.food52.com/dish.jpg"
     jina_headers: dict[str, str] = {}
+    settings = settings.model_copy(update={"jina_api_key": "jina_test_key"})
 
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
@@ -138,6 +139,25 @@ def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
     # Browser-like header sets make Jina return 403.
     assert "sec-fetch-mode" not in jina_headers
     assert "mozilla" not in jina_headers.get("user-agent", "").lower()
+    assert jina_headers.get("authorization") == "Bearer jina_test_key"
+
+
+def test_fetch_recipe_page_surfaces_original_error_when_jina_returns_401(settings: Settings):
+    page_url = "https://food52.com/recipes/example"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == page_url:
+            return httpx.Response(403, text="forbidden")
+        if url.startswith("https://r.jina.ai/"):
+            return httpx.Response(401, text="auth required")
+        raise AssertionError(f"Unexpected request: {url}")
+
+    transport = httpx.MockTransport(handler)
+    with patch("app.page_fetch.time.sleep"):
+        with _patch_client(transport):
+            with pytest.raises(PageFetchError, match="blocked automated access"):
+                fetch_recipe_page(page_url, settings=settings)
 
 
 def test_fetch_recipe_page_rejects_jina_challenge_page(settings: Settings):
