@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import (
     Depends,
@@ -18,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from app import auth
 from app.config import Settings, get_settings
 from app.density_estimate import estimate_ingredient_densities
+from app.extract import ExtractError, extract_text_from_path
 from app.fireworks_llm import LLMError
 from app.importer import ImportError, import_from_slug_file, import_from_upload, import_from_url
 from app.ingredients import (
@@ -45,8 +47,10 @@ from app.models import (
     RecipeUpdate,
     RecipeWrite,
     SearchResult,
+    SourceTextResponse,
     SyncManifest,
 )
+from app.page_fetch import first_http_url
 from app.search import search_details
 from app.sources import (
     ALLOWED_IMAGE_EXTENSIONS,
@@ -309,16 +313,29 @@ async def upload_recipe_image(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
 
-@app.get("/api/sources/{asset_path:path}")
+@app.get("/api/sources/{asset_path:path}", response_model=None)
 def get_recipe_asset(
     asset_path: str,
+    format: str | None = Query(default=None),
     settings: Settings = Depends(get_settings_dep),
-) -> FileResponse:
+) -> FileResponse | SourceTextResponse:
     relative_path = f"recipes/{asset_path}"
     try:
         file_path = resolve_asset_file(settings.recipe_root, relative_path)
     except AssetError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    if format == "text":
+        try:
+            text = extract_text_from_path(file_path)
+        except ExtractError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(error),
+            ) from error
+        website_url = first_http_url(text)
+        if not website_url:
+            website_url = _website_url_from_source_bytes(file_path)
+        return SourceTextResponse(text=text, website_url=website_url)
     return FileResponse(
         file_path,
         media_type=guess_media_type(file_path),
@@ -429,3 +446,17 @@ def frontend(path: str) -> FileResponse:
     if index.exists():
         return FileResponse(index)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Frontend not built")
+
+
+def _website_url_from_source_bytes(file_path: Path) -> str | None:
+    """Best-effort URL from raw source bytes (HTML often loses links after extraction)."""
+    try:
+        raw = file_path.read_bytes()
+    except OSError:
+        return None
+    for encoding in ("utf-8", "utf-8-sig", "latin-1"):
+        try:
+            return first_http_url(raw.decode(encoding))
+        except UnicodeDecodeError:
+            continue
+    return None

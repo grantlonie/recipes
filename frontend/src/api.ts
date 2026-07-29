@@ -57,6 +57,13 @@ export async function getScaledRecipe(slug: string, servings: number): Promise<R
   return request(`/api/recipe-scale/${slug}?servings=${servings}`)
 }
 
+export async function getSourceText(
+  href: string
+): Promise<{ text: string; website_url?: string | null }> {
+  const separator = href.includes('?') ? '&' : '?'
+  return request(`${href}${separator}format=text`)
+}
+
 export async function getTags(): Promise<string[]> {
   return request('/api/tags')
 }

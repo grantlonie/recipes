@@ -276,10 +276,6 @@ def format_us_volume(
         fl_oz = ml / ML_PER_FL_OZ
         return DisplayAmount(format_fraction(fl_oz), "fl oz")
     cups = ml / ML_PER_CUP
-    if cups >= 4:
-        quarts = cups / 4
-        label = "quart" if quarts <= 1.01 else "quarts"
-        return DisplayAmount(format_fraction(quarts), label)
     if cups >= 0.25:
         label = "cup" if cups <= 1.01 else "cups"
         return DisplayAmount(format_fraction(cups), label)

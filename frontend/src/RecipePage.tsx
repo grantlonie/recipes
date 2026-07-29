@@ -4,11 +4,13 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import {
+  ChatBubbleBottomCenterTextIcon,
   ChevronDownIcon,
   DocumentTextIcon,
   EllipsisVerticalIcon,
   PencilSquareIcon,
   ShareIcon,
+  Square3Stack3DIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
 
@@ -16,8 +18,11 @@ import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { AddCatalogIngredientDialog } from './components/AddCatalogIngredientDialog'
 import { BookmarkButton } from './components/BookmarkButton'
+import { Button } from './components/Button'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { Dialog } from './components/Dialog'
 import { Popover } from './components/Popover'
+import { SourceDialog } from './components/SourceDialog'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
 import { getRecipeBlocks } from './cooklangEditor'
 import { extractTokens, formatIngredientLabel } from './cooklangTokens'
@@ -103,8 +108,11 @@ export function RecipePage() {
   })
   const [scaleFactor, setScaleFactor] = useState<ScaleFactor>(1)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
+  const [cookwareDialogOpen, setCookwareDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false)
   const [overflowOpen, setOverflowOpen] = useState(false)
+  const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
   const [manualUnitSystem, setManualUnitSystem] = useState<UnitSystem | null>(null)
   const [densityGapName, setDensityGapName] = useState<string | null>(null)
   const [imageFailed, setImageFailed] = useState(false)
@@ -279,7 +287,9 @@ export function RecipePage() {
 
   const blocks = getRecipeBlocks(recipe)
   const introNotes = descriptionNotes(recipe)
-  const sourceHref = resolveSourceHref(recipe)
+  const source = resolveSource(recipe)
+  const hasCookware = recipe.cookware.length > 0
+  const hasNotes = introNotes.length > 0
 
   return (
     <article className="space-y-8 pb-8">
@@ -304,66 +314,12 @@ export function RecipePage() {
               />
             )}
             <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-full bg-black/55 p-1 backdrop-blur-sm">
-              {sourceHref ? (
-                <a
-                  aria-label="View source"
-                  className={IMAGE_ACTION_BUTTON_CLASS}
-                  href={sourceHref}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
-                </a>
-              ) : null}
-              <button
-                aria-label="Share recipe"
-                className={IMAGE_ACTION_BUTTON_CLASS}
-                onClick={handleShare}
-                type="button"
-              >
-                <ShareIcon aria-hidden="true" className={ICON_CLASS} />
-              </button>
-              {auth.authenticated ? (
-                <BookmarkButton
-                  bookmarked={recipe.bookmarked}
-                  className={IMAGE_ACTION_BUTTON_CLASS}
-                  disabled={bookmarkMutation.isPending}
-                  iconClassName={ICON_CLASS}
-                  onToggle={handleToggleBookmark}
-                />
-              ) : null}
+              {renderCardActions(IMAGE_ACTION_BUTTON_CLASS)}
             </div>
           </div>
         ) : (
           <div className="flex justify-end gap-1 p-4 pb-0">
-            {sourceHref ? (
-              <a
-                aria-label="View source"
-                className={OVERFLOW_BUTTON_CLASS}
-                href={sourceHref}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
-              </a>
-            ) : null}
-            <button
-              aria-label="Share recipe"
-              className={OVERFLOW_BUTTON_CLASS}
-              onClick={handleShare}
-              type="button"
-            >
-              <ShareIcon aria-hidden="true" className={ICON_CLASS} />
-            </button>
-            {auth.authenticated ? (
-              <BookmarkButton
-                bookmarked={recipe.bookmarked}
-                className={OVERFLOW_BUTTON_CLASS}
-                disabled={bookmarkMutation.isPending}
-                iconClassName={ICON_CLASS}
-                onToggle={handleToggleBookmark}
-              />
-            ) : null}
+            {renderCardActions(OVERFLOW_BUTTON_CLASS)}
           </div>
         )}
         <div className="p-6">
@@ -483,6 +439,50 @@ export function RecipePage() {
         open={densityGapName != null}
       />
 
+      <Dialog labelledBy="cookware-dialog-title" open={cookwareDialogOpen}>
+        <h2
+          className="text-lg font-semibold text-stone-900 dark:text-stone-100"
+          id="cookware-dialog-title"
+        >
+          Cookware
+        </h2>
+        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700 dark:text-stone-300">
+          {recipe.cookware.map(item => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={() => setCookwareDialogOpen(false)} type="button" variant="ghost">
+            Close
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog labelledBy="notes-dialog-title" open={notesDialogOpen}>
+        <h2
+          className="text-lg font-semibold text-stone-900 dark:text-stone-100"
+          id="notes-dialog-title"
+        >
+          Notes
+        </h2>
+        <div className="mt-3 space-y-3 text-sm text-stone-700 dark:text-stone-300">
+          {introNotes.map(note => (
+            <p key={note}>{note}</p>
+          ))}
+        </div>
+        <div className="mt-6 flex justify-end">
+          <Button onClick={() => setNotesDialogOpen(false)} type="button" variant="ghost">
+            Close
+          </Button>
+        </div>
+      </Dialog>
+
+      <SourceDialog
+        href={source?.kind === 'file' ? source.href : null}
+        onClose={() => setSourceDialogOpen(false)}
+        open={sourceDialogOpen}
+      />
+
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="space-y-6">
           <section className={panelClassName}>
@@ -557,31 +557,9 @@ export function RecipePage() {
               })}
             </ul>
           </section>
-
-          {recipe.cookware.length ? (
-            <section className={panelClassName}>
-              <h2 className="text-lg font-semibold">Cookware</h2>
-              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700 dark:text-stone-300">
-                {recipe.cookware.map(item => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
         </aside>
 
         <div className="space-y-6">
-          {introNotes.length ? (
-            <section className={panelClassName}>
-              <h2 className="text-lg font-semibold">Notes</h2>
-              <div className="mt-3 space-y-3 text-stone-700 dark:text-stone-300">
-                {introNotes.map(note => (
-                  <ExpandableNote key={note} text={note} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-
           <section className={panelClassName}>
             <h2 className="text-lg font-semibold">Steps</h2>
             <div className="mt-4 space-y-4">
@@ -723,6 +701,71 @@ export function RecipePage() {
     await deleteMutation.mutateAsync()
     setDeleteDialogOpen(false)
   }
+
+  function renderCardActions(buttonClassName: string) {
+    return (
+      <>
+        {hasCookware ? (
+          <button
+            aria-label="View cookware"
+            className={buttonClassName}
+            onClick={() => setCookwareDialogOpen(true)}
+            type="button"
+          >
+            <Square3Stack3DIcon aria-hidden="true" className={ICON_CLASS} />
+          </button>
+        ) : null}
+        {hasNotes ? (
+          <button
+            aria-label="View notes"
+            className={buttonClassName}
+            onClick={() => setNotesDialogOpen(true)}
+            type="button"
+          >
+            <ChatBubbleBottomCenterTextIcon aria-hidden="true" className={ICON_CLASS} />
+          </button>
+        ) : null}
+        {source?.kind === 'file' ? (
+          <button
+            aria-label="View source"
+            className={buttonClassName}
+            onClick={() => setSourceDialogOpen(true)}
+            type="button"
+          >
+            <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
+          </button>
+        ) : null}
+        {source?.kind === 'url' ? (
+          <a
+            aria-label="View source"
+            className={buttonClassName}
+            href={source.href}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
+          </a>
+        ) : null}
+        <button
+          aria-label="Share recipe"
+          className={buttonClassName}
+          onClick={handleShare}
+          type="button"
+        >
+          <ShareIcon aria-hidden="true" className={ICON_CLASS} />
+        </button>
+        {auth.authenticated ? (
+          <BookmarkButton
+            bookmarked={recipeQuery.data?.bookmarked ?? false}
+            className={buttonClassName}
+            disabled={bookmarkMutation.isPending}
+            iconClassName={ICON_CLASS}
+            onToggle={handleToggleBookmark}
+          />
+        ) : null}
+      </>
+    )
+  }
 }
 
 interface ScalePopoverProps {
@@ -778,10 +821,6 @@ function ScalePopover({ onChange, value }: ScalePopoverProps) {
   )
 }
 
-interface ExpandableNoteProps {
-  text: string
-}
-
 function descriptionNotes(recipe: { metadata?: Record<string, unknown> }): string[] {
   const notes: string[] = []
   for (const key of ['description', 'introduction'] as const) {
@@ -824,37 +863,6 @@ function cleanDescriptionText(value: string) {
       String.fromCodePoint(Number.parseInt(short || long, 16))
     )
     .trim()
-}
-
-function ExpandableNote({ text }: ExpandableNoteProps) {
-  const [expanded, setExpanded] = useState(false)
-  const [clamped, setClamped] = useState(false)
-  const textRef = useRef<HTMLParagraphElement>(null)
-
-  useEffect(() => {
-    const element = textRef.current
-    if (!element || expanded) {
-      return
-    }
-    setClamped(element.scrollHeight > element.clientHeight + 1)
-  }, [expanded, text])
-
-  return (
-    <div>
-      <p className={expanded ? undefined : 'line-clamp-4'} ref={textRef}>
-        {text}
-      </p>
-      {clamped || expanded ? (
-        <button
-          className="mt-2 text-sm font-semibold text-orange-700 hover:underline"
-          onClick={() => setExpanded(current => !current)}
-          type="button"
-        >
-          {expanded ? 'Show less' : 'Show more'}
-        </button>
-      ) : null}
-    </div>
-  )
 }
 
 function renderCooklangStep(
@@ -957,20 +965,35 @@ function formatServings(value: number) {
   return String(value)
 }
 
-function resolveSourceHref(recipe: {
+interface ResolvedSource {
+  href: string
+  kind: 'file' | 'url'
+}
+
+function resolveSource(recipe: {
   metadata?: Record<string, unknown>
   original_url?: string | null
   slug?: string
-}): string | null {
+}): ResolvedSource | null {
   const raw = recipe.metadata?.source
   const source = typeof raw === 'string' ? raw.trim() : ''
   if (isRefFile(source)) {
-    return resolveRefDisplay(source, recipe.slug)
+    return { href: resolveRefDisplay(source, recipe.slug), kind: 'file' }
   }
   if (source.startsWith('http://') || source.startsWith('https://')) {
-    return source
+    return { href: source, kind: 'url' }
   }
-  return recipe.original_url?.trim() || null
+  const fallback = recipe.original_url?.trim() || ''
+  if (!fallback) {
+    return null
+  }
+  if (fallback.startsWith('/api/sources/')) {
+    return { href: fallback, kind: 'file' }
+  }
+  if (fallback.startsWith('http://') || fallback.startsWith('https://')) {
+    return { href: fallback, kind: 'url' }
+  }
+  return { href: fallback, kind: 'file' }
 }
 
 function formatIngredientListAmount(

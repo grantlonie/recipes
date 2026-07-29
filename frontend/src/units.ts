@@ -229,13 +229,6 @@ function formatUsVolume(
     }
   }
   const cups = ml / ML_PER_CUP
-  if (cups >= 4) {
-    const quarts = cups / 4
-    return {
-      quantity: formatQuantityDisplay(String(quarts)),
-      unit: quarts <= 1.01 ? 'quart' : 'quarts',
-    }
-  }
   if (cups >= 0.25) {
     return {
       quantity: formatQuantityDisplay(String(cups)),
@@ -981,7 +974,6 @@ const UNIT_DISPLAY_LABELS: Record<string, string> = {
   lb: 'pounds',
   ml: 'milliliters',
   oz: 'ounces',
-  quart: 'quarts',
   Tbsp: 'tablespoons',
   tsp: 'teaspoons',
 }
@@ -997,7 +989,7 @@ export function editorUnitItems(
     label: unitDisplayLabel(unit),
     value: unit,
   }))
-  const us = ['cup', 'Tbsp', 'tsp', 'fl oz', 'quart', 'lb', 'oz'].map(unit => ({
+  const us = ['cup', 'Tbsp', 'tsp', 'fl oz', 'lb', 'oz'].map(unit => ({
     label: unitDisplayLabel(unit),
     value: unit,
   }))

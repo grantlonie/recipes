@@ -124,6 +124,11 @@ class AssetUploadResponse(BaseModel):
     path: str
 
 
+class SourceTextResponse(BaseModel):
+    text: str
+    website_url: str | None = None
+
+
 class LoginRequest(BaseModel):
     password: str
     username: str
