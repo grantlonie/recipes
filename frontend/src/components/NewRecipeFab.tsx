@@ -246,15 +246,8 @@ export function NewRecipeFab() {
         open={urlDialogOpen}
       />
 
-      <Dialog labelledBy="import-error-dialog-title" open={importErrorDialogOpen}>
-        <h2
-          className="text-xl font-bold text-stone-900 dark:text-stone-100"
-          id="import-error-dialog-title"
-        >
-          Couldn&apos;t import recipe
-        </h2>
-        <p className={`mt-3 text-sm ${errorTextClassName}`}>{importError}</p>
-        <div className="mt-6 flex justify-end">
+      <Dialog
+        footer={
           <Button
             onClick={() => {
               setImportErrorDialogOpen(false)
@@ -264,7 +257,16 @@ export function NewRecipeFab() {
           >
             OK
           </Button>
-        </div>
+        }
+        onClose={() => {
+          setImportErrorDialogOpen(false)
+          setImportError(null)
+        }}
+        open={importErrorDialogOpen}
+        title="Couldn't import recipe"
+        titleId="import-error-dialog-title"
+      >
+        <p className={`text-sm ${errorTextClassName}`}>{importError}</p>
       </Dialog>
     </>
   )
@@ -278,15 +280,15 @@ interface NewRecipeMenuItemProps {
 
 function NewRecipeMenuItem({ icon, label, onClick }: NewRecipeMenuItemProps) {
   return (
-    <button
-      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-stone-700 transition hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+    <Button
+      className="flex w-full items-center justify-start gap-3 rounded-xl px-3 py-2.5 hover:bg-orange-50 dark:hover:bg-stone-700"
       onClick={onClick}
       role="menuitem"
-      type="button"
+      variant="ghost"
     >
       <span className="text-orange-600 dark:text-orange-400">{icon}</span>
-      <span>{label}</span>
-    </button>
+      {label}
+    </Button>
   )
 }
 

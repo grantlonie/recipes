@@ -41,15 +41,25 @@ export function WebsiteImportDialog({
   const canImport = Boolean(normalizeUrl(url))
 
   return (
-    <Dialog className="max-w-lg" labelledBy="website-import-dialog-title" open={open}>
-      <form onSubmit={handleSubmit}>
-        <h2
-          className="text-xl font-bold text-stone-900 dark:text-stone-100"
-          id="website-import-dialog-title"
-        >
-          Import from website
-        </h2>
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+    <Dialog
+      footer={
+        <>
+          <Button disabled={importing} onClick={onClose} type="button" variant="ghost">
+            Cancel
+          </Button>
+          <Button disabled={!canImport || importing} form="website-import-form" type="submit">
+            {importing ? 'Importing...' : 'Import'}
+          </Button>
+        </>
+      }
+      onClose={onClose}
+      open={open}
+      size="sm"
+      title="Import from website"
+      titleId="website-import-dialog-title"
+    >
+      <form id="website-import-form" onSubmit={handleSubmit}>
+        <p className="text-sm text-stone-600 dark:text-stone-400">
           Paste a recipe URL to import.
         </p>
 
@@ -63,15 +73,6 @@ export function WebsiteImportDialog({
         />
 
         {error ? <p className={`mt-3 text-sm ${errorTextClassName}`}>{error}</p> : null}
-
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <Button disabled={importing} onClick={onClose} type="button" variant="ghost">
-            Cancel
-          </Button>
-          <Button disabled={!canImport || importing} type="submit">
-            {importing ? 'Importing...' : 'Import'}
-          </Button>
-        </div>
       </form>
     </Dialog>
   )

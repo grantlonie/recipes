@@ -10,11 +10,11 @@ interface ConfirmDialogProps {
   confirming?: boolean
   confirmingLabel?: string
   description: ReactNode
-  labelledBy?: string
   onCancel: () => void
   onConfirm: () => void
   open: boolean
   title: string
+  titleId?: string
 }
 
 export function ConfirmDialog({
@@ -24,26 +24,33 @@ export function ConfirmDialog({
   confirming = false,
   confirmingLabel,
   description,
-  labelledBy = 'confirm-dialog-title',
   onCancel,
   onConfirm,
   open,
   title,
+  titleId = 'confirm-dialog-title',
 }: ConfirmDialogProps) {
   return (
-    <Dialog className="max-w-md" labelledBy={labelledBy} open={open}>
-      <h2 className="text-lg font-semibold text-stone-900 dark:text-stone-100" id={labelledBy}>
-        {title}
-      </h2>
-      <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">{description}</p>
-      <div className="mt-6 flex justify-end gap-3">
-        <Button disabled={confirming} onClick={onCancel} type="button" variant="ghost">
-          {cancelLabel}
-        </Button>
-        <Button disabled={confirming} onClick={onConfirm} type="button" variant={confirmVariant}>
-          {confirming ? (confirmingLabel ?? confirmLabel) : confirmLabel}
-        </Button>
-      </div>
+    <Dialog
+      backdrop={{ clickaway: false }}
+      footer={
+        <>
+          <Button disabled={confirming} onClick={onCancel} type="button" variant="ghost">
+            {cancelLabel}
+          </Button>
+          <Button disabled={confirming} onClick={onConfirm} type="button" variant={confirmVariant}>
+            {confirming ? (confirmingLabel ?? confirmLabel) : confirmLabel}
+          </Button>
+        </>
+      }
+      onClose={onCancel}
+      open={open}
+      placement="center"
+      size="sm"
+      title={title}
+      titleId={titleId}
+    >
+      <p className="text-sm text-stone-600 dark:text-stone-400">{description}</p>
     </Dialog>
   )
 }

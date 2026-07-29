@@ -3,6 +3,8 @@ import { createContext, type ReactNode, useCallback, useContext, useMemo, useSta
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 import { useNavigate } from 'react-router-dom'
 
+import { IconButton } from './components/IconButton'
+
 interface RecipeDetailHeaderProviderProps {
   children: ReactNode
 }
@@ -66,14 +68,13 @@ export function RecipeDetailHeaderNav() {
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1">
-      <button
+      <IconButton
         aria-label="Back to recipes"
-        className="inline-flex shrink-0 items-center justify-center rounded-full p-1.5 text-stone-700 transition hover:bg-orange-100 dark:text-stone-200 dark:hover:bg-stone-700"
+        className="h-10 w-10"
+        icon={<ChevronLeftIcon aria-hidden="true" className="h-6 w-6" />}
         onClick={handleBack}
-        type="button"
-      >
-        <ChevronLeftIcon aria-hidden="true" className="h-6 w-6" />
-      </button>
+        tooltip={{ content: 'Back to recipes' }}
+      />
       <p
         aria-hidden="true"
         className={`min-w-0 truncate text-base font-semibold text-stone-900 transition-opacity duration-200 dark:text-stone-100 ${

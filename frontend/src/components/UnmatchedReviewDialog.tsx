@@ -105,18 +105,20 @@ export function UnmatchedReviewDialog({
 
   if (unmatched.length === 0) {
     return (
-      <Dialog labelledBy="unmatched-review-title" open={open}>
-        <h2 className="text-xl font-bold" id="unmatched-review-title">
-          Review unmatched ingredients
-        </h2>
-        <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
-          No unmatched ingredients right now.
-        </p>
-        <div className="mt-6 flex justify-end">
+      <Dialog
+        footer={
           <Button onClick={onClose} type="button">
             Done
           </Button>
-        </div>
+        }
+        onClose={onClose}
+        open={open}
+        title="Review unmatched ingredients"
+        titleId="unmatched-review-title"
+      >
+        <p className="text-sm text-stone-600 dark:text-stone-400">
+          No unmatched ingredients right now.
+        </p>
       </Dialog>
     )
   }
@@ -150,11 +152,26 @@ export function UnmatchedReviewDialog({
   }
 
   return (
-    <Dialog labelledBy="unmatched-review-title" open={open}>
-      <h2 className="text-xl font-bold" id="unmatched-review-title">
-        Review unmatched ingredients
-      </h2>
-      <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+    <Dialog
+      footer={
+        <>
+          <Button disabled={applying} onClick={onClose} type="button" variant="ghost">
+            Close
+          </Button>
+          <Button disabled={applying} onClick={handleSkip} type="button" variant="secondary">
+            Skip
+          </Button>
+          <Button disabled={!canConfirm || applying} onClick={handleConfirm} type="button">
+            {applying ? 'Saving…' : 'Done'}
+          </Button>
+        </>
+      }
+      onClose={onClose}
+      open={open}
+      title="Review unmatched ingredients"
+      titleId="unmatched-review-title"
+    >
+      <p className="text-sm text-stone-600 dark:text-stone-400">
         {remaining} remaining. Add to your catalog or map to an existing ingredient.
       </p>
 
@@ -256,18 +273,6 @@ export function UnmatchedReviewDialog({
         <p className={`mt-3 text-sm ${errorTextClassName}`}>Enter an ingredient name.</p>
       ) : null}
       {error ? <p className={`mt-3 text-sm ${errorTextClassName}`}>{error}</p> : null}
-
-      <div className="mt-6 flex flex-wrap justify-end gap-2">
-        <Button disabled={applying} onClick={onClose} type="button" variant="ghost">
-          Close
-        </Button>
-        <Button disabled={applying} onClick={handleSkip} type="button" variant="secondary">
-          Skip
-        </Button>
-        <Button disabled={!canConfirm || applying} onClick={handleConfirm} type="button">
-          {applying ? 'Saving…' : 'Done'}
-        </Button>
-      </div>
     </Dialog>
   )
 }

@@ -87,11 +87,18 @@ export function BulkImportPickerDialog({ onCancel, onSelect, open }: BulkImportP
   }
 
   return (
-    <Dialog labelledBy="bulk-import-picker-title" open={open}>
-      <h2 className="text-xl font-bold" id="bulk-import-picker-title">
-        Import files
-      </h2>
-      <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+    <Dialog
+      footer={
+        <Button disabled={preparing} onClick={onCancel} type="button" variant="ghost">
+          Cancel
+        </Button>
+      }
+      onClose={onCancel}
+      open={open}
+      title="Import files"
+      titleId="bulk-import-picker-title"
+    >
+      <p className="text-sm text-stone-600 dark:text-stone-400">
         Choose one or more recipe files, a folder, or a zip. Multiple files are imported as a batch.
       </p>
 
@@ -152,12 +159,6 @@ export function BulkImportPickerDialog({ onCancel, onSelect, open }: BulkImportP
         <p className="mt-3 text-sm text-stone-600 dark:text-stone-400">Preparing files…</p>
       ) : null}
       {error ? <p className={`mt-3 text-sm ${errorTextClassName}`}>{error}</p> : null}
-
-      <div className="mt-6 flex justify-end">
-        <Button disabled={preparing} onClick={onCancel} type="button" variant="ghost">
-          Cancel
-        </Button>
-      </div>
     </Dialog>
   )
 }

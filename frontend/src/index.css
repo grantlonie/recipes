@@ -32,6 +32,15 @@ textarea {
   font: inherit;
 }
 
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 .import-whisk-scene {
   position: relative;
   width: 7rem;

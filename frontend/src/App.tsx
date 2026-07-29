@@ -1,5 +1,9 @@
 import {
+  ArrowRightOnRectangleIcon,
+  BeakerIcon,
   BookmarkIcon as BookmarkIconOutline,
+  ClipboardDocumentListIcon,
+  Cog6ToothIcon,
   TagIcon,
   UserCircleIcon,
   XMarkIcon,
@@ -23,6 +27,7 @@ import { RecipePage } from './RecipePage'
 import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
+import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
 
@@ -41,7 +46,7 @@ export function App() {
 }
 
 function AppShell() {
-  const { auth, logoutPending, signOut } = useAuth()
+  const { auth } = useAuth()
   const { localRevision } = useRecipeSync()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [needsReviewCount, setNeedsReviewCount] = useState(0)
@@ -96,67 +101,77 @@ function AppShell() {
                 onClose={() => setSettingsOpen(false)}
                 open={settingsOpen}
                 trigger={
-                  <button
+                  <IconButton
                     aria-expanded={settingsOpen}
                     aria-haspopup="menu"
                     aria-label="Account"
-                    className="inline-flex items-center justify-center rounded-full p-1.5 text-stone-700 hover:bg-orange-100 dark:text-stone-200 dark:hover:bg-stone-700"
+                    className="h-10 w-10"
+                    icon={<UserCircleIcon aria-hidden="true" className="h-7 w-7" />}
                     onClick={() => setSettingsOpen(open => !open)}
-                    type="button"
-                  >
-                    <UserCircleIcon aria-hidden="true" className="h-7 w-7" />
-                  </button>
+                  />
                 }
               >
                 {auth.authenticated ? (
                   <>
                     <Link
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                      onClick={() => setSettingsOpen(false)}
-                      to="/settings"
-                    >
-                      Settings
-                    </Link>
-                    <Link
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
                       onClick={() => setSettingsOpen(false)}
                       to="/ingredients"
                     >
+                      <BeakerIcon
+                        aria-hidden="true"
+                        className="h-5 w-5 text-orange-600 dark:text-orange-400"
+                      />
                       Ingredients
                     </Link>
                     {needsReviewCount > 0 ? (
                       <Link
-                        className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
                         onClick={() => setSettingsOpen(false)}
                         to="/review"
                       >
+                        <ClipboardDocumentListIcon
+                          aria-hidden="true"
+                          className="h-5 w-5 text-orange-600 dark:text-orange-400"
+                        />
                         Needs review ({needsReviewCount})
                       </Link>
                     ) : null}
-                    <button
-                      className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                      disabled={logoutPending}
-                      onClick={handleSignOut}
-                      type="button"
+                    <Link
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      onClick={() => setSettingsOpen(false)}
+                      to="/settings"
                     >
-                      {logoutPending ? 'Signing out...' : 'Sign out'}
-                    </button>
+                      <Cog6ToothIcon
+                        aria-hidden="true"
+                        className="h-5 w-5 text-orange-600 dark:text-orange-400"
+                      />
+                      Settings
+                    </Link>
                   </>
                 ) : (
                   <>
                     <Link
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
-                      onClick={() => setSettingsOpen(false)}
-                      to="/settings"
-                    >
-                      Settings
-                    </Link>
-                    <Link
-                      className="block rounded-xl px-3 py-2 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
                       onClick={() => setSettingsOpen(false)}
                       to="/login"
                     >
+                      <ArrowRightOnRectangleIcon
+                        aria-hidden="true"
+                        className="h-5 w-5 text-orange-600 dark:text-orange-400"
+                      />
                       Sign in
+                    </Link>
+                    <Link
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                      onClick={() => setSettingsOpen(false)}
+                      to="/settings"
+                    >
+                      <Cog6ToothIcon
+                        aria-hidden="true"
+                        className="h-5 w-5 text-orange-600 dark:text-orange-400"
+                      />
+                      Settings
                     </Link>
                   </>
                 )}
@@ -189,11 +204,6 @@ function AppShell() {
       </main>
     </div>
   )
-
-  async function handleSignOut() {
-    setSettingsOpen(false)
-    await signOut()
-  }
 }
 
 function HomeSearchBar() {
@@ -249,18 +259,15 @@ function HomeSearchBar() {
           onClose={() => setTagsOpen(false)}
           open={tagsOpen}
           trigger={
-            <button
+            <IconButton
               aria-expanded={tagsOpen}
               aria-haspopup="listbox"
               aria-label="Filter by tags"
-              className={`inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 transition hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300 ${
-                activeTags.length ? 'text-orange-700' : 'text-orange-600'
-              }`}
+              className={activeTags.length ? 'text-orange-700' : 'text-orange-600'}
+              icon={<TagIcon aria-hidden="true" className="h-5 w-5" />}
               onClick={() => setTagsOpen(open => !open)}
-              type="button"
-            >
-              <TagIcon aria-hidden="true" className="h-5 w-5" />
-            </button>
+              tooltip={{ content: 'Filter by tags' }}
+            />
           }
         >
           {unselectedTags.length ? (
@@ -283,18 +290,21 @@ function HomeSearchBar() {
             </p>
           )}
         </Popover>
-        <button
+        <IconButton
           aria-label={bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes'}
-          className="inline-flex shrink-0 items-center justify-center self-center rounded-lg p-1.5 text-orange-600 transition hover:bg-orange-50 hover:text-orange-700 dark:hover:bg-stone-700 dark:hover:text-orange-300"
+          className="text-orange-600"
+          icon={
+            bookmarkedOnly ? (
+              <BookmarkIconSolid aria-hidden="true" className="h-5 w-5" />
+            ) : (
+              <BookmarkIconOutline aria-hidden="true" className="h-5 w-5" />
+            )
+          }
           onClick={() => setBookmarkedOnly(!bookmarkedOnly)}
-          type="button"
-        >
-          {bookmarkedOnly ? (
-            <BookmarkIconSolid aria-hidden="true" className="h-5 w-5" />
-          ) : (
-            <BookmarkIconOutline aria-hidden="true" className="h-5 w-5" />
-          )}
-        </button>
+          tooltip={{
+            content: bookmarkedOnly ? 'Show all recipes' : 'Show bookmarked recipes',
+          }}
+        />
       </div>
       {activeTags.length ? (
         <div className="mt-1.5 flex flex-wrap gap-1.5">

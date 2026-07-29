@@ -9,7 +9,7 @@ import { buildLoginUrl } from './shareImport'
 import { cardClassName } from './themeClasses'
 
 export function SettingsPage() {
-  const { auth } = useAuth()
+  const { auth, logoutPending, signOut } = useAuth()
   const navigate = useNavigate()
 
   function requireEditor(run: () => void) {
@@ -18,6 +18,11 @@ export function SettingsPage() {
       return
     }
     run()
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/')
   }
 
   return (
@@ -66,6 +71,25 @@ export function SettingsPage() {
             )}
           </BulkImportControls>
         </div>
+
+        {auth.authenticated ? (
+          <div>
+            <h2 className="text-sm font-semibold text-stone-700 dark:text-stone-200">Account</h2>
+            <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">
+              Signed in{auth.username ? ` as ${auth.username}` : ''}.
+            </p>
+            <div className="mt-3">
+              <Button
+                disabled={logoutPending}
+                onClick={() => void handleSignOut()}
+                type="button"
+                variant="danger"
+              >
+                {logoutPending ? 'Signing out...' : 'Sign out'}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </section>
   )

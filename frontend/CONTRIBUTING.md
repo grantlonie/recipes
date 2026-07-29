@@ -36,6 +36,7 @@ Run the project's format check before opening a PR. This repo uses Prettier (see
 2. Match patterns from existing components in the project
 3. Name the props type `ComponentNameProps` (e.g. `DialogProps`)
 4. Follow the project's chosen styling approach
+5. Follow [UI_PATTERNS.md](./UI_PATTERNS.md) for dialogs, popovers, buttons, icon buttons, and tooltips
 
 ### State management
 

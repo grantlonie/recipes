@@ -90,6 +90,7 @@ const CompactRecipeTile = memo(function CompactRecipeTile({
           disabled={bookmarkPending}
           iconClassName="h-4 w-4"
           onToggle={() => onBookmarkToggle(recipe)}
+          tooltip={false}
         />
       ) : null}
       <p className="mt-1 line-clamp-2 text-sm font-semibold leading-tight text-stone-900 dark:text-stone-100">

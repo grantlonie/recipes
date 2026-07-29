@@ -122,14 +122,24 @@ export function CameraCaptureDialog({
   }
 
   return (
-    <Dialog className="max-w-lg" labelledBy="camera-capture-dialog-title" open={open}>
-      <h2
-        className="text-xl font-bold text-stone-900 dark:text-stone-100"
-        id="camera-capture-dialog-title"
-      >
-        {title}
-      </h2>
-      <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+    <Dialog
+      footer={
+        <>
+          <Button onClick={handleClose} type="button" variant="ghost">
+            Cancel
+          </Button>
+          <Button disabled={!ready || Boolean(error)} onClick={handleCapture} type="button">
+            Capture photo
+          </Button>
+        </>
+      }
+      onClose={handleClose}
+      open={open}
+      size="sm"
+      title={title}
+      titleId="camera-capture-dialog-title"
+    >
+      <p className="text-sm text-stone-600 dark:text-stone-400">
         Position the recipe in view, then capture the photo.
       </p>
 
@@ -147,15 +157,6 @@ export function CameraCaptureDialog({
             ref={videoRef}
           />
         )}
-      </div>
-
-      <div className="mt-6 flex flex-wrap justify-end gap-2">
-        <Button onClick={handleClose} type="button" variant="ghost">
-          Cancel
-        </Button>
-        <Button disabled={!ready || Boolean(error)} onClick={handleCapture} type="button">
-          Capture photo
-        </Button>
       </div>
     </Dialog>
   )

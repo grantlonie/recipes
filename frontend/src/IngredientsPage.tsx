@@ -17,6 +17,7 @@ import { Button } from './components/Button'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DensitySearchLink } from './components/DensitySearchLink'
 import { Dialog } from './components/Dialog'
+import { IconButton } from './components/IconButton'
 import { UnmatchedReviewDialog } from './components/UnmatchedReviewDialog'
 import { putIngredientCatalog } from './db'
 import { titleCaseIngredient } from './ingredientDisplay'
@@ -201,14 +202,13 @@ export function IngredientsPage() {
       <div className={`flex min-h-0 flex-1 flex-col ${cardClassName}`}>
         <div className="flex items-center gap-2">
           <h1 className="text-3xl font-bold text-stone-900 dark:text-stone-100">Ingredients</h1>
-          <button
+          <IconButton
             aria-label="Ingredient catalog notes"
-            className="inline-flex rounded-full p-1 text-stone-400 transition hover:bg-orange-50 hover:text-stone-600 dark:hover:bg-stone-700 dark:hover:text-stone-200"
+            className="text-stone-400"
+            icon={<InformationCircleIcon aria-hidden="true" className="h-6 w-6" />}
             onClick={() => setInfoOpen(true)}
-            type="button"
-          >
-            <InformationCircleIcon aria-hidden="true" className="h-6 w-6" />
-          </button>
+            tooltip={{ content: 'Catalog notes' }}
+          />
         </div>
 
         {unmatched.length > 0 ? (
@@ -294,30 +294,68 @@ export function IngredientsPage() {
         </div>
       </div>
 
-      <Dialog labelledBy="ingredient-info-dialog-title" open={infoOpen}>
-        <h2
-          className="text-xl font-bold text-stone-900 dark:text-stone-100"
-          id="ingredient-info-dialog-title"
-        >
-          Notes
-        </h2>
-        <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-stone-600 dark:text-stone-400">
+      <Dialog
+        footer={
+          <Button onClick={() => setInfoOpen(false)} type="button" variant="ghost">
+            Close
+          </Button>
+        }
+        onClose={() => setInfoOpen(false)}
+        open={infoOpen}
+        title="Notes"
+        titleId="ingredient-info-dialog-title"
+      >
+        <ul className="list-disc space-y-2 pl-5 text-sm text-stone-600 dark:text-stone-400">
           {INGREDIENT_NOTES.map(note => (
             <li key={note}>{note}</li>
           ))}
         </ul>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={() => setInfoOpen(false)} type="button" variant="ghost">
-            Close
-          </Button>
-        </div>
       </Dialog>
 
-      <Dialog labelledBy="ingredient-catalog-dialog-title" open={dialogOpen}>
-        <h2 className="text-xl font-bold" id="ingredient-catalog-dialog-title">
-          {editing ? 'Edit ingredient' : 'Add ingredient'}
-        </h2>
-        <form className="mt-4 space-y-4" onSubmit={handleSave}>
+      <Dialog
+        footer={
+          <div className="flex w-full justify-between gap-2">
+            {editing ? (
+              <Button
+                disabled={deleteMutation.isPending || saveMutation.isPending}
+                onClick={handleDelete}
+                type="button"
+                variant="danger"
+              >
+                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              {!editing || dirty ? (
+                <Button onClick={closeDialog} type="button" variant="ghost">
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                className={editing ? 'w-[80px] justify-center' : undefined}
+                disabled={saveMutation.isPending || !name.trim()}
+                form="ingredient-catalog-form"
+                type="submit"
+              >
+                {saveMutation.isPending
+                  ? 'Saving...'
+                  : editing
+                    ? dirty
+                      ? 'Update'
+                      : 'Done'
+                    : 'Save'}
+              </Button>
+            </div>
+          </div>
+        }
+        onClose={closeDialog}
+        open={dialogOpen}
+        title={editing ? 'Edit ingredient' : 'Add ingredient'}
+        titleId="ingredient-catalog-dialog-title"
+      >
+        <form className="space-y-4" id="ingredient-catalog-form" onSubmit={handleSave}>
           <label className="block">
             <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Name</span>
             <input
@@ -370,40 +408,6 @@ export function IngredientsPage() {
           {deleteMutation.error ? (
             <p className={`text-sm ${errorTextClassName}`}>{deleteMutation.error.message}</p>
           ) : null}
-          <div className="flex justify-between gap-2">
-            {editing ? (
-              <Button
-                disabled={deleteMutation.isPending || saveMutation.isPending}
-                onClick={handleDelete}
-                type="button"
-                variant="danger"
-              >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              {!editing || dirty ? (
-                <Button onClick={closeDialog} type="button" variant="ghost">
-                  Cancel
-                </Button>
-              ) : null}
-              <Button
-                className={editing ? 'w-[80px] justify-center' : undefined}
-                disabled={saveMutation.isPending || !name.trim()}
-                type="submit"
-              >
-                {saveMutation.isPending
-                  ? 'Saving...'
-                  : editing
-                    ? dirty
-                      ? 'Update'
-                      : 'Done'
-                    : 'Save'}
-              </Button>
-            </div>
-          </div>
         </form>
       </Dialog>
 
@@ -431,11 +435,11 @@ export function IngredientsPage() {
             undone.
           </>
         }
-        labelledBy="delete-ingredient-title"
         onCancel={() => setDeleteConfirmOpen(false)}
         onConfirm={confirmDelete}
         open={deleteConfirmOpen}
         title="Delete ingredient?"
+        titleId="delete-ingredient-title"
       />
     </section>
   )

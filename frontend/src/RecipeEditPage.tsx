@@ -459,18 +459,45 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             ? 'Re-importing will overwrite the current recipe title, metadata, and body from the source file.'
             : 'Re-importing will overwrite the current recipe title, metadata, and body from the source URL.'
         }
-        labelledBy="reimport-confirm-title"
         onCancel={() => setReimportConfirmOpen(false)}
         onConfirm={() => void confirmReimportFromSource()}
         open={reimportConfirmOpen}
         title="Re-import recipe?"
+        titleId="reimport-confirm-title"
       />
 
-      <Dialog labelledBy="ingredient-dialog-title" open={ingredientDialogOpen}>
-        <h2 className="text-xl font-bold" id="ingredient-dialog-title">
-          {editingPos !== null ? 'Edit ingredient' : 'Add ingredient'}
-        </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+      <Dialog
+        footer={
+          <div className="flex w-full justify-between gap-2">
+            {editingPos !== null ? (
+              <Button onClick={deleteIngredientToken} variant="danger">
+                Delete
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              {editingPos === null || ingredientDirty ? (
+                <Button onClick={closeIngredientDialog} variant="ghost">
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                className={editingPos !== null ? 'w-[80px] justify-center' : undefined}
+                disabled={!ingredientDraft.name.trim()}
+                onClick={confirmIngredientDialog}
+              >
+                {editingPos !== null ? (ingredientDirty ? 'Update' : 'Done') : 'Add ingredient'}
+              </Button>
+            </div>
+          </div>
+        }
+        onClose={closeIngredientDialog}
+        open={ingredientDialogOpen}
+        title={editingPos !== null ? 'Edit ingredient' : 'Add ingredient'}
+        titleId="ingredient-dialog-title"
+      >
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Quantity">
             {isUsCookingVolumeUnit(ingredientDraft.units) ? (
               <VolumeQuantitySelect
@@ -531,36 +558,25 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         <p className="mt-2 text-xs text-stone-500 dark:text-stone-400">
           Amounts are stored in the units you enter. Unit-system conversion happens when viewing.
         </p>
-        <div className="mt-6 flex justify-between gap-2">
-          {editingPos !== null ? (
-            <Button onClick={deleteIngredientToken} variant="danger">
-              Delete
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            {editingPos === null || ingredientDirty ? (
-              <Button onClick={closeIngredientDialog} variant="ghost">
-                Cancel
-              </Button>
-            ) : null}
-            <Button
-              className={editingPos !== null ? 'w-[80px] justify-center' : undefined}
-              disabled={!ingredientDraft.name.trim()}
-              onClick={confirmIngredientDialog}
-            >
-              {editingPos !== null ? (ingredientDirty ? 'Update' : 'Done') : 'Add ingredient'}
-            </Button>
-          </div>
-        </div>
       </Dialog>
 
-      <Dialog labelledBy="section-dialog-title" open={sectionDialogOpen}>
-        <h2 className="text-xl font-bold" id="section-dialog-title">
-          {editingSectionPos !== null ? 'Edit section' : 'Add section'}
-        </h2>
-        <Field className="mt-4" label="Section name">
+      <Dialog
+        footer={
+          <>
+            <Button onClick={() => setSectionDialogOpen(false)} variant="ghost">
+              Cancel
+            </Button>
+            <Button disabled={!sectionTitle.trim()} onClick={saveSection}>
+              {editingSectionPos !== null ? 'Update section' : 'Add section'}
+            </Button>
+          </>
+        }
+        onClose={() => setSectionDialogOpen(false)}
+        open={sectionDialogOpen}
+        title={editingSectionPos !== null ? 'Edit section' : 'Add section'}
+        titleId="section-dialog-title"
+      >
+        <Field label="Section name">
           <input
             autoFocus
             className={inputClassName}
@@ -569,21 +585,40 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             value={sectionTitle}
           />
         </Field>
-        <div className="mt-6 flex justify-end gap-2">
-          <Button onClick={() => setSectionDialogOpen(false)} variant="ghost">
-            Cancel
-          </Button>
-          <Button disabled={!sectionTitle.trim()} onClick={saveSection}>
-            {editingSectionPos !== null ? 'Update section' : 'Add section'}
-          </Button>
-        </div>
       </Dialog>
 
-      <Dialog labelledBy="timer-dialog-title" open={timerDialogOpen}>
-        <h2 className="text-xl font-bold" id="timer-dialog-title">
-          {editingTimerPos !== null ? 'Edit time' : 'Add time'}
-        </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <Dialog
+        footer={
+          <div className="flex w-full justify-between gap-2">
+            {editingTimerPos !== null ? (
+              <Button onClick={deleteTimerToken} variant="danger">
+                Delete
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              {editingTimerPos === null || timerDirty ? (
+                <Button onClick={closeTimerDialog} variant="ghost">
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                className={editingTimerPos !== null ? 'w-[80px] justify-center' : undefined}
+                disabled={!timerDraft.quantity.trim()}
+                onClick={confirmTimerDialog}
+              >
+                {editingTimerPos !== null ? (timerDirty ? 'Update' : 'Done') : 'Add time'}
+              </Button>
+            </div>
+          </div>
+        }
+        onClose={closeTimerDialog}
+        open={timerDialogOpen}
+        title={editingTimerPos !== null ? 'Edit time' : 'Add time'}
+        titleId="timer-dialog-title"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Amount">
             <input
               autoFocus
@@ -615,36 +650,40 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             </select>
           </Field>
         </div>
-        <div className="mt-6 flex justify-between gap-2">
-          {editingTimerPos !== null ? (
-            <Button onClick={deleteTimerToken} variant="danger">
-              Delete
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            {editingTimerPos === null || timerDirty ? (
-              <Button onClick={closeTimerDialog} variant="ghost">
-                Cancel
-              </Button>
-            ) : null}
-            <Button
-              className={editingTimerPos !== null ? 'w-[80px] justify-center' : undefined}
-              disabled={!timerDraft.quantity.trim()}
-              onClick={confirmTimerDialog}
-            >
-              {editingTimerPos !== null ? (timerDirty ? 'Update' : 'Done') : 'Add time'}
-            </Button>
-          </div>
-        </div>
       </Dialog>
 
-      <Dialog labelledBy="cookware-dialog-title" open={cookwareDialogOpen}>
-        <h2 className="text-xl font-bold" id="cookware-dialog-title">
-          {editingCookwarePos !== null ? 'Edit cookware' : 'Add cookware'}
-        </h2>
-        <Field className="mt-4" label="Cookware">
+      <Dialog
+        footer={
+          <div className="flex w-full justify-between gap-2">
+            {editingCookwarePos !== null ? (
+              <Button onClick={deleteCookwareToken} variant="danger">
+                Delete
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              {editingCookwarePos === null || cookwareDirty ? (
+                <Button onClick={closeCookwareDialog} variant="ghost">
+                  Cancel
+                </Button>
+              ) : null}
+              <Button
+                className={editingCookwarePos !== null ? 'w-[80px] justify-center' : undefined}
+                disabled={!cookwareDraft.name.trim()}
+                onClick={confirmCookwareDialog}
+              >
+                {editingCookwarePos !== null ? (cookwareDirty ? 'Update' : 'Done') : 'Add cookware'}
+              </Button>
+            </div>
+          </div>
+        }
+        onClose={closeCookwareDialog}
+        open={cookwareDialogOpen}
+        title={editingCookwarePos !== null ? 'Edit cookware' : 'Add cookware'}
+        titleId="cookware-dialog-title"
+      >
+        <Field label="Cookware">
           <input
             autoFocus
             className={inputClassName}
@@ -655,29 +694,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             value={cookwareDraft.name}
           />
         </Field>
-        <div className="mt-6 flex justify-between gap-2">
-          {editingCookwarePos !== null ? (
-            <Button onClick={deleteCookwareToken} variant="danger">
-              Delete
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            {editingCookwarePos === null || cookwareDirty ? (
-              <Button onClick={closeCookwareDialog} variant="ghost">
-                Cancel
-              </Button>
-            ) : null}
-            <Button
-              className={editingCookwarePos !== null ? 'w-[80px] justify-center' : undefined}
-              disabled={!cookwareDraft.name.trim()}
-              onClick={confirmCookwareDialog}
-            >
-              {editingCookwarePos !== null ? (cookwareDirty ? 'Update' : 'Done') : 'Add cookware'}
-            </Button>
-          </div>
-        </div>
       </Dialog>
     </section>
   )

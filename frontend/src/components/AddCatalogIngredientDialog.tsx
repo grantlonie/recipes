@@ -91,14 +91,30 @@ export function AddCatalogIngredientDialog({
   })
 
   return (
-    <Dialog labelledBy="add-catalog-ingredient-title" open={open}>
-      <h2 className="text-xl font-bold" id="add-catalog-ingredient-title">
-        Add ingredient density
-      </h2>
-      <p className="mt-2 text-sm text-stone-600 dark:text-stone-400">
+    <Dialog
+      footer={
+        <>
+          <Button onClick={onClose} type="button" variant="ghost">
+            Cancel
+          </Button>
+          <Button
+            disabled={saveMutation.isPending || !name.trim()}
+            form="add-catalog-ingredient-form"
+            type="submit"
+          >
+            {saveMutation.isPending ? 'Saving...' : 'Save'}
+          </Button>
+        </>
+      }
+      onClose={onClose}
+      open={open}
+      title="Add ingredient density"
+      titleId="add-catalog-ingredient-title"
+    >
+      <p className="text-sm text-stone-600 dark:text-stone-400">
         Density is needed to convert this ingredient between volume and weight.
       </p>
-      <form className="mt-4 space-y-4" onSubmit={handleSave}>
+      <form className="mt-4 space-y-4" id="add-catalog-ingredient-form" onSubmit={handleSave}>
         <label className="block">
           <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Name</span>
           <input
@@ -142,14 +158,6 @@ export function AddCatalogIngredientDialog({
         {saveMutation.error ? (
           <p className={`text-sm ${errorTextClassName}`}>{saveMutation.error.message}</p>
         ) : null}
-        <div className="flex justify-end gap-2">
-          <Button onClick={onClose} type="button" variant="ghost">
-            Cancel
-          </Button>
-          <Button disabled={saveMutation.isPending || !name.trim()} type="submit">
-            {saveMutation.isPending ? 'Saving...' : 'Save'}
-          </Button>
-        </div>
       </form>
     </Dialog>
   )

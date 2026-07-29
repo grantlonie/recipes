@@ -18,12 +18,13 @@ import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
 import { AddCatalogIngredientDialog } from './components/AddCatalogIngredientDialog'
 import { BookmarkButton } from './components/BookmarkButton'
-import { Button } from './components/Button'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Dialog } from './components/Dialog'
+import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { SourceDialog } from './components/SourceDialog'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
+import { extractCookwareTokens } from './cooklangCookware'
 import { getRecipeBlocks } from './cooklangEditor'
 import { extractTokens, formatIngredientLabel } from './cooklangTokens'
 import { extractTimerTokens, formatTimerLabel } from './cooklangTimers'
@@ -53,13 +54,7 @@ import {
 import { useUnitSystem } from './UnitSystemContext'
 import { isRefFile, resolveRefDisplay } from './importMapping'
 
-const COOKWARE_RE = /#([^{}#]+)\{\}/g
-
 const ICON_CLASS = 'h-5 w-5'
-const IMAGE_ACTION_BUTTON_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-white transition hover:bg-white/20'
-const OVERFLOW_BUTTON_CLASS =
-  'inline-flex shrink-0 items-center justify-center rounded-full p-2 text-stone-500 transition hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-200'
 
 const SCALE_OPTIONS = [
   { label: '0.5X', value: 0.5 },
@@ -314,13 +309,11 @@ export function RecipePage() {
               />
             )}
             <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-full bg-black/55 p-1 backdrop-blur-sm">
-              {renderCardActions(IMAGE_ACTION_BUTTON_CLASS)}
+              {renderCardActions('onMedia')}
             </div>
           </div>
         ) : (
-          <div className="flex justify-end gap-1 p-4 pb-0">
-            {renderCardActions(OVERFLOW_BUTTON_CLASS)}
-          </div>
+          <div className="flex justify-end gap-1 p-4 pb-0">{renderCardActions('default')}</div>
         )}
         <div className="p-6">
           <div className="flex items-start justify-between gap-3">
@@ -340,21 +333,18 @@ export function RecipePage() {
                 onClose={() => setOverflowOpen(false)}
                 open={overflowOpen}
                 trigger={
-                  <button
+                  <IconButton
                     aria-expanded={overflowOpen}
                     aria-haspopup="menu"
                     aria-label="Recipe actions"
-                    className={OVERFLOW_BUTTON_CLASS}
+                    icon={<EllipsisVerticalIcon aria-hidden="true" className={ICON_CLASS} />}
                     onClick={() => setOverflowOpen(open => !open)}
-                    type="button"
-                  >
-                    <EllipsisVerticalIcon aria-hidden="true" className={ICON_CLASS} />
-                  </button>
+                  />
                 }
               >
                 <div className="py-1" role="menu">
                   <Link
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-stone-700 transition hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-stone-700 transition hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
                     onClick={() => setOverflowOpen(false)}
                     role="menuitem"
                     to={`/recipes/edit/${slug}`}
@@ -366,7 +356,7 @@ export function RecipePage() {
                     Edit
                   </Link>
                   <button
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                    className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
                     disabled={deleteMutation.isPending}
                     onClick={() => {
                       setOverflowOpen(false)
@@ -426,11 +416,11 @@ export function RecipePage() {
         confirming={deleteMutation.isPending}
         confirmingLabel="Deleting..."
         description={<>Delete &ldquo;{recipe.title}&rdquo;? This cannot be undone.</>}
-        labelledBy="delete-recipe-title"
         onCancel={() => setDeleteDialogOpen(false)}
         onConfirm={() => void handleDelete()}
         open={deleteDialogOpen}
         title="Delete recipe?"
+        titleId="delete-recipe-title"
       />
 
       <AddCatalogIngredientDialog
@@ -439,41 +429,29 @@ export function RecipePage() {
         open={densityGapName != null}
       />
 
-      <Dialog labelledBy="cookware-dialog-title" open={cookwareDialogOpen}>
-        <h2
-          className="text-lg font-semibold text-stone-900 dark:text-stone-100"
-          id="cookware-dialog-title"
-        >
-          Cookware
-        </h2>
-        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700 dark:text-stone-300">
+      <Dialog
+        onClose={() => setCookwareDialogOpen(false)}
+        open={cookwareDialogOpen}
+        title="Cookware"
+        titleId="cookware-dialog-title"
+      >
+        <ul className="list-disc space-y-1 pl-5 text-sm text-stone-700 dark:text-stone-300">
           {recipe.cookware.map(item => (
             <li key={item}>{item}</li>
           ))}
         </ul>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={() => setCookwareDialogOpen(false)} type="button" variant="ghost">
-            Close
-          </Button>
-        </div>
       </Dialog>
 
-      <Dialog labelledBy="notes-dialog-title" open={notesDialogOpen}>
-        <h2
-          className="text-lg font-semibold text-stone-900 dark:text-stone-100"
-          id="notes-dialog-title"
-        >
-          Notes
-        </h2>
-        <div className="mt-3 space-y-3 text-sm text-stone-700 dark:text-stone-300">
+      <Dialog
+        onClose={() => setNotesDialogOpen(false)}
+        open={notesDialogOpen}
+        title="Notes"
+        titleId="notes-dialog-title"
+      >
+        <div className="space-y-3 text-sm text-stone-700 dark:text-stone-300">
           {introNotes.map(note => (
             <p key={note}>{note}</p>
           ))}
-        </div>
-        <div className="mt-6 flex justify-end">
-          <Button onClick={() => setNotesDialogOpen(false)} type="button" variant="ghost">
-            Close
-          </Button>
         </div>
       </Dialog>
 
@@ -557,6 +535,28 @@ export function RecipePage() {
               })}
             </ul>
           </section>
+
+          {hasNotes ? (
+            <section className={`hidden lg:block ${panelClassName}`}>
+              <h2 className="text-lg font-semibold">Notes</h2>
+              <div className="mt-3 space-y-3 text-sm text-stone-700 dark:text-stone-300">
+                {introNotes.map(note => (
+                  <p key={note}>{note}</p>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {hasCookware ? (
+            <section className={`hidden lg:block ${panelClassName}`}>
+              <h2 className="text-lg font-semibold">Cookware</h2>
+              <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-stone-700 dark:text-stone-300">
+                {recipe.cookware.map(item => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </aside>
 
         <div className="space-y-6">
@@ -702,65 +702,63 @@ export function RecipePage() {
     setDeleteDialogOpen(false)
   }
 
-  function renderCardActions(buttonClassName: string) {
+  function renderCardActions(tone: 'default' | 'onMedia') {
     return (
       <>
         {hasCookware ? (
-          <button
-            aria-label="View cookware"
-            className={buttonClassName}
-            onClick={() => setCookwareDialogOpen(true)}
-            type="button"
-          >
-            <Square3Stack3DIcon aria-hidden="true" className={ICON_CLASS} />
-          </button>
+          <span className="lg:hidden">
+            <IconButton
+              aria-label="Cookware"
+              icon={<Square3Stack3DIcon aria-hidden="true" className={ICON_CLASS} />}
+              onClick={() => setCookwareDialogOpen(true)}
+              tone={tone}
+              tooltip={{ content: 'Cookware' }}
+            />
+          </span>
         ) : null}
         {hasNotes ? (
-          <button
-            aria-label="View notes"
-            className={buttonClassName}
-            onClick={() => setNotesDialogOpen(true)}
-            type="button"
-          >
-            <ChatBubbleBottomCenterTextIcon aria-hidden="true" className={ICON_CLASS} />
-          </button>
+          <span className="lg:hidden">
+            <IconButton
+              aria-label="Notes"
+              icon={<ChatBubbleBottomCenterTextIcon aria-hidden="true" className={ICON_CLASS} />}
+              onClick={() => setNotesDialogOpen(true)}
+              tone={tone}
+              tooltip={{ content: 'Notes' }}
+            />
+          </span>
         ) : null}
         {source?.kind === 'file' ? (
-          <button
-            aria-label="View source"
-            className={buttonClassName}
+          <IconButton
+            aria-label="Source"
+            icon={<DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />}
             onClick={() => setSourceDialogOpen(true)}
-            type="button"
-          >
-            <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
-          </button>
+            tone={tone}
+            tooltip={{ content: 'Source' }}
+          />
         ) : null}
         {source?.kind === 'url' ? (
-          <a
-            aria-label="View source"
-            className={buttonClassName}
-            href={source.href}
-            rel="noreferrer"
-            target="_blank"
-          >
-            <DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />
-          </a>
+          <IconButton
+            aria-label="Source"
+            icon={<DocumentTextIcon aria-hidden="true" className={ICON_CLASS} />}
+            onClick={() => window.open(source.href, '_blank', 'noopener,noreferrer')}
+            tone={tone}
+            tooltip={{ content: 'Source' }}
+          />
         ) : null}
-        <button
-          aria-label="Share recipe"
-          className={buttonClassName}
-          onClick={handleShare}
-          type="button"
-        >
-          <ShareIcon aria-hidden="true" className={ICON_CLASS} />
-        </button>
+        <IconButton
+          aria-label="Share"
+          icon={<ShareIcon aria-hidden="true" className={ICON_CLASS} />}
+          onClick={() => void handleShare()}
+          tone={tone}
+          tooltip={{ content: 'Share' }}
+        />
         {auth.authenticated ? (
           <BookmarkButton
             bookmarked={recipeQuery.data?.bookmarked ?? false}
-            className={buttonClassName}
             disabled={bookmarkMutation.isPending}
             iconClassName={ICON_CLASS}
             onToggle={handleToggleBookmark}
+            tone={tone}
           />
         ) : null}
       </>
@@ -902,13 +900,11 @@ function renderCooklangLine(
     })
   }
 
-  COOKWARE_RE.lastIndex = 0
-  for (const match of line.matchAll(COOKWARE_RE)) {
-    const [marker, name] = match
+  for (const token of extractCookwareTokens(line)) {
     markers.push({
-      index: match.index ?? 0,
-      length: marker.length,
-      text: name.trim(),
+      index: token.start,
+      length: token.end - token.start,
+      text: token.name,
       type: 'cookware',
     })
   }
