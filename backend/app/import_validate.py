@@ -37,6 +37,13 @@ _SKIP_SOURCE_LINE_RE = re.compile(
 _SECTION_PREFIX_RE = re.compile(r"^(?:#{1,6}\s+|(?:\d+[.)]|[-*+])\s+)+")
 _INGREDIENTS_START_RE = re.compile(r"^(?:ingredients)\b", re.IGNORECASE)
 _FOR_THE_SUBSECTION_RE = re.compile(r"^for the\b.+:$", re.IGNORECASE)
+# Mid-list labels (BBC "To finish", "For the glaze") — not shopping items.
+_INGREDIENT_SUBSECTION_LABEL_RE = re.compile(
+    r"(?i)^(?:"
+    r"to\s+(?:finish|serve|decorate|assemble|garnish|bake|cook)"
+    r"|for\s+the\b.+"
+    r"):?\s*$"
+)
 _INGREDIENTS_END_RE = re.compile(
     r"^(?:directions|instructions|method|preparation|steps|procedure|how to|"
     r"nutrition(?:\s+facts)?|reviews?|related|community|ask the community|"
@@ -278,25 +285,29 @@ def _missing_prep_note_warnings(body: str, source_text: str) -> list[str]:
         return []
 
     cook_ingredients = cooklang.parse_ingredients(body)
+    body_folded = body.casefold()
     warnings: list[str] = []
     for line in source_lines:
         if _SKIP_SOURCE_LINE_RE.search(line):
             continue
-        prep_words = _source_prep_words(line)
-        if not prep_words:
-            continue
         matches = _matching_cook_ingredients(line, cook_ingredients)
         if not matches:
             continue
+        relevant_prep: list[str] = []
         covered: set[str] = set()
         for ingredient in matches:
+            # Only require prep from the OR-branch that matches this @ingredient
+            # (e.g. "oil or melted butter" + @vegetable oil → ignore "melted").
+            prep_words = _source_prep_words_for_ingredient(line, ingredient)
+            for prep in prep_words:
+                if prep not in relevant_prep:
+                    relevant_prep.append(prep)
             haystack = f"{ingredient.name} {ingredient.note or ''}".casefold()
             for prep in prep_words:
-                forms = set(inflection_forms(prep))
-                forms.add(prep)
-                if any(re.search(rf"\b{re.escape(form)}\b", haystack) for form in forms):
+                # Ingredient notes and body/`>` tips both count as coverage.
+                if _prep_word_present(prep, haystack) or _prep_word_present(prep, body_folded):
                     covered.add(prep)
-        missing = [prep for prep in prep_words if prep not in covered]
+        missing = [prep for prep in relevant_prep if prep not in covered]
         if missing:
             warnings.append(
                 f"Source preparation note missing for {line}: {', '.join(missing)}"
@@ -345,7 +356,7 @@ def _ingredient_section_candidates(source_text: str) -> list[list[str]]:
             continue
         if not in_ingredients:
             continue
-        if line.endswith(":") and len(line) < 40:
+        if _is_ingredient_subsection_label(line):
             continue
         if _SKIP_SOURCE_LINE_RE.search(line):
             continue
@@ -373,6 +384,15 @@ def _is_ingredients_start(section: str, original_line: str) -> bool:
     return False
 
 
+def _is_ingredient_subsection_label(line: str) -> bool:
+    """True for mid-list headings like 'To finish' or 'Glaze:' — not ingredients."""
+    if len(line) >= 40:
+        return False
+    if line.endswith(":"):
+        return True
+    return bool(_INGREDIENT_SUBSECTION_LABEL_RE.match(line))
+
+
 def _quantity_line_count(lines: list[str]) -> int:
     return sum(1 for line in lines if _QUANTITY_START_RE.match(line.strip()))
 
@@ -387,6 +407,8 @@ def _looks_like_ingredient_line(line: str) -> bool:
         return False
     if _NOT_INGREDIENT_LINE_RE.search(line):
         return False
+    if _is_ingredient_subsection_label(line):
+        return False
     if _QUANTITY_START_RE.match(line):
         return True
     # Unquantified pantry lines ("Salt", "Black pepper") — keep short plain text.
@@ -400,15 +422,59 @@ def _source_prep_words(line: str) -> list[str]:
     return list(dict.fromkeys(token for token in tokens if token in _PREP_WORDS))
 
 
+def _prep_word_present(prep: str, haystack: str) -> bool:
+    forms = set(inflection_forms(prep))
+    forms.add(prep)
+    return any(re.search(rf"\b{re.escape(form)}\b", haystack) for form in forms)
+
+
+def _source_alternative_branches(line: str) -> list[str]:
+    """Split 'A or B' shopping lines into alternatives; drop parenthetical asides."""
+    without_parens = re.sub(r"\([^)]*\)", " ", line)
+    parts = re.split(r"\bor\b", without_parens, flags=re.IGNORECASE)
+    branches = [part.strip(" ,;") for part in parts if part.strip(" ,;")]
+    return branches if len(branches) > 1 else [line]
+
+
+def _ingredient_name_forms(ingredient: Ingredient) -> set[str]:
+    name_forms: set[str] = set()
+    for token in normalize_ingredient_key(ingredient.name).split():
+        name_forms.update(token_match_forms(token))
+    return name_forms
+
+
+def _branch_matches_ingredient(branch: str, name_forms: set[str]) -> bool:
+    for token in _source_content_tokens(branch):
+        if token_match_forms(token) & name_forms:
+            return True
+    return False
+
+
+def _source_prep_words_for_ingredient(line: str, ingredient: Ingredient) -> list[str]:
+    branches = _source_alternative_branches(line)
+    if len(branches) == 1:
+        return _source_prep_words(line)
+
+    name_forms = _ingredient_name_forms(ingredient)
+    matching = [branch for branch in branches if _branch_matches_ingredient(branch, name_forms)]
+    if not matching:
+        return _source_prep_words(line)
+
+    prep: list[str] = []
+    for branch in matching:
+        for word in _source_prep_words(branch):
+            if word not in prep:
+                prep.append(word)
+    return prep
+
+
 def _matching_cook_ingredients(line: str, cook_ingredients: list[Ingredient]) -> list[Ingredient]:
     content_tokens = _source_content_tokens(line)
     if not content_tokens:
         return []
     matches: list[Ingredient] = []
     for ingredient in cook_ingredients:
-        name_forms: set[str] = set()
-        for token in normalize_ingredient_key(ingredient.name).split():
-            name_forms.update(token_match_forms(token))
+        name_forms = _ingredient_name_forms(ingredient)
         for token in content_tokens:
             if token_match_forms(token) & name_forms:
                 matches.append(ingredient)

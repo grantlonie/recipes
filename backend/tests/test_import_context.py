@@ -215,6 +215,81 @@ Cook.
     assert result.warnings == []
 
 
+def test_validate_accepts_prep_covered_by_body_note():
+    content = """---
+title: Brownies
+---
+
+Cream @butter{1%cup} with sugar.
+
+> Softened or melted butter both work here.
+"""
+    source = """Ingredients
+1 cup softened butter
+
+Directions
+Mix.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert result.warnings == []
+
+
+def test_validate_ignores_prep_on_unused_or_alternative():
+    content = """---
+title: Waffles
+---
+
+Add @vegetable oil{0.33%cup} and mix.
+
+> You can also use melted butter instead of vegetable oil.
+"""
+    source = """Ingredients
+1/3 cup vegetable oil or melted butter
+
+Directions
+Mix.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert result.warnings == []
+
+
+def test_validate_ignores_or_alternative_prep_even_without_body_mention():
+    content = """---
+title: Waffles
+---
+
+Add @vegetable oil{0.33%cup} and mix.
+"""
+    source = """Ingredients
+1/3 cup vegetable oil or melted butter
+
+Directions
+Mix.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert result.warnings == []
+
+
+def test_validate_still_requires_prep_on_chosen_or_branch():
+    content = """---
+title: Salad
+---
+
+Toss @parsley{0.25%cup} with oil.
+"""
+    source = """Ingredients
+1/4 cup chopped parsley or cilantro
+
+Directions
+Toss.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert any(
+        "chopped" in warning and "Source preparation note missing for" in warning
+        for warning in result.warnings
+    )
+
+
 def test_validate_recognizes_converted_amounts_as_present():
     content = """---
 title: Brownies
@@ -376,3 +451,26 @@ Bake.
 """
     result = validate_imported_cooklang(content, source_text=source)
     assert any("sugar" in warning for warning in result.warnings)
+
+
+def test_validate_skips_to_finish_subsection_label():
+    content = """---
+title: Brioche wreath
+---
+
+Brush with @eggs{1}(lightly beaten) and sprinkle @salt{}(sea).
+Add @marmalade{2%Tbsp}(fine-shred).
+"""
+    source = """Ingredients
+250g camembert
+To finish
+1 free-range egg, lightly beaten
+good pinch sea salt
+2 tbsp fine-shred marmalade
+
+Method
+Bake.
+"""
+    result = validate_imported_cooklang(content, source_text=source)
+    assert not any("To finish" in warning for warning in result.warnings)
+    assert any("camembert" in warning.lower() for warning in result.warnings)
