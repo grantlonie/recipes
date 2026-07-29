@@ -354,6 +354,7 @@ def _import_extracted_text(
         ingredients=ingredients,
         source_text=extracted_text,
         trace=trace,
+        scrape_source_image=image_url is None and image_scrape_note is None,
     )
     return _with_import_metadata(
         _maybe_quality_repair(
@@ -379,6 +380,7 @@ def _finalize_import(
     ingredients: IngredientRepository,
     source_text: str | None = None,
     trace: ImportTrace | None = None,
+    scrape_source_image: bool = True,
 ) -> ImportPreview:
     if not _is_valid_import(raw):
         raise ImportError("Imported content is not valid Cooklang")
@@ -389,7 +391,13 @@ def _finalize_import(
     elif source_url and cooklang.is_ref_file(source_url):
         metadata["source"] = source_url
     image_notes: list[str] = []
-    _apply_import_image(metadata, image_url=image_url, settings=settings, notes=image_notes)
+    _apply_import_image(
+        metadata,
+        image_url=image_url,
+        settings=settings,
+        notes=image_notes,
+        scrape_source=scrape_source_image,
+    )
 
     content = cooklang.render_document(metadata, body)
     content = cooklang.prepare_imported_content(content)
@@ -403,8 +411,15 @@ def _finalize_import(
     )
     content = cooklang.prepare_imported_content(cooklang.render_document(metadata, mapped_body))
     metadata, body = cooklang.parse_document(content)
-    # Re-apply after normalize in case front-matter repair dropped image.
-    _apply_import_image(metadata, image_url=image_url, settings=settings, notes=image_notes)
+    # Re-apply provided image after normalize in case front-matter repair dropped it.
+    # Do not scrape again — one HTML meta fetch is enough.
+    _apply_import_image(
+        metadata,
+        image_url=image_url,
+        settings=settings,
+        notes=image_notes,
+        scrape_source=False,
+    )
     _ensure_drink_tags(metadata, body)
     content = cooklang.render_document(metadata, body)
     validation = validate_imported_cooklang(
@@ -491,6 +506,7 @@ def _maybe_quality_repair(
         ingredients=ingredients,
         source_text=extracted_text,
         trace=trace,
+        scrape_source_image=False,
     )
     # Prefer the repaired result even if some soft warnings remain.
     return repaired_preview
@@ -618,6 +634,7 @@ def _apply_import_image(
     image_url: str | None,
     settings: Settings,
     notes: list[str] | None = None,
+    scrape_source: bool = True,
 ) -> None:
     """Set image from scrape unless a local asset file is already present."""
     if cooklang.metadata_image_file(metadata):
@@ -627,13 +644,15 @@ def _apply_import_image(
         return
     if _has_usable_image(metadata):
         return
+    if not scrape_source:
+        return
     source = metadata.get("source")
     if isinstance(source, str) and cooklang.is_ref_url(source):
         scraped = fetch_page_image_url(source, settings=settings)
         if scraped:
             metadata["image"] = scraped
             return
-        note = f"Could not scrape image from {source}"
+        note = f"Could not scrape image from {source.split('#', 1)[0]}"
         if notes is not None and note not in notes:
             notes.append(note)
 

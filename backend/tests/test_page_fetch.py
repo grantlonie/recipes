@@ -55,6 +55,15 @@ def test_first_http_url_strips_trailing_punctuation():
     )
 
 
+def test_first_http_url_strips_fragment():
+    assert (
+        first_http_url(
+            "https://food52.com/recipes/25419-a-simple-homey-coconut-y-red-lentil-dal#comments"
+        )
+        == "https://food52.com/recipes/25419-a-simple-homey-coconut-y-red-lentil-dal"
+    )
+
+
 def test_fetch_recipe_page_direct_success(settings: Settings):
     page_url = "https://example.com/recipe"
     image_url = "https://example.com/hero.jpg"
@@ -185,25 +194,32 @@ def test_fetch_recipe_page_rejects_jina_challenge_page(settings: Settings):
                 fetch_recipe_page(page_url, settings=settings)
 
 
-def test_fetch_page_image_url_uses_microlink_when_page_fetch_fails(settings: Settings):
-    page_url = "https://food52.com/recipes/example"
-    image_url = "https://images.food52.com/dish.jpg"
+def test_fetch_page_image_url_reads_og_image_meta(settings: Settings):
+    page_url = "https://example.com/recipe"
+    image_url = "https://example.com/hero.jpg"
 
     def handler(request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if url == page_url or url.startswith("https://r.jina.ai/"):
-            return httpx.Response(429, text="slow down", headers={"Retry-After": "0"})
-        if "api.microlink.io" in url:
-            return httpx.Response(
-                200,
-                json={"status": "success", "data": {"image": {"url": image_url}}},
-            )
-        raise AssertionError(f"Unexpected request: {url}")
+        assert str(request.url) == page_url
+        return httpx.Response(
+            200,
+            text=(
+                f'<html><head><meta property="og:image" content="{image_url}" />'
+                "</head><body>Recipe</body></html>"
+            ),
+        )
 
     transport = httpx.MockTransport(handler)
-    with patch("app.page_fetch.time.sleep"):
-        with _patch_client(transport):
-            assert fetch_page_image_url(page_url, settings=settings) == image_url
+    with _patch_client(transport):
+        assert fetch_page_image_url(page_url, settings=settings) == image_url
+
+
+def test_fetch_page_image_url_returns_none_on_blocked_page(settings: Settings):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, text="forbidden")
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client(transport):
+        assert fetch_page_image_url("https://example.com/recipe", settings=settings) is None
 
 
 def test_fetch_recipe_page_total_failure(settings: Settings):

@@ -12,8 +12,8 @@ from app.config import Settings
 from app.extract import ExtractError, extract_html_text, extract_page_image_url
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
+IMAGE_SCRAPE_TIMEOUT_SECONDS = 8.0
 JINA_READER_PREFIX = "https://r.jina.ai/"
-MICROLINK_API = "https://api.microlink.io/"
 RETRYABLE_STATUS = frozenset({403, 429})
 CURL_CFFI_IMPERSONATE = "chrome131"
 
@@ -86,7 +86,8 @@ def first_http_url(text: str) -> str | None:
     match = SOURCE_HTTP_URL_RE.search(text)
     if not match:
         return None
-    return match.group(0).rstrip(".,);]>\"'")
+    # Drop trailing punctuation and URL fragments (#comments).
+    return match.group(0).rstrip(".,);]>\"'").split("#", 1)[0]
 
 
 def fetch_recipe_page(url: str, *, settings: Settings) -> FetchedPage:
@@ -119,14 +120,23 @@ def fetch_recipe_page(url: str, *, settings: Settings) -> FetchedPage:
 
 
 def fetch_page_image_url(url: str, *, settings: Settings) -> str | None:
-    """Best-effort og:image (or equivalent) scrape; never raises for HTTP failures."""
-    try:
-        page = fetch_recipe_page(url, settings=settings)
-    except PageFetchError:
-        return _fetch_image_via_microlink(url, settings=settings)
-    if page.image_url:
-        return page.image_url
-    return _fetch_image_via_microlink(url, settings=settings)
+    """Fetch HTML once and read og:image / twitter:image / JSON-LD image.
+
+    Intentionally simple and fail-fast: no Jina, no Microlink, no long retries.
+    """
+    page_url = url.strip().split("#", 1)[0]
+    if not page_url:
+        return None
+
+    with _acquire_fetch_slot(settings):
+        try:
+            response = _get_page(page_url, timeout_seconds=IMAGE_SCRAPE_TIMEOUT_SECONDS)
+        except Exception:  # noqa: BLE001 - image scrape is best-effort
+            return None
+
+    if response.status_code >= 400 or _looks_like_challenge_page(response.text):
+        return None
+    return extract_page_image_url(response.text, response.url or page_url)
 
 
 def rate_limit_message(status_code: int | None = None) -> str:
@@ -151,7 +161,7 @@ def _fetch_direct(url: str, *, settings: Settings) -> FetchedPage:
 
     for attempt in range(attempts):
         try:
-            response = _get_page(url)
+            response = _get_page(url, timeout_seconds=DEFAULT_TIMEOUT_SECONDS)
         except httpx.TimeoutException as error:
             raise PageFetchError("Recipe import timed out") from error
         except httpx.HTTPError as error:
@@ -202,15 +212,17 @@ def _fetch_direct(url: str, *, settings: Settings) -> FetchedPage:
     raise last_error
 
 
-def _get_page(url: str) -> _RawResponse:
+def _get_page(url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> _RawResponse:
     """Prefer Chrome TLS impersonation; fall back to plain httpx."""
-    curl_response = _get_page_curl_cffi(url)
+    curl_response = _get_page_curl_cffi(url, timeout_seconds=timeout_seconds)
     if curl_response is not None:
         return curl_response
-    return _get_page_httpx(url)
+    return _get_page_httpx(url, timeout_seconds=timeout_seconds)
 
 
-def _get_page_curl_cffi(url: str) -> _RawResponse | None:
+def _get_page_curl_cffi(
+    url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+) -> _RawResponse | None:
     try:
         from curl_cffi import requests as curl_requests
     except ImportError:
@@ -220,7 +232,7 @@ def _get_page_curl_cffi(url: str) -> _RawResponse | None:
         response = curl_requests.get(
             url,
             impersonate=CURL_CFFI_IMPERSONATE,
-            timeout=DEFAULT_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
             allow_redirects=True,
             headers={
                 "Accept": BROWSER_HEADERS["Accept"],
@@ -239,8 +251,8 @@ def _get_page_curl_cffi(url: str) -> _RawResponse | None:
     )
 
 
-def _get_page_httpx(url: str) -> _RawResponse:
-    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
+def _get_page_httpx(url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> _RawResponse:
+    timeout = httpx.Timeout(timeout_seconds, connect=min(15.0, timeout_seconds))
     with httpx.Client(follow_redirects=True, timeout=timeout, headers=BROWSER_HEADERS) as client:
         response = client.get(url)
         return _RawResponse(
@@ -281,42 +293,12 @@ def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
     if _looks_like_challenge_page(text):
         raise PageFetchError(rate_limit_message(403), status_code=403)
 
-    image_url = _image_url_from_markdown(text, base_url=url)
-    if not image_url:
-        image_url = _fetch_image_via_microlink(url, settings=settings)
     return FetchedPage(
         extracted_text=text,
         final_url=url,
-        image_url=image_url,
+        image_url=_image_url_from_markdown(text, base_url=url),
         used_fallback=True,
     )
-
-
-def _fetch_image_via_microlink(url: str, *, settings: Settings) -> str | None:
-    if not settings.page_fetch_fallback_enabled:
-        return None
-    timeout = httpx.Timeout(30.0, connect=10.0)
-    try:
-        with httpx.Client(follow_redirects=True, timeout=timeout) as client:
-            response = client.get(MICROLINK_API, params={"url": url, "meta": "true"})
-            response.raise_for_status()
-            payload = response.json()
-    except (httpx.HTTPError, ValueError):
-        return None
-
-    if not isinstance(payload, dict) or payload.get("status") != "success":
-        return None
-    data = payload.get("data")
-    if not isinstance(data, dict):
-        return None
-    image = data.get("image")
-    if isinstance(image, str) and image.startswith(("http://", "https://")):
-        return image
-    if isinstance(image, dict):
-        candidate = image.get("url")
-        if isinstance(candidate, str) and candidate.startswith(("http://", "https://")):
-            return candidate
-    return None
 
 
 def _image_url_from_markdown(text: str, *, base_url: str) -> str | None:
