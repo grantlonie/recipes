@@ -10,7 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/react/24/solid'
 import type { ChangeEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
 import { useAuth } from './AuthContext'
@@ -210,6 +210,7 @@ function HomeSearchBar() {
   const { activeTags, bookmarkedOnly, query, setActiveTags, setBookmarkedOnly, setQuery } =
     useRecipeListState()
   const { localRevision } = useRecipeSync()
+  const inputRef = useRef<HTMLInputElement>(null)
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState(query)
   const [tagsOpen, setTagsOpen] = useState(false)
@@ -218,6 +219,16 @@ function HomeSearchBar() {
     () => availableTags.filter(tag => !selectedTags.has(tag)),
     [availableTags, selectedTags]
   )
+
+  useLayoutEffect(() => {
+    const input = inputRef.current
+    if (!input) {
+      return
+    }
+    // preventScroll so remounting the search bar does not jump the recipe list to the top.
+    input.focus({ preventScroll: true })
+    input.select()
+  }, [])
 
   useEffect(() => {
     if (inputValue === query) {
@@ -245,11 +256,11 @@ function HomeSearchBar() {
         <label className="min-w-0 flex-1">
           <span className="sr-only">Search recipes</span>
           <input
-            autoFocus
             className="w-full rounded-lg border border-orange-200 bg-orange-50/80 px-3 py-1.5 text-sm outline-none ring-orange-500 placeholder:text-stone-500 focus:ring-2 dark:border-stone-600 dark:bg-stone-800/80 dark:text-stone-100 dark:placeholder:text-stone-400"
             onChange={handleQueryChange}
             onFocus={event => event.target.select()}
             placeholder="Search recipes"
+            ref={inputRef}
             type="search"
             value={inputValue}
           />

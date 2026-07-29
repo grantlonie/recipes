@@ -63,17 +63,25 @@ export function RecipeDetailHeaderNav() {
   const { title, titleInHeader } = useRecipeDetailHeader()
 
   function handleBack() {
+    // React Router's history idx > 0 means an in-app entry exists; otherwise
+    // browser back would leave the site, so go home instead.
+    const historyIndex =
+      typeof window.history.state?.idx === 'number' ? window.history.state.idx : 0
+    if (historyIndex > 0) {
+      navigate(-1)
+      return
+    }
     navigate('/')
   }
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1">
       <IconButton
-        aria-label="Back to recipes"
+        aria-label="Back"
         className="h-10 w-10"
         icon={<ChevronLeftIcon aria-hidden="true" className="h-6 w-6" />}
         onClick={handleBack}
-        tooltip={{ content: 'Back to recipes' }}
+        tooltip={{ content: 'Back' }}
       />
       <p
         aria-hidden="true"

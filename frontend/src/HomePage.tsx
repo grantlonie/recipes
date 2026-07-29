@@ -35,6 +35,7 @@ export function HomePage({ isVisible }: HomePageProps) {
   const scrollRestoringRef = useRef(false)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
   const filterKey = `${query}|${activeTags.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
+  const appliedFilterKeyRef = useRef(filterKey)
   const [summaries, setSummaries] = useState<RecipeSummary[]>([])
   const [details, setDetails] = useState<RecipeDetail[]>([])
   const [localReady, setLocalReady] = useState(false)
@@ -121,12 +122,18 @@ export function HomePage({ isVisible }: HomePageProps) {
     if (!isVisible) {
       return
     }
+    // Only reset when filters change — not when returning to the home view.
+    if (appliedFilterKeyRef.current === filterKey) {
+      return
+    }
+    appliedFilterKeyRef.current = filterKey
     scrollRestoringRef.current = true
+    setScrollTop(0)
     window.scrollTo(0, 0)
     requestAnimationFrame(() => {
       scrollRestoringRef.current = false
     })
-  }, [filterKey, isVisible])
+  }, [filterKey, isVisible, setScrollTop])
 
   useEffect(() => {
     if (!isVisible) {
