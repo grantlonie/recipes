@@ -14,6 +14,7 @@ import {
   type PendingImport,
 } from './importMapping'
 import { ensureUniqueSlug, findRecipeBySourceUrl, formatImportError } from './shareImport'
+import { siteFromMetadata, siteFromUrl } from './site'
 import { storeRecipe } from './sync'
 import type { CatalogIngredient, ImportPreview, RecipeDetail, RecipeSummary } from './types'
 
@@ -101,7 +102,7 @@ export async function finalizeImportedRecipe(
   content: string,
   suggestedSlug: string,
   sourceFile?: File,
-  options: { skipUniqueSlugCheck?: boolean } = {}
+  options: { skipUniqueSlugCheck?: boolean; websiteUrl?: string } = {}
 ): Promise<RecipeDetail> {
   const slug = options.skipUniqueSlugCheck
     ? suggestedSlug.trim() || 'new-recipe'
@@ -113,8 +114,14 @@ export async function finalizeImportedRecipe(
   }
 
   const sourcePath = await uploadRecipeSource(slug, sourceFile)
+  const parsed = parseImportedDocument(recipe.content)
+  const site =
+    siteFromMetadata(parsed.metadata) ??
+    (options.websiteUrl ? siteFromUrl(options.websiteUrl) : null) ??
+    undefined
   const nextContent = attachAssetsToContent(recipe.content, {
     image: sourceFile.type.startsWith('image/') ? sourcePath : undefined,
+    site: site ?? undefined,
     source: sourcePath,
   })
   recipe = await updateRecipe(slug, nextContent)
@@ -134,7 +141,7 @@ export { formatImportError }
 
 function attachAssetsToContent(
   content: string,
-  assets: { image?: string; source: string }
+  assets: { image?: string; source: string; site?: string }
 ): string {
   const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/)
   if (!match) {
@@ -145,6 +152,9 @@ function attachAssetsToContent(
   parsed.metadata.source = assets.source
   if (assets.image) {
     parsed.metadata.image = assets.image
+  }
+  if (assets.site) {
+    parsed.metadata.site = assets.site
   }
 
   return renderImportDocument(parsed.metadata, parsed.body)

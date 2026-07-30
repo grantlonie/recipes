@@ -44,6 +44,7 @@ export interface RecipeSummary {
   original_url?: string | null
   review?: string[]
   servings: number
+  site?: string | null
   slug: string
   tags: string[]
   title: string

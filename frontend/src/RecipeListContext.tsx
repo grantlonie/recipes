@@ -6,6 +6,7 @@ const RECENT_RECIPES_KEY = 'recipes.recentlyViewed'
 const RECENT_RECIPES_LIMIT = 18
 
 interface RecipeListState {
+  activeSites: string[]
   activeTags: string[]
   bookmarkedOnly: boolean
   query: string
@@ -14,6 +15,7 @@ interface RecipeListState {
   addRecentRecipe: (recipe: RecipeSummary) => void
   pruneRecentRecipes: (existingSlugs: ReadonlySet<string>) => void
   removeRecentRecipe: (slug: string) => void
+  setActiveSites: (sites: string[]) => void
   setActiveTags: (tags: string[]) => void
   setBookmarkedOnly: (value: boolean) => void
   setQuery: (value: string) => void
@@ -27,6 +29,7 @@ interface RecipeListProviderProps {
 }
 
 export function RecipeListProvider({ children }: RecipeListProviderProps) {
+  const [activeSites, setActiveSitesState] = useState<string[]>([])
   const [activeTags, setActiveTagsState] = useState<string[]>([])
   const [bookmarkedOnly, setBookmarkedOnlyState] = useState(false)
   const [query, setQueryState] = useState('')
@@ -57,6 +60,11 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
     })
   }, [])
 
+  const setActiveSites = useCallback((sites: string[]) => {
+    setActiveSitesState(sites)
+    setScrollTop(0)
+  }, [])
+
   const setActiveTags = useCallback((tags: string[]) => {
     setActiveTagsState(tags)
     setScrollTop(0)
@@ -75,6 +83,7 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
   return (
     <RecipeListContext.Provider
       value={{
+        activeSites,
         activeTags,
         addRecentRecipe,
         bookmarkedOnly,
@@ -83,6 +92,7 @@ export function RecipeListProvider({ children }: RecipeListProviderProps) {
         query,
         recentRecipes,
         scrollTop,
+        setActiveSites,
         setActiveTags,
         setBookmarkedOnly,
         setQuery,

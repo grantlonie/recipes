@@ -70,6 +70,7 @@ class RecipeSummary(BaseModel):
     original_url: str | None = None
     review: list[str] = Field(default_factory=list)
     servings: float = 1
+    site: str | None = None
     slug: str
     tags: list[str] = Field(default_factory=list)
     title: str

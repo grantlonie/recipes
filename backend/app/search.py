@@ -55,6 +55,7 @@ def _score_recipe(recipe: RecipeSummary, terms: list[str]) -> tuple[int, str]:
     title = recipe.title.casefold()
     tags = " ".join(recipe.tags).casefold()
     notes = " ".join(recipe.notes).casefold()
+    site = (recipe.site or "").casefold()
     source = (recipe.original_url or "").casefold()
 
     score = 0
@@ -66,6 +67,9 @@ def _score_recipe(recipe: RecipeSummary, terms: list[str]) -> tuple[int, str]:
         elif term in tags:
             score += 60
             matches.append("tags")
+        elif site and term in site:
+            score += 50
+            matches.append("site")
         elif term in notes:
             score += 35
             matches.append("notes")

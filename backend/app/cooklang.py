@@ -1,6 +1,7 @@
 import re
 from fractions import Fraction
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -32,6 +33,7 @@ APP_OWNED_IMPORT_KEYS = frozenset(
         "import_notes",
         "image_pending",
         "image_source",
+        "site",
     }
 )
 IMPORT_ERROR_NOTE_PREFIX = "Import error: "
@@ -39,7 +41,7 @@ RECIPES_PREFIX = "recipes/"
 # Local assets live next to recipe.cook as source.* / image.* (no slug in metadata).
 LOCAL_ASSET_FILENAME_RE = re.compile(r"^(?:source|image)\.[A-Za-z0-9]+$")
 # Latin letters with diacritics (excl. ×÷) so names like jalapeño parse fully.
-TOKEN_CHARS = r"A-Za-z0-9_./' \-" + "\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F"
+TOKEN_CHARS = r"A-Za-z0-9_./' \-" + "\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u024f"
 INGREDIENT_RE = re.compile(
     rf"@(?:(?P<name_braced>[{TOKEN_CHARS}]+?)\{{(?P<amount>[^}}]*)\}}|"
     rf"(?P<name>[{TOKEN_CHARS}]+?)(?=\s|[.,;:!?)]|\(|$))"
@@ -228,9 +230,7 @@ def split_salt_and_pepper_markers(body: str) -> tuple[str, bool]:
         note = (match.group(2) or "").strip() or "to taste"
         note_markup = f"({note})"
         if amount:
-            return (
-                f"@salt{{{amount}}}{note_markup} and @black pepper{{{amount}}}{note_markup}"
-            )
+            return f"@salt{{{amount}}}{note_markup} and @black pepper{{{amount}}}{note_markup}"
         return f"@salt{{}}{note_markup} and @black pepper{{}}{note_markup}"
 
     updated, count = _SALT_AND_PEPPER_RE.subn(replacer, body)
@@ -1023,6 +1023,29 @@ def metadata_image_file(metadata: dict[str, Any]) -> str | None:
     return None
 
 
+def site_from_url(url: str) -> str | None:
+    """Host used for recipe `site` metadata (www stripped; food52.com stays food52.com)."""
+    host = urlparse(url.strip()).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host or None
+
+
+def metadata_site(metadata: dict[str, Any]) -> str | None:
+    explicit = metadata.get("site")
+    if isinstance(explicit, str):
+        cleaned = explicit.strip().casefold()
+        if cleaned:
+            return cleaned
+    for key in ("source", "image_source"):
+        value = metadata.get(key)
+        if isinstance(value, str) and is_ref_url(value):
+            site = site_from_url(value)
+            if site:
+                return site
+    return None
+
+
 def metadata_source_value(metadata: dict[str, Any]) -> str | None:
     return parse_ref_value(metadata, "source")
 
@@ -1184,8 +1207,7 @@ def validate_document_refs(metadata: dict[str, Any]) -> None:
         value = parse_ref_value(metadata, key)
         if value and not validate_ref_value(value):
             raise ValueError(
-                f"Invalid {key} value: must be http(s) URL or local asset file "
-                "(source.* / image.*)"
+                f"Invalid {key} value: must be http(s) URL or local asset file (source.* / image.*)"
             )
 
 

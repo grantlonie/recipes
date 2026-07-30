@@ -1,3 +1,4 @@
+import { formatSiteLabel, siteFromMetadata } from './site'
 import type { IngredientCatalog, RecipeDetail, RecipeSummary, SyncManifest } from './types'
 
 const DB_NAME = 'recipes-app'
@@ -73,6 +74,33 @@ export async function getLocalTags(): Promise<string[]> {
   return [...tags].sort((left, right) =>
     left.localeCompare(right, undefined, { sensitivity: 'base' })
   )
+}
+
+export interface LocalSiteCount {
+  count: number
+  site: string
+}
+
+export async function getLocalSitesByCount(): Promise<LocalSiteCount[]> {
+  const summaries = await getLocalSummaries()
+  const counts = new Map<string, number>()
+  for (const recipe of summaries) {
+    const site = recipe.site?.trim()
+    if (!site) {
+      continue
+    }
+    counts.set(site, (counts.get(site) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([site, count]) => ({ count, site }))
+    .sort((left, right) => {
+      if (right.count !== left.count) {
+        return right.count - left.count
+      }
+      return formatSiteLabel(left.site).localeCompare(formatSiteLabel(right.site), undefined, {
+        sensitivity: 'base',
+      })
+    })
 }
 
 export async function putRecipe(recipe: RecipeDetail, updatedAt: string): Promise<void> {
@@ -210,6 +238,7 @@ function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {
     original_url: recipe.original_url,
     review: recipe.review,
     servings: recipe.servings,
+    site: recipe.site ?? siteFromMetadata(recipe.metadata),
     slug: recipe.slug,
     tags: recipe.tags,
     title: recipe.title,

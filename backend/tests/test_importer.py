@@ -246,6 +246,7 @@ def test_import_from_url_fetches_and_imports(settings: Settings, ingredients: In
 
     assert preview.suggested_slug == "chicken-bacon-pasta"
     assert "source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta" in preview.content
+    assert "site: bbcgoodfood.com" in preview.content
     assert "image: https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg" in preview.content
     assert preview.image_url == "https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg"
 
@@ -334,7 +335,9 @@ Add @chicken{} and @bacon{}.
 
     mock_fetch.assert_not_called()
     assert "image_pending: true" in preview.content
-    assert "image_source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta" in preview.content
+    assert (
+        "image_source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta" in preview.content
+    )
     assert preview.image_url is None
 
 
@@ -461,6 +464,7 @@ def test_import_from_text_file_defers_embedded_website_url(
     assert f"image_source: {page_url}" in preview.content
     assert preview.image_url is None
     assert "source: source.txt" in preview.content
+    assert "site: food52.com" in preview.content
 
 
 def test_import_from_file_sets_source_path_for_assets(

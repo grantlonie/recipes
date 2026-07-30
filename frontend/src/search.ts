@@ -39,6 +39,7 @@ function scoreRecipe(recipe: RecipeSummary, content: string, terms: string[]): n
   const title = recipe.title.toLocaleLowerCase()
   const tags = recipe.tags.join(' ').toLocaleLowerCase()
   const notes = recipe.notes.join(' ').toLocaleLowerCase()
+  const site = (recipe.site ?? '').toLocaleLowerCase()
   const source = (recipe.original_url ?? '').toLocaleLowerCase()
 
   let score = 0
@@ -47,6 +48,8 @@ function scoreRecipe(recipe: RecipeSummary, content: string, terms: string[]): n
       score += 100
     } else if (tags.includes(term)) {
       score += 60
+    } else if (site && site.includes(term)) {
+      score += 50
     } else if (notes.includes(term)) {
       score += 35
     } else if (source.includes(term)) {

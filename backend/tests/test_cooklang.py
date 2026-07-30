@@ -2,6 +2,7 @@ from app.cooklang import (
     format_yaml_quoted_string,
     heal_imported_cooklang,
     metadata_cook_time,
+    metadata_site,
     normalize_document,
     parse_blocks,
     parse_cookware,
@@ -12,6 +13,7 @@ from app.cooklang import (
     sanitize_front_matter,
     scale_blocks,
     scale_steps,
+    site_from_url,
     split_amount,
     trim_cooklang_document,
 )
@@ -208,7 +210,7 @@ Whisk @lemon zest{1%Tbsp}.
     metadata, body = parse_document(fixed)
     assert metadata["title"] == "'Dori Sanders' No-Churn Fresh Lemon Ice Cream"
     assert metadata["description"] == "No-churn lemon ice cream."
-    assert 'title: "\'Dori Sanders\' No-Churn Fresh Lemon Ice Cream"' in fixed
+    assert "title: \"'Dori Sanders' No-Churn Fresh Lemon Ice Cream\"" in fixed
     assert "Whisk @lemon zest{1%Tbsp}." in body
 
 
@@ -387,9 +389,7 @@ Season with @salt{}(to taste).
     assert "Top with @feta cheese" in body
     assert "Let me re-check" not in body
     assert "Let me finalize" not in body
-    assert any(
-        "self-talk" in note or "trimmed trailing LLM reasoning" in note for note in notes
-    )
+    assert any("self-talk" in note or "trimmed trailing LLM reasoning" in note for note in notes)
 
 
 def test_heal_splits_salt_and_pepper_marker():
@@ -608,8 +608,7 @@ def test_parse_ingredients_scales_amounts_with_embedded_units():
 
 def test_parse_ingredients_merges_same_name_and_note():
     ingredients = parse_ingredients(
-        "Mix @rice flour{0.5%cup} into the crust. "
-        "Sprinkle @rice flour{0.5%cup} over the top."
+        "Mix @rice flour{0.5%cup} into the crust. Sprinkle @rice flour{0.5%cup} over the top."
     )
 
     assert len(ingredients) == 1
@@ -620,9 +619,7 @@ def test_parse_ingredients_merges_same_name_and_note():
 
 
 def test_parse_ingredients_does_not_merge_different_notes():
-    ingredients = parse_ingredients(
-        "Slice @tomatoes{2}(beefsteak) and @tomatoes{1}(cherry)."
-    )
+    ingredients = parse_ingredients("Slice @tomatoes{2}(beefsteak) and @tomatoes{1}(cherry).")
 
     assert len(ingredients) == 2
     assert ingredients[0].name == "tomatoes"
@@ -634,9 +631,7 @@ def test_parse_ingredients_does_not_merge_different_notes():
 
 
 def test_parse_ingredients_does_not_merge_different_units():
-    ingredients = parse_ingredients(
-        "Add @rice flour{0.5%cup} and @rice flour{50%g}."
-    )
+    ingredients = parse_ingredients("Add @rice flour{0.5%cup} and @rice flour{50%g}.")
 
     assert len(ingredients) == 2
     assert ingredients[0].quantity == "0.5"
@@ -736,3 +731,26 @@ def test_format_ingredient_markup_keeps_empty_braces():
     )
     assert metadata_cook_time({"time": "1 hour 50 minutes"}) == "1 hour 50 minutes"
     assert metadata_cook_time({"cook time": "45 minutes"}) == "45 minutes cook"
+
+
+def test_site_from_url_strips_www_keeps_host():
+    assert site_from_url("https://www.food52.com/recipes/21102") == "food52.com"
+    assert site_from_url("https://bbcgoodfood.com/recipes/x") == "bbcgoodfood.com"
+    assert site_from_url("https://cooking.nytimes.com/recipes/1") == "cooking.nytimes.com"
+    assert site_from_url("https://example.co.uk/r") == "example.co.uk"
+    assert site_from_url("not-a-url") is None
+
+
+def test_metadata_site_prefers_explicit_then_derives():
+    assert metadata_site({"site": "Food52.com"}) == "food52.com"
+    assert metadata_site({"source": "https://www.bbcgoodfood.com/recipes/x"}) == "bbcgoodfood.com"
+    assert (
+        metadata_site(
+            {
+                "source": "source.txt",
+                "image_source": "https://food52.com/recipes/x",
+            }
+        )
+        == "food52.com"
+    )
+    assert metadata_site({"source": "source.txt"}) is None

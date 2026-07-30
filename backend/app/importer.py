@@ -257,6 +257,8 @@ def _import_image_file(
             source_text=None,
             trace=trace,
         ),
+        source_text=None,
+        source_url=None,
         trace=trace,
     )
 
@@ -358,6 +360,8 @@ def _import_extracted_text(
             system_prompt=system_prompt,
             trace=trace,
         ),
+        source_text=extracted_text,
+        source_url=source_url,
         trace=trace,
     )
 
@@ -412,6 +416,7 @@ def _finalize_import(
         source_text=source_text,
     )
     _ensure_drink_tags(metadata, body)
+    _apply_recipe_site(metadata, source_url=source_url, source_text=source_text, body=body)
     content = cooklang.render_document(metadata, body)
     validation = validate_imported_cooklang(
         content,
@@ -503,7 +508,13 @@ def _maybe_quality_repair(
     return repaired_preview
 
 
-def _with_import_metadata(preview: ImportPreview, *, trace: ImportTrace) -> ImportPreview:
+def _with_import_metadata(
+    preview: ImportPreview,
+    *,
+    trace: ImportTrace,
+    source_url: str | None = None,
+    source_text: str | None = None,
+) -> ImportPreview:
     """Write app-owned review/import_* front matter; never embed validation as step notes."""
     metadata, body = cooklang.parse_document(preview.content)
     pending_source = _pending_image_source(metadata)
@@ -542,10 +553,43 @@ def _with_import_metadata(preview: ImportPreview, *, trace: ImportTrace) -> Impo
             metadata["image_pending"] = True
             metadata["image_source"] = source
 
+    _apply_recipe_site(metadata, source_url=source_url, source_text=source_text, body=body)
+
     content = cooklang.render_document(metadata, body)
     if not content.endswith("\n"):
         content += "\n"
     return preview.model_copy(update={"content": content})
+
+
+def _apply_recipe_site(
+    metadata: dict,
+    *,
+    source_url: str | None = None,
+    source_text: str | None = None,
+    body: str | None = None,
+) -> None:
+    """Set app-owned `site` from the best available recipe URL."""
+    candidates: list[str] = []
+    if source_url and cooklang.is_ref_url(source_url):
+        candidates.append(source_url)
+    for key in ("image_source", "source"):
+        value = metadata.get(key)
+        if isinstance(value, str) and cooklang.is_ref_url(value):
+            candidates.append(value)
+    if source_text:
+        found = first_http_url(source_text)
+        if found:
+            candidates.append(found)
+    if body:
+        found = first_http_url(body)
+        if found:
+            candidates.append(found)
+    for url in candidates:
+        site = cooklang.site_from_url(url)
+        if site:
+            metadata["site"] = site
+            return
+    metadata.pop("site", None)
 
 
 def _pending_image_source(metadata: dict) -> str | None:

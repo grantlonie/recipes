@@ -4,6 +4,7 @@ import {
   BookmarkIcon as BookmarkIconOutline,
   ClipboardDocumentListIcon,
   Cog6ToothIcon,
+  GlobeAltIcon,
   TagIcon,
   UserCircleIcon,
   XMarkIcon,
@@ -14,7 +15,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
 
 import { useAuth } from './AuthContext'
-import { getLocalSummaries, getLocalTags } from './db'
+import { getLocalSitesByCount, getLocalSummaries, getLocalTags, type LocalSiteCount } from './db'
+import { formatSiteLabel } from './site'
 import { HomePage } from './HomePage'
 import { ImportPage } from './ImportPage'
 import { ImportProgressProvider } from './ImportProgressContext'
@@ -207,14 +209,29 @@ function AppShell() {
 }
 
 function HomeSearchBar() {
-  const { activeTags, bookmarkedOnly, query, setActiveTags, setBookmarkedOnly, setQuery } =
-    useRecipeListState()
+  const {
+    activeSites,
+    activeTags,
+    bookmarkedOnly,
+    query,
+    setActiveSites,
+    setActiveTags,
+    setBookmarkedOnly,
+    setQuery,
+  } = useRecipeListState()
   const { localRevision } = useRecipeSync()
   const inputRef = useRef<HTMLInputElement>(null)
+  const [availableSites, setAvailableSites] = useState<LocalSiteCount[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [inputValue, setInputValue] = useState(query)
+  const [sitesOpen, setSitesOpen] = useState(false)
   const [tagsOpen, setTagsOpen] = useState(false)
+  const selectedSites = useMemo(() => new Set(activeSites), [activeSites])
   const selectedTags = useMemo(() => new Set(activeTags), [activeTags])
+  const unselectedSites = useMemo(
+    () => availableSites.filter(entry => !selectedSites.has(entry.site)),
+    [availableSites, selectedSites]
+  )
   const unselectedTags = useMemo(
     () => availableTags.filter(tag => !selectedTags.has(tag)),
     [availableTags, selectedTags]
@@ -240,9 +257,10 @@ function HomeSearchBar() {
 
   useEffect(() => {
     let cancelled = false
-    getLocalTags().then(tags => {
+    Promise.all([getLocalTags(), getLocalSitesByCount()]).then(([tags, sites]) => {
       if (!cancelled) {
         setAvailableTags(tags)
+        setAvailableSites(sites)
       }
     })
     return () => {
@@ -265,6 +283,45 @@ function HomeSearchBar() {
             value={inputValue}
           />
         </label>
+        <Popover
+          align="right"
+          onClose={() => setSitesOpen(false)}
+          open={sitesOpen}
+          trigger={
+            <IconButton
+              aria-expanded={sitesOpen}
+              aria-haspopup="listbox"
+              aria-label="Filter by source"
+              className={activeSites.length ? 'text-orange-700' : 'text-orange-600'}
+              icon={<GlobeAltIcon aria-hidden="true" className="h-5 w-5" />}
+              onClick={() => setSitesOpen(open => !open)}
+              tooltip={{ content: 'Filter by source' }}
+            />
+          }
+        >
+          {unselectedSites.length ? (
+            <div className="max-h-56 min-w-44 overflow-y-auto" role="listbox">
+              {unselectedSites.map(entry => (
+                <button
+                  className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm text-stone-700 hover:bg-orange-50 dark:text-stone-200 dark:hover:bg-stone-700"
+                  key={entry.site}
+                  onClick={() => addSite(entry.site)}
+                  role="option"
+                  type="button"
+                >
+                  <span>{formatSiteLabel(entry.site)}</span>
+                  <span className="tabular-nums text-stone-500 dark:text-stone-400">
+                    {entry.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-3 py-2 text-sm text-stone-500 dark:text-stone-400">
+              No sources available
+            </p>
+          )}
+        </Popover>
         <Popover
           align="right"
           onClose={() => setTagsOpen(false)}
@@ -317,12 +374,28 @@ function HomeSearchBar() {
           }}
         />
       </div>
-      {activeTags.length ? (
+      {activeSites.length || activeTags.length ? (
         <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {activeSites.map(site => (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-sky-100 py-0.5 pl-2.5 pr-1 text-sm text-sky-900 dark:bg-sky-950/60 dark:text-sky-200"
+              key={`site-${site}`}
+            >
+              {formatSiteLabel(site)}
+              <button
+                aria-label={`Remove ${formatSiteLabel(site)} source filter`}
+                className="inline-flex rounded-full p-0.5 hover:bg-sky-200 dark:hover:bg-sky-900/60"
+                onClick={() => removeSite(site)}
+                type="button"
+              >
+                <XMarkIcon aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
           {activeTags.map(tag => (
             <span
               className="inline-flex items-center gap-1 rounded-full bg-orange-100 py-0.5 pl-2.5 pr-1 text-sm text-orange-800 dark:bg-orange-950/60 dark:text-orange-200"
-              key={tag}
+              key={`tag-${tag}`}
             >
               {tag}
               <button
@@ -340,6 +413,15 @@ function HomeSearchBar() {
     </div>
   )
 
+  function addSite(site: string) {
+    setActiveSites(
+      [...activeSites, site].sort((left, right) =>
+        left.localeCompare(right, undefined, { sensitivity: 'base' })
+      )
+    )
+    setSitesOpen(false)
+  }
+
   function addTag(tag: string) {
     setActiveTags(
       [...activeTags, tag].sort((left, right) =>
@@ -351,6 +433,10 @@ function HomeSearchBar() {
 
   function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
     setInputValue(event.target.value)
+  }
+
+  function removeSite(site: string) {
+    setActiveSites(activeSites.filter(item => item !== site))
   }
 
   function removeTag(tag: string) {

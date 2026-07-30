@@ -8,6 +8,7 @@ import {
 } from './importMapping'
 import { finalizeImportedRecipe } from './importRecipeFlow'
 import { sourceUrlKey } from './shareImport'
+import { siteFromUrl } from './site'
 import { storeRecipe } from './sync'
 import type { CatalogIngredient, ImportPreview, RecipeSummary } from './types'
 import { matchCatalogIngredient, normalizeUnit } from './units'
@@ -208,7 +209,14 @@ export function withReadyStatus(item: BulkImportItem): BulkImportItem {
 }
 
 export function buildBulkItemContent(item: BulkImportItem): string {
-  return renderImportDocument(item.metadata, item.body)
+  const metadata = { ...item.metadata }
+  if (!metadata.site && item.sourceUrl) {
+    const site = siteFromUrl(item.sourceUrl)
+    if (site) {
+      metadata.site = site
+    }
+  }
+  return renderImportDocument(metadata, item.body)
 }
 
 export function countBulkProgress(items: BulkImportItem[]) {
@@ -376,6 +384,7 @@ export async function saveBulkImportItem(
   const content = buildBulkItemContent(item)
   const recipe = await finalizeImportedRecipe(content, slug, item.file, {
     skipUniqueSlugCheck: true,
+    websiteUrl: item.sourceUrl,
   })
   await storeRecipe(recipe)
   options.existing.bySlug.add(recipe.slug)
@@ -387,6 +396,7 @@ export async function saveBulkImportItem(
       original_url: recipe.original_url,
       review: recipe.review,
       servings: recipe.servings,
+      site: recipe.site,
       slug: recipe.slug,
       tags: recipe.tags,
       title: recipe.title,
