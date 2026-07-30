@@ -79,8 +79,13 @@ const CompactRecipeTile = memo(function CompactRecipeTile({
           src={recipe.image}
         />
       ) : (
-        <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-orange-100 dark:bg-stone-800">
+        <div className="relative flex aspect-square w-full items-center justify-center rounded-xl bg-orange-100 dark:bg-stone-800">
           <img alt="" className="h-16 w-16 object-contain opacity-90" src="/web-app-icon-512.png" />
+          {recipe.image_pending ? (
+            <span className="absolute inset-x-1 bottom-1 truncate rounded bg-black/55 px-1 py-0.5 text-center text-[10px] font-medium text-white">
+              Image soon
+            </span>
+          ) : null}
         </div>
       )}
       {auth.authenticated ? (

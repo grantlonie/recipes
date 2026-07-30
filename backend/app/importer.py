@@ -30,12 +30,7 @@ from app.import_context import (
 from app.import_validate import validate_imported_cooklang
 from app.ingredients import IngredientRepository
 from app.models import ImportPreview
-from app.page_fetch import (
-    PageFetchError,
-    fetch_page_image_url,
-    fetch_recipe_page,
-    first_http_url,
-)
+from app.page_fetch import PageFetchError, fetch_recipe_page, first_http_url
 from app.sources import ALLOWED_SOURCE_EXTENSIONS, AssetError
 from app.units import prefers_fluid_volume
 
@@ -130,10 +125,6 @@ def import_from_file(
                 extracted = extract_text_from_path(path)
         except ExtractError as error:
             raise ImportError(str(error)) from error
-        if not page_image_url:
-            page_image_url, image_scrape_note = _image_url_from_source_text(
-                extracted, settings=settings
-            )
         preview = _import_extracted_text(
             extracted,
             source_url=source_path,
@@ -354,7 +345,7 @@ def _import_extracted_text(
         ingredients=ingredients,
         source_text=extracted_text,
         trace=trace,
-        scrape_source_image=image_url is None and image_scrape_note is None,
+        defer_remote_image=image_url is None and image_scrape_note is None,
     )
     return _with_import_metadata(
         _maybe_quality_repair(
@@ -380,7 +371,7 @@ def _finalize_import(
     ingredients: IngredientRepository,
     source_text: str | None = None,
     trace: ImportTrace | None = None,
-    scrape_source_image: bool = True,
+    defer_remote_image: bool = True,
 ) -> ImportPreview:
     if not _is_valid_import(raw):
         raise ImportError("Imported content is not valid Cooklang")
@@ -394,9 +385,9 @@ def _finalize_import(
     _apply_import_image(
         metadata,
         image_url=image_url,
-        settings=settings,
         notes=image_notes,
-        scrape_source=scrape_source_image,
+        defer_remote=defer_remote_image,
+        source_text=source_text,
     )
 
     content = cooklang.render_document(metadata, body)
@@ -412,13 +403,13 @@ def _finalize_import(
     content = cooklang.prepare_imported_content(cooklang.render_document(metadata, mapped_body))
     metadata, body = cooklang.parse_document(content)
     # Re-apply provided image after normalize in case front-matter repair dropped it.
-    # Do not scrape again — one HTML meta fetch is enough.
+    # Do not fetch remote images here — that is deferred to the image queue worker.
     _apply_import_image(
         metadata,
         image_url=image_url,
-        settings=settings,
         notes=image_notes,
-        scrape_source=False,
+        defer_remote=defer_remote_image,
+        source_text=source_text,
     )
     _ensure_drink_tags(metadata, body)
     content = cooklang.render_document(metadata, body)
@@ -506,7 +497,7 @@ def _maybe_quality_repair(
         ingredients=ingredients,
         source_text=extracted_text,
         trace=trace,
-        scrape_source_image=False,
+        defer_remote_image=False,
     )
     # Prefer the repaired result even if some soft warnings remain.
     return repaired_preview
@@ -515,6 +506,7 @@ def _maybe_quality_repair(
 def _with_import_metadata(preview: ImportPreview, *, trace: ImportTrace) -> ImportPreview:
     """Write app-owned review/import_* front matter; never embed validation as step notes."""
     metadata, body = cooklang.parse_document(preview.content)
+    pending_source = _pending_image_source(metadata)
     cooklang.strip_app_owned_import_keys(metadata)
     body = cooklang.strip_import_error_notes(body)
 
@@ -538,10 +530,32 @@ def _with_import_metadata(preview: ImportPreview, *, trace: ImportTrace) -> Impo
     else:
         metadata.pop("import_notes", None)
 
+    if not _has_usable_image(metadata):
+        source = pending_source
+        if source is None:
+            raw_source = metadata.get("source")
+            if isinstance(raw_source, str) and cooklang.is_ref_url(raw_source):
+                source = raw_source.split("#", 1)[0]
+        if source is None:
+            source = first_http_url(body)
+        if source:
+            metadata["image_pending"] = True
+            metadata["image_source"] = source
+
     content = cooklang.render_document(metadata, body)
     if not content.endswith("\n"):
         content += "\n"
     return preview.model_copy(update={"content": content})
+
+
+def _pending_image_source(metadata: dict) -> str | None:
+    explicit = metadata.get("image_source")
+    if isinstance(explicit, str) and explicit.strip().startswith(("http://", "https://")):
+        return explicit.strip().split("#", 1)[0]
+    source = metadata.get("source")
+    if isinstance(source, str) and cooklang.is_ref_url(source):
+        return source.split("#", 1)[0]
+    return None
 
 
 def _log_advanced_processing(
@@ -632,43 +646,36 @@ def _apply_import_image(
     metadata: dict,
     *,
     image_url: str | None,
-    settings: Settings,
     notes: list[str] | None = None,
-    scrape_source: bool = True,
+    defer_remote: bool = True,
+    source_text: str | None = None,
 ) -> None:
-    """Set image from scrape unless a local asset file is already present."""
+    """Set image from provided URL, or mark pending for the background image queue."""
+    _ = notes  # Call-site compatibility; remote scrape notes are no longer emitted.
     if cooklang.metadata_image_file(metadata):
+        metadata.pop("image_pending", None)
+        metadata.pop("image_source", None)
         return
     if image_url and cooklang.is_ref_url(image_url):
         metadata["image"] = image_url
+        metadata.pop("image_pending", None)
+        metadata.pop("image_source", None)
         return
     if _has_usable_image(metadata):
+        metadata.pop("image_pending", None)
+        metadata.pop("image_source", None)
         return
-    if not scrape_source:
+    if not defer_remote:
         return
     source = metadata.get("source")
+    pending_url: str | None = None
     if isinstance(source, str) and cooklang.is_ref_url(source):
-        scraped = fetch_page_image_url(source, settings=settings)
-        if scraped:
-            metadata["image"] = scraped
-            return
-        note = f"Could not scrape image from {source.split('#', 1)[0]}"
-        if notes is not None and note not in notes:
-            notes.append(note)
-
-
-def _image_url_from_source_text(text: str, *, settings: Settings) -> tuple[str | None, str | None]:
-    """Scrape og:image from the first website URL embedded in source text.
-
-    Returns (image_url, soft_warning).
-    """
-    web_url = first_http_url(text)
-    if not web_url:
-        return None, None
-    image_url = fetch_page_image_url(web_url, settings=settings)
-    if image_url:
-        return image_url, None
-    return None, f"Could not scrape image from {web_url}"
+        pending_url = source.split("#", 1)[0]
+    elif source_text:
+        pending_url = first_http_url(source_text)
+    if pending_url:
+        metadata["image_pending"] = True
+        metadata["image_source"] = pending_url
 
 
 def _has_usable_image(metadata: dict) -> bool:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Backfill missing recipe image URLs by scraping source pages."""
+"""Backfill missing recipe image URLs, or enqueue them for the image worker."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from app import cooklang  # noqa: E402
 from app.config import Settings, get_settings  # noqa: E402
+from app.image_queue import enqueue_missing_recipes  # noqa: E402
 from app.page_fetch import fetch_page_image_url, first_http_url  # noqa: E402
 from app.sources import RECIPE_FILENAME  # noqa: E402
 
@@ -28,6 +29,11 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Preview changes without writing recipe.cook files",
+    )
+    parser.add_argument(
+        "--enqueue-missing",
+        action="store_true",
+        help="Mark image_pending and enqueue for the image-worker instead of scraping now",
     )
     parser.add_argument(
         "--limit",
@@ -48,6 +54,16 @@ def main() -> int:
     if not recipe_root.is_dir():
         print(f"Recipe root not found: {recipe_root}", file=sys.stderr)
         return 1
+
+    settings = settings.model_copy(update={"data_root": recipe_root.parent})
+
+    if args.enqueue_missing:
+        enqueued, skipped = enqueue_missing_recipes(settings=settings, dry_run=args.dry_run)
+        print(
+            f"Done. enqueued={enqueued} skipped={skipped} dry_run={args.dry_run} "
+            f"queue={settings.image_queue_path}"
+        )
+        return 0
 
     slugs = sorted(
         path.name
@@ -100,6 +116,8 @@ def backfill_recipe_image(recipe_path: Path, *, settings: Settings, dry_run: boo
         return "missing"
 
     metadata["image"] = image_url
+    metadata.pop("image_pending", None)
+    metadata.pop("image_source", None)
     next_content = cooklang.render_document(metadata, body)
     if not next_content.endswith("\n"):
         next_content += "\n"

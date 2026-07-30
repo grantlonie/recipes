@@ -312,6 +312,20 @@ export function RecipePage() {
               {renderCardActions('onMedia')}
             </div>
           </div>
+        ) : recipe.image_pending ? (
+          <div className="relative">
+            <div className="flex h-[250px] w-full flex-col items-center justify-center gap-2 bg-orange-100 sm:h-[320px] dark:bg-stone-800">
+              <img
+                alt=""
+                className="h-24 w-24 object-contain opacity-90"
+                src="/web-app-icon-512.png"
+              />
+              <p className="text-sm font-medium text-stone-600 dark:text-stone-300">Image soon</p>
+            </div>
+            <div className="absolute bottom-3 right-3 flex items-center gap-0.5 rounded-full bg-black/55 p-1 backdrop-blur-sm">
+              {renderCardActions('onMedia')}
+            </div>
+          </div>
         ) : (
           <div className="flex justify-end gap-1 p-4 pb-0">{renderCardActions('default')}</div>
         )}
@@ -1030,3 +1044,4 @@ function formatIngredientFromToken(
   }
   return `${formatted} ${formatIngredientLabel(token.name, token.note)}`
 }
+

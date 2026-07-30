@@ -119,24 +119,47 @@ def fetch_recipe_page(url: str, *, settings: Settings) -> FetchedPage:
                 raise error from fallback_error
 
 
-def fetch_page_image_url(url: str, *, settings: Settings) -> str | None:
-    """Fetch HTML once and read og:image / twitter:image / JSON-LD image.
+@dataclass(frozen=True)
+class ImageScrapeResult:
+    blocked: bool = False
+    error: str | None = None
+    image_url: str | None = None
+    status_code: int | None = None
 
-    Intentionally simple and fail-fast: no Jina, no Microlink, no long retries.
-    """
+
+def fetch_page_image_url(url: str, *, settings: Settings) -> str | None:
+    """Fetch HTML once and read og:image / twitter:image / JSON-LD image."""
+    return fetch_page_image_result(url, settings=settings).image_url
+
+
+def fetch_page_image_result(url: str, *, settings: Settings | None = None) -> ImageScrapeResult:
+    """Fetch HTML once and read image meta; returns status for queue backoff."""
+    _ = settings  # Host pacing lives in image_queue; this call is intentionally unthrottled.
     page_url = url.strip().split("#", 1)[0]
     if not page_url:
-        return None
+        return ImageScrapeResult(error="empty url")
 
-    with _acquire_fetch_slot(settings):
-        try:
-            response = _get_page(page_url, timeout_seconds=IMAGE_SCRAPE_TIMEOUT_SECONDS)
-        except Exception:  # noqa: BLE001 - image scrape is best-effort
-            return None
+    try:
+        response = _get_page(page_url, timeout_seconds=IMAGE_SCRAPE_TIMEOUT_SECONDS)
+    except Exception as error:  # noqa: BLE001 - image scrape is best-effort
+        return ImageScrapeResult(error=str(error))
 
-    if response.status_code >= 400 or _looks_like_challenge_page(response.text):
-        return None
-    return extract_page_image_url(response.text, response.url or page_url)
+    if response.status_code in RETRYABLE_STATUS or _looks_like_challenge_page(response.text):
+        return ImageScrapeResult(
+            blocked=True,
+            error=f"status={response.status_code}",
+            status_code=response.status_code or 403,
+        )
+    if response.status_code >= 400:
+        return ImageScrapeResult(
+            error=f"status={response.status_code}",
+            status_code=response.status_code,
+        )
+
+    image_url = extract_page_image_url(response.text, response.url or page_url)
+    if not image_url:
+        return ImageScrapeResult(error="no og:image", status_code=response.status_code)
+    return ImageScrapeResult(image_url=image_url, status_code=response.status_code)
 
 
 def rate_limit_message(status_code: int | None = None) -> str:

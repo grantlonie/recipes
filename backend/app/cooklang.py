@@ -25,7 +25,14 @@ TITLE_KEY_ALIASES = frozenset(
     }
 )
 APP_OWNED_IMPORT_KEYS = frozenset(
-    {"review", "import_time", "import_duration_ms", "import_notes"}
+    {
+        "review",
+        "import_time",
+        "import_duration_ms",
+        "import_notes",
+        "image_pending",
+        "image_source",
+    }
 )
 IMPORT_ERROR_NOTE_PREFIX = "Import error: "
 RECIPES_PREFIX = "recipes/"
@@ -896,6 +903,15 @@ def metadata_review(metadata: dict[str, Any]) -> list[str]:
 
 def metadata_import_notes(metadata: dict[str, Any]) -> list[str]:
     return metadata_string_list(metadata, "import_notes")
+
+
+def metadata_image_pending(metadata: dict[str, Any]) -> bool:
+    value = metadata.get("image_pending")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return False
 
 
 def strip_app_owned_import_keys(metadata: dict[str, Any]) -> None:

@@ -313,7 +313,7 @@ def test_import_from_url_sends_browser_headers(
     assert "text/html" in headers.get("Accept", "")
 
 
-def test_import_from_text_fetches_image_from_source_when_missing(
+def test_import_from_text_defers_remote_image_when_missing(
     settings: Settings, ingredients: IngredientRepository
 ):
     cooklang = """---
@@ -323,30 +323,19 @@ source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta
 
 Add @chicken{} and @bacon{}.
 """
-    source_url = "https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta"
-    image_url = "https://www.bbcgoodfood.com/images/chicken-bacon-pasta.jpg"
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        if str(request.url) == source_url:
-            return httpx.Response(
-                200,
-                text=(
-                    f'<html><head><meta property="og:image" content="{image_url}" />'
-                    "</head><body>Recipe page</body></html>"
-                ),
-            )
-        raise AssertionError(f"Unexpected request: {request.url}")
-
-    transport = httpx.MockTransport(handler)
     with patch("app.importer.complete_cooklang", return_value=cooklang):
-        with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with patch("app.page_fetch.fetch_page_image_url") as mock_fetch:
             preview = import_from_text(
                 "Recipe text",
                 settings=settings,
                 ingredients=ingredients,
             )
 
-    assert f"image: {image_url}" in preview.content
+    mock_fetch.assert_not_called()
+    assert "image_pending: true" in preview.content
+    assert "image_source: https://www.bbcgoodfood.com/recipes/chicken-bacon-pasta" in preview.content
+    assert preview.image_url is None
 
 
 def test_import_from_text_keeps_existing_image(
@@ -362,7 +351,7 @@ Add @chicken{} and @bacon{}.
 """
 
     with patch("app.importer.complete_cooklang", return_value=cooklang):
-        with patch("app.importer.fetch_page_image_url") as mock_fetch:
+        with patch("app.page_fetch.fetch_page_image_url") as mock_fetch:
             preview = import_from_text(
                 "Recipe text",
                 settings=settings,
@@ -372,6 +361,7 @@ Add @chicken{} and @bacon{}.
     mock_fetch.assert_not_called()
     assert "image: https://cdn.example.com/existing.jpg" in preview.content
     assert preview.image_url == "https://cdn.example.com/existing.jpg"
+    assert "image_pending" not in preview.content
 
 
 def test_import_from_url_keeps_existing_image_file(
@@ -440,13 +430,12 @@ def test_import_from_html_file_extracts_page_image(
     assert "source: source.html" in preview.content
 
 
-def test_import_from_text_file_scrapes_embedded_website_url(
+def test_import_from_text_file_defers_embedded_website_url(
     settings: Settings,
     ingredients: IngredientRepository,
     tmp_path: Path,
 ):
     page_url = "https://food52.com/recipes/21007-alice-medrich-s-best-cocoa-brownies"
-    image_url = "https://images.food52.com/brownies.jpg"
     source_dir = tmp_path / "alice-medrich-s-best-cocoa-brownies"
     source_dir.mkdir()
     source_file = source_dir / "source.txt"
@@ -455,23 +444,11 @@ def test_import_from_text_file_scrapes_embedded_website_url(
         encoding="utf-8",
     )
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        if str(request.url) == page_url:
-            return httpx.Response(
-                200,
-                text=(
-                    f'<html><head><meta property="og:image" content="{image_url}" />'
-                    "</head><body>Brownies</body></html>"
-                ),
-            )
-        raise AssertionError(f"Unexpected request: {request.url}")
-
-    transport = httpx.MockTransport(handler)
     with patch(
         "app.importer.complete_cooklang",
         return_value="---\ntitle: Brownies\n---\n\nBake @batter{}.\n",
     ):
-        with patch("app.page_fetch.httpx.Client", return_value=httpx.Client(transport=transport)):
+        with patch("app.page_fetch.fetch_page_image_url") as mock_fetch:
             preview = import_from_file(
                 source_file,
                 settings=settings,
@@ -479,10 +456,11 @@ def test_import_from_text_file_scrapes_embedded_website_url(
                 source_path="source.txt",
             )
 
-    assert f"image: {image_url}" in preview.content
-    assert preview.image_url == image_url
+    mock_fetch.assert_not_called()
+    assert "image_pending: true" in preview.content
+    assert f"image_source: {page_url}" in preview.content
+    assert preview.image_url is None
     assert "source: source.txt" in preview.content
-    assert page_url not in preview.content.split("---")[1]
 
 
 def test_import_from_file_sets_source_path_for_assets(

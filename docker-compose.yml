@@ -26,6 +26,21 @@ services:
       timeout: 5s
       retries: 5
 
+  image-worker:
+    build: .
+    container_name: recipes-image-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_ROOT: /data
+      PYTHONPATH: /app/backend
+    volumes:
+      - ${HOST_DATA_ROOT:-/srv/apps/recipes/data}:/data
+    networks:
+      - shared
+    command: ['python', '-m', 'app.image_queue_worker']
+
 networks:
   shared:
     external: true

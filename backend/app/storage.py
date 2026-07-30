@@ -4,6 +4,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from app import cooklang
+from app.config import get_settings
+from app.image_queue import maybe_enqueue_from_recipe
 from app.models import ManifestEntry, RecipeDetail, RecipeSummary, SyncManifest
 from app.sources import RECIPE_FILENAME, delete_recipe_dir, rename_recipe_dir
 
@@ -17,6 +19,7 @@ def summary_from_detail(recipe: RecipeDetail) -> RecipeSummary:
         bookmarked=recipe.bookmarked,
         cook_time=recipe.cook_time,
         image=recipe.image,
+        image_pending=recipe.image_pending,
         notes=recipe.notes,
         original_url=recipe.original_url,
         review=recipe.review,
@@ -145,6 +148,11 @@ class RecipeRepository:
             self.recipes.pop(previous_slug, None)
             self._mtimes.pop(previous_slug, None)
         self.version += 1
+        try:
+            settings = get_settings().model_copy(update={"data_root": self.recipe_root.parent})
+            maybe_enqueue_from_recipe(settings=settings, slug=slug, content=content)
+        except Exception:  # noqa: BLE001 - saving the recipe must not fail on queue issues
+            pass
         return self.recipes[slug]
 
     def update_metadata(
@@ -200,12 +208,16 @@ class RecipeRepository:
         metadata, body = cooklang.parse_document(content)
         title = cooklang.metadata_title(metadata, slug)
         servings = cooklang.metadata_servings(metadata)
+        has_image = bool(
+            cooklang.metadata_image_url(metadata) or cooklang.metadata_image_file(metadata)
+        )
         return RecipeDetail(
             bookmarked=cooklang.metadata_bookmarked(metadata),
             content=content,
             cook_time=cooklang.metadata_cook_time(metadata),
             cookware=cooklang.parse_cookware(body),
             image=cooklang.resolve_image_url(metadata, self.app_base_url, slug=slug),
+            image_pending=cooklang.metadata_image_pending(metadata) and not has_image,
             ingredients=cooklang.parse_ingredients(body, servings=servings),
             metadata=metadata,
             notes=cooklang.parse_notes(metadata, body),

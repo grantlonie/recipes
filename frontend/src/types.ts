@@ -39,6 +39,7 @@ export interface RecipeSummary {
   bookmarked: boolean
   cook_time?: string | null
   image?: string | null
+  image_pending?: boolean
   notes: string[]
   original_url?: string | null
   review?: string[]

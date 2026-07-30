@@ -231,6 +231,7 @@ function summaryFromDetail(recipe: RecipeDetail): RecipeSummary {
     bookmarked: recipe.bookmarked,
     cook_time: recipe.cook_time,
     image: recipe.image,
+    image_pending: recipe.image_pending,
     notes: recipe.notes,
     original_url: recipe.original_url,
     review: recipe.review,

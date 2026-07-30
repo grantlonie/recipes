@@ -65,6 +65,7 @@ class RecipeSummary(BaseModel):
     bookmarked: bool = False
     cook_time: str | None = None
     image: str | None = None
+    image_pending: bool = False
     notes: list[str] = Field(default_factory=list)
     original_url: str | None = None
     review: list[str] = Field(default_factory=list)

@@ -78,6 +78,7 @@ Copy `.env.example` to `.env` and change `RECIPE_EDITOR_PASSWORD` and `SESSION_S
       source.pdf       # optional uploaded source
       image.jpg        # optional uploaded image
   ingredients.json      Ingredient catalog (densities, aliases)
+  image_queue.json      Deferred remote image scrape queue
 ```
 
 Recipe metadata follows Cooklang front matter conventions:
@@ -112,6 +113,15 @@ Editors can import recipes from a URL, file upload (HTML, PDF, DOCX, Markdown, p
 camera capture. The backend fetches or extracts source text, sends it to Fireworks AI with a
 Cooklang system prompt, and returns a preview for mapping ingredients before save.
 
+Remote recipe images are not scraped on the request path (except when the import already has HTML
+with `og:image`, or a URL import that already fetched the page). Missing images are marked
+`image_pending` and filled by the `image-worker` Compose service, which scrapes politely across
+distinct hosts. Seed existing gaps with:
+
+```bash
+python scripts/backfill_recipe_images.py --enqueue-missing
+```
+
 Set `FIREWORKS_API_KEY` in `.env` for import to work. Model names and token limits are
 configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.example`).
 
@@ -127,8 +137,14 @@ configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.exampl
 | `RECIPE_EDITOR_USERNAME` / `RECIPE_EDITOR_PASSWORD` | Editor login credentials |
 | `SESSION_SECRET` | Signed session cookie secret |
 | `FIREWORKS_API_KEY` | Fireworks API key for recipe import |
+| `JINA_API_KEY` | Optional Jina Reader key for blocked page fallback |
 | `IMPORT_MODEL_TEXT` / `IMPORT_MODEL_VISION` / `IMPORT_MODEL_REPAIR` / `IMPORT_MODEL_BULK` | LLM models for import stages |
 | `IMPORT_MAX_SOURCE_CHARS` / `IMPORT_MAX_OUTPUT_TOKENS` | Import size limits |
+| `PAGE_FETCH_*` | Direct page-fetch retries, concurrency, and spacing |
+| `IMAGE_QUEUE_CONCURRENCY` | Max parallel image scrapes (distinct hosts only) |
+| `IMAGE_QUEUE_HOST_GAP_SECONDS` | Minimum gap between requests to the same host |
+| `IMAGE_QUEUE_HOST_COOLDOWN_SECONDS` | Initial cooldown after 403/429 (doubles up to 6h) |
+| `IMAGE_QUEUE_MAX_ATTEMPTS` | Give up and clear `image_pending` after N failures |
 
 ## Docker
 

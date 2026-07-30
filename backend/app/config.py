@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     import_model_text: str = "accounts/fireworks/models/qwen3p7-plus"
     import_model_vision: str = "accounts/fireworks/models/qwen3p7-plus"
     jina_api_key: str = ""
+    image_queue_concurrency: int = 6
+    image_queue_host_cooldown_seconds: int = 1800
+    image_queue_host_gap_seconds: int = 20
+    image_queue_max_attempts: int = 8
     page_fetch_concurrency: int = 1
     page_fetch_fallback_enabled: bool = True
     page_fetch_max_retries: int = 2
@@ -36,6 +40,10 @@ class Settings(BaseSettings):
     @property
     def ingredients_path(self) -> Path:
         return self.data_root / "ingredients.json"
+
+    @property
+    def image_queue_path(self) -> Path:
+        return self.data_root / "image_queue.json"
 
 
 @lru_cache
