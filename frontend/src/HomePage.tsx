@@ -210,7 +210,7 @@ export function HomePage({ isVisible }: HomePageProps) {
             }
             onBookmarkToggle={handleBookmarkToggle}
             recipes={showAllRecipes ? summaries : displayRecentRecipes}
-            title={showAllRecipes ? 'All Recipes' : 'Recently Viewed'}
+            title={showAllRecipes ? `All Recipes (${summaries.length})` : 'Recently Viewed'}
           />
         ) : (
           <p className="text-sm text-stone-600 dark:text-stone-400">No recipes yet.</p>
