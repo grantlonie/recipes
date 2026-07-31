@@ -1,5 +1,9 @@
+/** Sentinel site value for recipes with no `site` (shown as Personal in the source filter). */
+export const PERSONAL_SITE = 'personal'
+
 /** Host → display label for common recipe sources. Unknown hosts fall back to the host. */
 export const SITE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  [PERSONAL_SITE]: 'Personal',
   '100daysofrealfood.com': '100 Days of Real Food',
   'acouplecooks.com': 'A Couple Cooks',
   'alexandracooks.com': 'Alexandra Cooks',

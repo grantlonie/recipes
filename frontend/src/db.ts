@@ -1,4 +1,4 @@
-import { formatSiteLabel, siteFromMetadata } from './site'
+import { formatSiteLabel, PERSONAL_SITE, siteFromMetadata } from './site'
 import type { IngredientCatalog, RecipeDetail, RecipeSummary, SyncManifest } from './types'
 
 const DB_NAME = 'recipes-app'
@@ -84,14 +84,16 @@ export interface LocalSiteCount {
 export async function getLocalSitesByCount(): Promise<LocalSiteCount[]> {
   const summaries = await getLocalSummaries()
   const counts = new Map<string, number>()
+  let personalCount = 0
   for (const recipe of summaries) {
     const site = recipe.site?.trim()
     if (!site) {
+      personalCount += 1
       continue
     }
     counts.set(site, (counts.get(site) ?? 0) + 1)
   }
-  return [...counts.entries()]
+  const sites = [...counts.entries()]
     .map(([site, count]) => ({ count, site }))
     .sort((left, right) => {
       if (right.count !== left.count) {
@@ -101,6 +103,10 @@ export async function getLocalSitesByCount(): Promise<LocalSiteCount[]> {
         sensitivity: 'base',
       })
     })
+  if (personalCount > 0) {
+    return [{ count: personalCount, site: PERSONAL_SITE }, ...sites]
+  }
+  return sites
 }
 
 export async function putRecipe(recipe: RecipeDetail, updatedAt: string): Promise<void> {

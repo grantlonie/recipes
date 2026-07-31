@@ -9,6 +9,7 @@ import { getAllStoredRecipes, getLocalSummaries } from './db'
 import { useRecipeListState } from './RecipeListContext'
 import { useRecipeSync } from './RecipeSyncContext'
 import { searchRecipes } from './search'
+import { PERSONAL_SITE } from './site'
 import { storeRecipe } from './sync'
 import type { RecipeDetail, RecipeSummary } from './types'
 
@@ -270,7 +271,12 @@ function filterRecipes(
     if (activeTags.some(tag => !recipe.tags.includes(tag))) {
       return false
     }
-    if (activeSites.length && (!recipe.site || !activeSites.includes(recipe.site))) {
+    if (
+      activeSites.length &&
+      !activeSites.some(site =>
+        site === PERSONAL_SITE ? !recipe.site?.trim() : recipe.site === site
+      )
+    ) {
       return false
     }
     return true
