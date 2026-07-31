@@ -41,13 +41,7 @@ import { buildLoginUrl, ensureUniqueSlug, slugify } from './shareImport'
 import { loadRecipeStaleFirst, storeRecipe } from './sync'
 import { cardClassName, errorTextClassName, inputClassName } from './themeClasses'
 import type { ImportPreview, UnitSystem } from './types'
-import {
-  defaultEditorUnit,
-  editorUnitItems,
-  isUsCookingVolumeUnit,
-  normalizeUnit,
-  prefersFluidVolume,
-} from './units'
+import { defaultEditorUnit, editorUnitItems, isUsCookingVolumeUnit, normalizeUnit } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 
 const emptyBody = 'Add @ingredient{1%cup}.\n'
@@ -432,15 +426,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               </div>
             </div>
             <RecipeBodyEditor
-              catalog={catalog}
               onChange={setBody}
               onEditCookware={handleEditCookware}
               onEditIngredient={handleEditIngredient}
               onEditSection={handleEditSection}
               onEditTimer={handleEditTimer}
               ref={bodyEditorRef}
-              preferFluidVolume={prefersFluidVolume(tags)}
-              unitSystem={unitSystem}
               value={body}
             />
           </TabPanel>

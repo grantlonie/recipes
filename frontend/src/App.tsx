@@ -31,7 +31,6 @@ import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
-import { UnitSystemToggle } from './components/UnitSystemToggle'
 
 export function App() {
   return (
@@ -98,7 +97,6 @@ function AppShell() {
               </Link>
             )}
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
-              {!isHome && !isRecipeDetailPage ? <UnitSystemToggle /> : null}
               <Popover
                 onClose={() => setSettingsOpen(false)}
                 open={settingsOpen}
