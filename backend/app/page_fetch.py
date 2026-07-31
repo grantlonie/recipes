@@ -13,6 +13,7 @@ from app.extract import ExtractError, extract_html_text, extract_page_image_url
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
 IMAGE_SCRAPE_TIMEOUT_SECONDS = 8.0
+JINA_IMAGE_TIMEOUT_SECONDS = 45.0
 JINA_READER_PREFIX = "https://r.jina.ai/"
 RETRYABLE_STATUS = frozenset({403, 429})
 CURL_CFFI_IMPERSONATE = "chrome131"
@@ -36,13 +37,14 @@ BROWSER_HEADERS = {
 }
 
 # Jina rejects browser-like header sets with 403; keep this minimal.
+# Request full HTML so og:image / JSON-LD extraction stays on the shared path.
 JINA_HEADERS = {
-    "Accept": "text/plain,text/markdown,*/*;q=0.8",
+    "Accept": "text/html,*/*;q=0.8",
     "User-Agent": "recipes-importer/1.0",
+    "X-Respond-With": "html",
 }
 
 SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
-MARKDOWN_IMAGE_RE = re.compile(r"!\[[^\]]*\]\((https?://[^)\s]+)\)")
 CHALLENGE_MARKERS = (
     "vercel security checkpoint",
     "just a moment...",
@@ -134,7 +136,6 @@ def fetch_page_image_url(url: str, *, settings: Settings) -> str | None:
 
 def fetch_page_image_result(url: str, *, settings: Settings | None = None) -> ImageScrapeResult:
     """Fetch HTML once and read image meta; returns status for queue backoff."""
-    _ = settings  # Host pacing lives in image_queue; this call is intentionally unthrottled.
     page_url = url.strip().split("#", 1)[0]
     if not page_url:
         return ImageScrapeResult(error="empty url")
@@ -144,12 +145,24 @@ def fetch_page_image_result(url: str, *, settings: Settings | None = None) -> Im
     except Exception as error:  # noqa: BLE001 - image scrape is best-effort
         return ImageScrapeResult(error=str(error))
 
-    if response.status_code in RETRYABLE_STATUS or _looks_like_challenge_page(response.text):
-        return ImageScrapeResult(
+    blocked = response.status_code in RETRYABLE_STATUS or _looks_like_challenge_page(
+        response.text
+    )
+    if blocked:
+        blocked_result = ImageScrapeResult(
             blocked=True,
             error=f"status={response.status_code}",
             status_code=response.status_code or 403,
         )
+        if (
+            settings is not None
+            and settings.page_fetch_fallback_enabled
+            and settings.jina_api_key.strip()
+        ):
+            fallback = _image_via_jina(page_url, settings=settings)
+            if fallback.image_url or not fallback.blocked:
+                return fallback
+        return blocked_result
     if response.status_code >= 400:
         return ImageScrapeResult(
             error=f"status={response.status_code}",
@@ -286,13 +299,22 @@ def _get_page_httpx(url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECOND
         )
 
 
-def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
-    timeout = httpx.Timeout(DEFAULT_TIMEOUT_SECONDS, connect=15.0)
-    reader_url = f"{JINA_READER_PREFIX}{url}"
+def _jina_request_headers(settings: Settings) -> dict[str, str]:
     headers = dict(JINA_HEADERS)
     api_key = settings.jina_api_key.strip()
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+        # Hosted proxy pool (residential/datacenter rotation); requires API key.
+        headers["X-Proxy"] = "auto"
+    return headers
+
+
+def _fetch_jina_html(
+    url: str, *, settings: Settings, timeout_seconds: float
+) -> str:
+    timeout = httpx.Timeout(timeout_seconds, connect=min(15.0, timeout_seconds))
+    reader_url = f"{JINA_READER_PREFIX}{url}"
+    headers = _jina_request_headers(settings)
     try:
         with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
             response = client.get(reader_url)
@@ -315,33 +337,44 @@ def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
         raise PageFetchError("Recipe import failed: empty reader response")
     if _looks_like_challenge_page(text):
         raise PageFetchError(rate_limit_message(403), status_code=403)
+    return text
 
+
+def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
+    html = _fetch_jina_html(url, settings=settings, timeout_seconds=DEFAULT_TIMEOUT_SECONDS)
+    try:
+        extracted = extract_html_text(html)
+    except ExtractError as error:
+        raise PageFetchError(str(error)) from error
     return FetchedPage(
-        extracted_text=text,
+        extracted_text=extracted,
         final_url=url,
-        image_url=_image_url_from_markdown(text, base_url=url),
+        image_url=extract_page_image_url(html, url),
         used_fallback=True,
     )
 
 
-def _image_url_from_markdown(text: str, *, base_url: str) -> str | None:
-    for match in MARKDOWN_IMAGE_RE.finditer(text):
-        candidate = match.group(1).strip()
-        if candidate:
-            resolved = extract_page_image_url(
-                f'<meta property="og:image" content="{candidate}" />',
-                base_url,
-            )
-            if resolved:
-                return resolved
-    for match in SOURCE_HTTP_URL_RE.finditer(text):
-        candidate = match.group(0).rstrip(".,);]>\"'")
-        lowered = candidate.lower()
-        if any(lowered.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".webp", ".gif")):
-            return candidate
-        if "images." in lowered or "/image" in lowered:
-            return candidate
-    return None
+def _image_via_jina(url: str, *, settings: Settings) -> ImageScrapeResult:
+    logger.info("Direct image scrape blocked for %s; trying Jina HTML fallback", url)
+    try:
+        html = _fetch_jina_html(
+            url, settings=settings, timeout_seconds=JINA_IMAGE_TIMEOUT_SECONDS
+        )
+    except PageFetchError as error:
+        logger.warning("Jina image fallback failed for %s (%s)", url, error)
+        return ImageScrapeResult(
+            blocked=True,
+            error=str(error),
+            status_code=error.status_code or 403,
+        )
+    except Exception as error:  # noqa: BLE001 - image scrape is best-effort
+        logger.warning("Jina image fallback failed for %s (%s)", url, error)
+        return ImageScrapeResult(blocked=True, error=str(error), status_code=403)
+
+    image_url = extract_page_image_url(html, url)
+    if not image_url:
+        return ImageScrapeResult(error="no og:image", status_code=200)
+    return ImageScrapeResult(image_url=image_url, status_code=200)
 
 
 def _looks_like_challenge_page(text: str) -> bool:

@@ -7,6 +7,7 @@ import pytest
 from app.config import Settings
 from app.page_fetch import (
     PageFetchError,
+    fetch_page_image_result,
     fetch_page_image_url,
     fetch_recipe_page,
     first_http_url,
@@ -131,16 +132,20 @@ def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
             return httpx.Response(
                 200,
                 text=(
-                    f"# Greek Lamb\n\n![hero]({image_url})\n\n"
-                    "Ingredients\n- lamb\n\nDirections\n- cook\n"
+                    "<html><head>"
+                    f'<meta property="og:image" content="{image_url}" />'
+                    "</head><body><article><h1>Greek Lamb</h1>"
+                    "<p>Ingredients</p><ul><li>lamb</li></ul>"
+                    "<p>Directions</p><p>cook</p></article></body></html>"
                 ),
             )
         raise AssertionError(f"Unexpected request: {url}")
 
     transport = httpx.MockTransport(handler)
     with patch("app.page_fetch.time.sleep"):
-        with _patch_client(transport):
-            page = fetch_recipe_page(page_url, settings=settings)
+        with patch("app.page_fetch.extract_html_text", return_value="Greek Lamb\nlamb\ncook"):
+            with _patch_client(transport):
+                page = fetch_recipe_page(page_url, settings=settings)
 
     assert page.used_fallback is True
     assert "Greek Lamb" in page.extracted_text
@@ -149,6 +154,8 @@ def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
     assert "sec-fetch-mode" not in jina_headers
     assert "mozilla" not in jina_headers.get("user-agent", "").lower()
     assert jina_headers.get("authorization") == "Bearer jina_test_key"
+    assert jina_headers.get("x-respond-with") == "html"
+    assert jina_headers.get("x-proxy") == "auto"
 
 
 def test_fetch_recipe_page_surfaces_original_error_when_jina_returns_401(settings: Settings):
@@ -220,6 +227,62 @@ def test_fetch_page_image_url_returns_none_on_blocked_page(settings: Settings):
     transport = httpx.MockTransport(handler)
     with _patch_client(transport):
         assert fetch_page_image_url("https://example.com/recipe", settings=settings) is None
+
+
+def test_fetch_page_image_falls_back_to_jina_html_on_403(settings: Settings):
+    page_url = "https://www.liquor.com/recipes/corpse-reviver-no-2/"
+    image_url = (
+        "https://www.liquor.com/thmb/abc=/1500x0/filters:no_upscale()"
+        ":max_bytes(150000):strip_icc()/corpse-reviver.jpg"
+    )
+    jina_headers: dict[str, str] = {}
+    settings = settings.model_copy(update={"jina_api_key": "jina_test_key"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == page_url:
+            return httpx.Response(403, text="forbidden")
+        if url.startswith("https://r.jina.ai/"):
+            jina_headers.update({key.lower(): value for key, value in request.headers.items()})
+            return httpx.Response(
+                200,
+                text=(
+                    "<html><head>"
+                    f'<meta property="og:image" content="{image_url}" />'
+                    "</head><body>recipe</body></html>"
+                ),
+            )
+        raise AssertionError(f"Unexpected request: {url}")
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client(transport):
+        result = fetch_page_image_result(page_url, settings=settings)
+
+    assert result.image_url == image_url
+    assert result.blocked is False
+    assert jina_headers.get("x-respond-with") == "html"
+    assert jina_headers.get("x-proxy") == "auto"
+
+
+def test_fetch_page_image_stays_blocked_when_jina_fallback_fails(settings: Settings):
+    page_url = "https://www.liquor.com/recipes/example/"
+    settings = settings.model_copy(update={"jina_api_key": "jina_test_key"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == page_url:
+            return httpx.Response(403, text="forbidden")
+        if url.startswith("https://r.jina.ai/"):
+            return httpx.Response(401, text="auth required")
+        raise AssertionError(f"Unexpected request: {url}")
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client(transport):
+        result = fetch_page_image_result(page_url, settings=settings)
+
+    assert result.image_url is None
+    assert result.blocked is True
+    assert result.status_code == 403
 
 
 def test_fetch_recipe_page_total_failure(settings: Settings):
