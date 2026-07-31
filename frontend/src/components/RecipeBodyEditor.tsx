@@ -7,7 +7,6 @@ import type { CookwareAttrs } from '../cooklangCookware'
 import { parseCooklangBody, serializeCooklangBody } from '../cooklangEditor'
 import type { IngredientAttrs } from '../cooklangTokens'
 import type { TimerAttrs } from '../cooklangTimers'
-import type { CatalogIngredient, UnitSystem } from '../types'
 import { CookNoteExtension } from './cookNoteExtension'
 import { CookwareExtension } from './cookwareExtension'
 import { setCookwareDisplayState } from './cookwareDisplayStore'
@@ -35,30 +34,17 @@ export interface RecipeBodyEditorHandle {
 }
 
 interface RecipeBodyEditorProps {
-  catalog: CatalogIngredient[]
   onChange: (body: string) => void
   onEditCookware: (pos: number, attrs: CookwareAttrs) => void
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
   onEditSection: (pos: number, title: string) => void
   onEditTimer: (pos: number, attrs: TimerAttrs) => void
-  preferFluidVolume?: boolean
-  unitSystem: UnitSystem
   value: string
 }
 
 export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEditorProps>(
   function RecipeBodyEditor(
-    {
-      catalog,
-      onChange,
-      onEditCookware,
-      onEditIngredient,
-      onEditSection,
-      onEditTimer,
-      preferFluidVolume = false,
-      unitSystem,
-      value,
-    },
+    { onChange, onEditCookware, onEditIngredient, onEditSection, onEditTimer, value },
     ref
   ) {
     const onChangeRef = useRef(onChange)
@@ -130,13 +116,8 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
     editorRef.current = editor
 
     useEffect(() => {
-      setIngredientDisplayState({
-        catalog,
-        onEditIngredient,
-        preferFluidVolume,
-        unitSystem,
-      })
-    }, [catalog, onEditIngredient, preferFluidVolume, unitSystem])
+      setIngredientDisplayState({ onEditIngredient })
+    }, [onEditIngredient])
 
     useEffect(() => {
       setCookwareDisplayState({ onEditCookware })

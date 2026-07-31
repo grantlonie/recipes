@@ -3,7 +3,6 @@ import { NodeViewWrapper } from '@tiptap/react'
 import { useSyncExternalStore } from 'react'
 
 import { formatTimerLabel, type TimerAttrs } from '../cooklangTimers'
-import { stepTimerMarkerClassName } from '../themeClasses'
 import { getTimerDisplayState, subscribeTimerDisplay } from './timerDisplayStore'
 
 export function TimerChip({ getPos, node }: NodeViewProps) {
@@ -14,7 +13,7 @@ export function TimerChip({ getPos, node }: NodeViewProps) {
   return (
     <NodeViewWrapper as="span" className="inline">
       <button
-        className={`mx-0.5 ${stepTimerMarkerClassName} hover:bg-amber-100 dark:hover:bg-amber-900/50`}
+        className="mx-0.5 my-0.5 inline rounded-md border border-amber-400 bg-amber-50/90 px-0.5 font-medium text-stone-900 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-900/50"
         contentEditable={false}
         onClick={event => {
           event.preventDefault()
