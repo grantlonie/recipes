@@ -249,6 +249,15 @@ def prefers_fluid_volume(tags: list[str] | None) -> bool:
     return any(tag.strip().casefold() in FLUID_VOLUME_TAGS for tag in tags)
 
 
+# Catalog names that display as Tbsp rather than cups in US volume mode.
+TBSP_PREFERRED_INGREDIENTS = frozenset({"butter"})
+
+
+def prefers_tablespoons(name: str) -> bool:
+    key = " ".join(name.strip().casefold().replace("-", " ").split())
+    return key in TBSP_PREFERRED_INGREDIENTS
+
+
 def format_metric_volume(grams: float, density_kg_m3: float) -> DisplayAmount:
     ml = grams_to_ml(grams, density_kg_m3)
     sign = "-" if ml < 0 else ""
@@ -270,16 +279,22 @@ def format_us_volume(
     density_kg_m3: float,
     *,
     prefer_fl_oz: bool = False,
+    prefer_tbsp: bool = False,
 ) -> DisplayAmount:
     ml = grams_to_ml(grams, density_kg_m3)
     if prefer_fl_oz:
         fl_oz = ml / ML_PER_FL_OZ
         return DisplayAmount(format_fraction(fl_oz), "fl oz")
     cups = ml / ML_PER_CUP
+    tbsp = ml / ML_PER_TBSP
+    if prefer_tbsp:
+        if tbsp >= 1:
+            return DisplayAmount(format_fraction(tbsp), "Tbsp")
+        tsp = ml / ML_PER_TSP
+        return DisplayAmount(format_fraction(tsp), "tsp")
     if cups >= 0.25:
         label = "cup" if cups <= 1.01 else "cups"
         return DisplayAmount(format_fraction(cups), label)
-    tbsp = ml / ML_PER_TBSP
     if tbsp >= 1:
         return DisplayAmount(format_fraction(tbsp), "Tbsp")
     tsp = ml / ML_PER_TSP
@@ -293,6 +308,7 @@ def format_amount(
     unit_system: str,
     density_kg_m3: float | None = None,
     prefer_fluid_volume: bool = False,
+    prefer_tbsp: bool = False,
 ) -> DisplayAmount:
     if quantity is None:
         return DisplayAmount("", normalize_unit(unit))
@@ -320,7 +336,7 @@ def format_amount(
     if unit_system == "us":
         if has_density:
             assert density_kg_m3 is not None
-            return format_us_volume(grams, density_kg_m3)
+            return format_us_volume(grams, density_kg_m3, prefer_tbsp=prefer_tbsp)
         return format_us_mass(grams)
     return format_metric_mass(grams)
 

@@ -219,7 +219,7 @@ function formatMetricVolume(grams: number, densityKgM3: number): DisplayAmount {
 function formatUsVolume(
   grams: number,
   densityKgM3: number,
-  options: { preferFlOz?: boolean } = {}
+  options: { preferFlOz?: boolean; preferTbsp?: boolean } = {}
 ): DisplayAmount {
   const ml = (grams * 1000) / densityKgM3
   if (options.preferFlOz) {
@@ -229,13 +229,20 @@ function formatUsVolume(
     }
   }
   const cups = ml / ML_PER_CUP
+  const tbsp = ml / ML_PER_TBSP
+  if (options.preferTbsp) {
+    if (tbsp >= 1) {
+      return { quantity: formatQuantityDisplay(String(tbsp)), unit: 'Tbsp' }
+    }
+    const tsp = ml / ML_PER_TSP
+    return { quantity: formatQuantityDisplay(String(tsp)), unit: 'tsp' }
+  }
   if (cups >= 0.25) {
     return {
       quantity: formatQuantityDisplay(String(cups)),
       unit: cups <= 1.01 ? 'cup' : 'cups',
     }
   }
-  const tbsp = ml / ML_PER_TBSP
   if (tbsp >= 1) {
     return { quantity: formatQuantityDisplay(String(tbsp)), unit: 'Tbsp' }
   }
@@ -256,6 +263,7 @@ function formatAmountFromGrams(
     unitSystem: UnitSystem
     densityKgM3?: number | null
     preferFluidVolume?: boolean
+    preferTbsp?: boolean
   }
 ): DisplayAmount {
   const hasDensity = options.densityKgM3 != null && options.densityKgM3 > 0
@@ -270,7 +278,9 @@ function formatAmountFromGrams(
   }
   if (options.unitSystem === 'us') {
     if (hasDensity) {
-      return formatUsVolume(grams, options.densityKgM3 as number)
+      return formatUsVolume(grams, options.densityKgM3 as number, {
+        preferTbsp: options.preferTbsp,
+      })
     }
     return formatUsMass(grams)
   }
@@ -284,6 +294,7 @@ export function formatAmount(
     unitSystem: UnitSystem
     densityKgM3?: number | null
     preferFluidVolume?: boolean
+    preferTbsp?: boolean
   }
 ): DisplayAmount {
   if (quantity === null) {
@@ -324,6 +335,7 @@ export function formatIngredientAmount(
     unitSystem: UnitSystem
     densityKgM3?: number | null
     preferFluidVolume?: boolean
+    preferTbsp?: boolean
   }
 ): DisplayAmount {
   if (!quantityText) {
@@ -407,7 +419,13 @@ function singularizeToken(token: string): string {
   if (value.endsWith('ves') && value.length > 4) {
     return `${value.slice(0, -3)}f`
   }
-  if (value.endsWith('s') && !value.endsWith('ss') && !value.endsWith('us') && !value.endsWith('is') && value.length > 3) {
+  if (
+    value.endsWith('s') &&
+    !value.endsWith('ss') &&
+    !value.endsWith('us') &&
+    !value.endsWith('is') &&
+    value.length > 3
+  ) {
     return value.slice(0, -1)
   }
   return value
@@ -880,6 +898,15 @@ export function densityForName(
 export function hasUsableDensity(name: string, catalog: CatalogIngredient[]): boolean {
   const density = densityForName(name, catalog)
   return density != null && density > 0
+}
+
+/** Catalog names that display as Tbsp rather than cups in US volume mode. */
+const TBSP_PREFERRED_INGREDIENTS = new Set(['butter'])
+
+export function prefersTablespoons(name: string, catalog: CatalogIngredient[]): boolean {
+  const match = findCatalogIngredient(name, catalog)
+  const key = normalizeIngredientKey(match?.name ?? name)
+  return TBSP_PREFERRED_INGREDIENTS.has(key)
 }
 
 const METRIC_UNITS = new Set(['g', 'kg', 'ml', 'l'])
