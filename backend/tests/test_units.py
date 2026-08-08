@@ -92,6 +92,21 @@ def test_format_metric_and_us():
     assert not prefers_fluid_volume(["dinner"])
     assert not prefers_fluid_volume(None)
 
+    # Butter prefers tablespoons over cups in US volume display
+    from app.units import prefers_tablespoons
+
+    butter = format_amount(
+        0.5,
+        "cup",
+        unit_system="us",
+        density_kg_m3=910,
+        prefer_tbsp=True,
+    )
+    assert butter.unit == "Tbsp"
+    assert butter.quantity == "8"
+    assert prefers_tablespoons("butter")
+    assert not prefers_tablespoons("peanut butter")
+
 def test_format_fraction_single_unit():
     assert format_fraction(2.25) == "2 ¼"
     assert format_fraction(0.5) == "½"

@@ -50,6 +50,7 @@ import {
   hasUsableDensity,
   ingredientNeedsDensity,
   prefersFluidVolume,
+  prefersTablespoons,
 } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 import { isRefFile, resolveRefDisplay } from './importMapping'
@@ -437,11 +438,13 @@ export function RecipePage() {
         titleId="delete-recipe-title"
       />
 
-      <AddCatalogIngredientDialog
-        ingredientName={densityGapName}
-        onClose={() => setDensityGapName(null)}
-        open={densityGapName != null}
-      />
+      {auth.authenticated ? (
+        <AddCatalogIngredientDialog
+          ingredientName={densityGapName}
+          onClose={() => setDensityGapName(null)}
+          open={densityGapName != null}
+        />
+      ) : null}
 
       <Dialog
         onClose={() => setCookwareDialogOpen(false)}
@@ -501,7 +504,7 @@ export function RecipePage() {
             </div>
             <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               {recipe.ingredients.map((ingredient, index) => {
-                const needsDensity = densityGapNames.has(ingredient.name)
+                const needsDensity = auth.authenticated && densityGapNames.has(ingredient.name)
                 const nameClass = needsDensity
                   ? 'text-amber-800 underline decoration-amber-500/80 decoration-dotted underline-offset-2 dark:text-amber-200'
                   : isScaled
@@ -1018,6 +1021,7 @@ function formatIngredientListAmount(
     {
       densityKgM3: densityForName(ingredient.name, catalog),
       preferFluidVolume,
+      preferTbsp: prefersTablespoons(ingredient.name, catalog),
       unitSystem,
     }
   )
@@ -1036,6 +1040,7 @@ function formatIngredientFromToken(
   const display = formatIngredientAmount(token.quantity, token.unit, {
     densityKgM3: densityForName(token.name, catalog),
     preferFluidVolume,
+    preferTbsp: prefersTablespoons(token.name, catalog),
     unitSystem,
   })
   const formatted = formatDisplayAmount(display)
@@ -1044,4 +1049,3 @@ function formatIngredientFromToken(
   }
   return `${formatted} ${formatIngredientLabel(token.name, token.note)}`
 }
-
