@@ -35,6 +35,7 @@ export function HomePage({ isVisible }: HomePageProps) {
     setScrollTop,
   } = useRecipeListState()
   const scrollRestoringRef = useRef(false)
+  const scrollTopRef = useRef(scrollTop)
   const [showAllRecipes, setShowAllRecipes] = useState(false)
   const filterKey = `${query}|${activeTags.join(',')}|${activeSites.join(',')}|${bookmarkedOnly}|${showAllRecipes}`
   const appliedFilterKeyRef = useRef(filterKey)
@@ -88,15 +89,7 @@ export function HomePage({ isVisible }: HomePageProps) {
       activeTags,
       bookmarkedOnly,
     })
-  }, [
-    activeSites,
-    activeTags,
-    bookmarkedOnly,
-    details,
-    searchQuery,
-    showSearchResults,
-    summaries,
-  ])
+  }, [activeSites, activeTags, bookmarkedOnly, details, searchQuery, showSearchResults, summaries])
 
   useEffect(() => {
     sync()
@@ -123,11 +116,11 @@ export function HomePage({ isVisible }: HomePageProps) {
       return
     }
     scrollRestoringRef.current = true
-    window.scrollTo(0, scrollTop)
+    window.scrollTo(0, scrollTopRef.current)
     requestAnimationFrame(() => {
       scrollRestoringRef.current = false
     })
-  }, [isVisible, scrollTop])
+  }, [isVisible])
 
   useEffect(() => {
     if (!isVisible) {
@@ -139,6 +132,7 @@ export function HomePage({ isVisible }: HomePageProps) {
     }
     appliedFilterKeyRef.current = filterKey
     scrollRestoringRef.current = true
+    scrollTopRef.current = 0
     setScrollTop(0)
     window.scrollTo(0, 0)
     requestAnimationFrame(() => {
@@ -154,11 +148,16 @@ export function HomePage({ isVisible }: HomePageProps) {
       if (scrollRestoringRef.current) {
         return
       }
-      setScrollTop(window.scrollY)
+      // Keep position in a ref while scrolling so iOS momentum is not interrupted
+      // by React state updates or window.scrollTo during the gesture.
+      scrollTopRef.current = window.scrollY
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      setScrollTop(scrollTopRef.current)
+    }
   }, [isVisible, setScrollTop])
 
   return (

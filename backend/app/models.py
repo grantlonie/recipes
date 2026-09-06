@@ -110,6 +110,10 @@ class ImportRequest(BaseModel):
     url: HttpUrl
 
 
+class ImportTextRequest(BaseModel):
+    text: str
+
+
 class ImportPreview(BaseModel):
     content: str
     suggested_slug: str
