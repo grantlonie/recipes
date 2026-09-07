@@ -107,6 +107,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [cookwareInitial, setCookwareInitial] = useState<CookwareFormState>(emptyCookwareForm)
   const [cookwareDraft, setCookwareDraft] = useState<CookwareFormState>(emptyCookwareForm)
   const [reimportConfirmOpen, setReimportConfirmOpen] = useState(false)
+  const [rewriteConfirmOpen, setRewriteConfirmOpen] = useState(false)
   const [recipeSlug, setRecipeSlug] = useState(mode === 'new' ? 'new-recipe' : slug)
   const [servings, setServings] = useState(4)
   const [source, setSource] = useState('')
@@ -117,6 +118,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [cookTime, setCookTime] = useState('')
   const [title, setTitle] = useState('New Recipe')
   const isNew = mode === 'new'
+  const hasSource = Boolean(source.trim())
+  const canRewrite = Boolean(body.trim())
   const recipeQuery = useQuery({
     enabled: auth.authenticated && !isNew && Boolean(slug),
     queryFn: () =>
@@ -174,23 +177,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       navigate(`/recipes/${recipe.slug}`, { replace: true })
     },
   })
-  const rewriteMutation = useMutation({
-    mutationFn: (text: string) => importRecipeText(text),
-    onMutate: () => {
-      startImport({ title: 'Rewriting recipe', total: 1 })
-      updateProgress({ status: 'Turning your text into Cooklang…' })
-    },
-    onSuccess: preview => {
-      handleImportPreview(preview, { suggestedSlug: preview.suggested_slug })
-      completeImport({
-        saved: 1,
-        unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
-      })
-    },
-    onError: error => {
-      failImport(error instanceof Error ? error.message : 'Rewrite failed')
-    },
-  })
   const reimportMutation = useMutation({
     mutationFn: async () => {
       if (isRefFile(source)) {
@@ -216,6 +202,35 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     },
     onError: error => {
       failImport(error instanceof Error ? error.message : 'Re-import failed')
+    },
+  })
+  const rewriteMutation = useMutation({
+    mutationFn: (text: string) => importRecipeText(text),
+    onMutate: () => {
+      startImport({ title: 'Rewriting recipe', total: 1 })
+      updateProgress({
+        status: isNew ? 'Turning your text into Cooklang…' : 'Converting recipe text…',
+      })
+    },
+    onSuccess: preview => {
+      handleImportPreview(
+        preview,
+        isNew
+          ? { suggestedSlug: preview.suggested_slug }
+          : {
+              preserveBookmarked: true,
+              preserveImage: true,
+              preserveSource: true,
+              preserveTags: true,
+            }
+      )
+      completeImport({
+        saved: 1,
+        unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
+      })
+    },
+    onError: error => {
+      failImport(error instanceof Error ? error.message : 'Rewrite failed')
     },
   })
 
@@ -308,13 +323,22 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {!isNew ? (
+            {!isNew && hasSource ? (
               <Button
-                disabled={!source.trim() || reimportMutation.isPending}
+                disabled={reimportMutation.isPending}
                 onClick={handleReimportFromSource}
                 variant="secondary"
               >
                 Re Import
+              </Button>
+            ) : null}
+            {!isNew && !hasSource ? (
+              <Button
+                disabled={!canRewrite || rewriteMutation.isPending}
+                onClick={handleRewriteFromText}
+                variant="secondary"
+              >
+                Rewrite
               </Button>
             ) : null}
             <Button onClick={handleCancel} variant="ghost">
@@ -339,14 +363,20 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
 
         <div className="mt-6">
           <TabPanel active={activeTab} id="recipe">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <Button
-                disabled={!body.trim() || rewriteMutation.isPending}
-                onClick={handleRewrite}
-                variant="secondary"
-              >
-                {rewriteMutation.isPending ? 'Rewriting...' : 'Rewrite'}
-              </Button>
+            <div
+              className={`mb-3 flex flex-wrap items-center gap-2 ${
+                isNew ? 'justify-between' : 'justify-end'
+              }`}
+            >
+              {isNew ? (
+                <Button
+                  disabled={!body.trim() || rewriteMutation.isPending}
+                  onClick={handleRewrite}
+                  variant="secondary"
+                >
+                  {rewriteMutation.isPending ? 'Rewriting...' : 'Rewrite'}
+                </Button>
+              ) : null}
               <div
                 className="inline-flex overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-800 ring-1 ring-orange-200 dark:bg-stone-700 dark:text-orange-200 dark:ring-stone-600"
                 role="group"
@@ -429,11 +459,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 slug={isNew ? recipeSlug : slug}
                 value={image}
               />
-              {!isNew && reimportMutation.error ? (
-                <p className={`lg:col-span-2 text-sm ${errorTextClassName}`}>
-                  {reimportMutation.error.message}
-                </p>
-              ) : null}
               <Field className="lg:col-span-2" label="Description">
                 <textarea
                   className={`${inputClassName} min-h-24`}
@@ -449,6 +474,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         </div>
         {saveMutation.error ? (
           <p className={`mt-2 text-sm ${errorTextClassName}`}>{saveMutation.error.message}</p>
+        ) : null}
+        {!isNew && reimportMutation.error ? (
+          <p className={`mt-2 text-sm ${errorTextClassName}`}>{reimportMutation.error.message}</p>
+        ) : null}
+        {!isNew && rewriteMutation.error ? (
+          <p className={`mt-2 text-sm ${errorTextClassName}`}>{rewriteMutation.error.message}</p>
         ) : null}
       </div>
 
@@ -466,6 +497,18 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         open={reimportConfirmOpen}
         title="Re-import recipe?"
         titleId="reimport-confirm-title"
+      />
+
+      <ConfirmDialog
+        confirmLabel="Rewrite"
+        confirming={rewriteMutation.isPending}
+        confirmingLabel="Rewriting..."
+        description="Rewriting will send the current recipe text to the AI and overwrite the title, metadata, and body with the converted recipe."
+        onCancel={() => setRewriteConfirmOpen(false)}
+        onConfirm={() => void confirmRewriteFromText()}
+        open={rewriteConfirmOpen}
+        title="Rewrite recipe?"
+        titleId="rewrite-confirm-title"
       />
 
       <Dialog
@@ -782,6 +825,30 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   async function confirmReimportFromSource() {
     setReimportConfirmOpen(false)
     await reimportMutation.mutateAsync()
+  }
+
+  function handleRewriteFromText() {
+    if (!canRewrite) {
+      return
+    }
+    setRewriteConfirmOpen(true)
+  }
+
+  async function confirmRewriteFromText() {
+    const text = buildRewriteSourceText({
+      body,
+      cookTime,
+      description,
+      prepTime,
+      servings,
+      time,
+      title,
+    })
+    if (!text) {
+      return
+    }
+    setRewriteConfirmOpen(false)
+    await rewriteMutation.mutateAsync(text)
   }
 
   async function handleImageUpload(file: File) {
@@ -1372,6 +1439,39 @@ function getTagsFromMetadata(value: unknown) {
 
 function isEmptyArray(value: unknown) {
   return Array.isArray(value) && value.length === 0
+}
+
+function buildRewriteSourceText(recipe: {
+  body: string
+  cookTime: string
+  description: string
+  prepTime: string
+  servings: number
+  time: string
+  title: string
+}) {
+  const lines: string[] = []
+  if (recipe.title.trim()) {
+    lines.push(recipe.title.trim(), '')
+  }
+  const details = [
+    `Servings: ${recipe.servings}`,
+    recipe.prepTime.trim() ? `Prep time: ${recipe.prepTime.trim()}` : '',
+    recipe.cookTime.trim() ? `Cook time: ${recipe.cookTime.trim()}` : '',
+    !recipe.prepTime.trim() && !recipe.cookTime.trim() && recipe.time.trim()
+      ? `Time: ${recipe.time.trim()}`
+      : '',
+  ].filter(Boolean)
+  if (details.length) {
+    lines.push(...details, '')
+  }
+  if (recipe.description.trim()) {
+    lines.push(recipe.description.trim(), '')
+  }
+  if (recipe.body.trim()) {
+    lines.push(recipe.body.trim())
+  }
+  return lines.join('\n').trim()
 }
 
 function uniqueUnmatchedCount(names: string[] | undefined): number {
