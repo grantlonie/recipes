@@ -150,6 +150,26 @@ export async function importRecipeFile(slug: string): Promise<ImportPreview> {
   }
 }
 
+export async function importRecipeText(text: string): Promise<ImportPreview> {
+  const controller = new AbortController()
+  const timeoutId = window.setTimeout(() => controller.abort(), 100_000)
+
+  try {
+    return await request('/api/import/text', {
+      body: JSON.stringify({ text }),
+      method: 'POST',
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error("Couldn't rewrite this recipe. The import timed out.")
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeoutId)
+  }
+}
+
 export async function importRecipeUpload(file: File): Promise<ImportPreview> {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), 100_000)

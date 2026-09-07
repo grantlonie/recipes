@@ -39,12 +39,13 @@ interface RecipeBodyEditorProps {
   onEditIngredient: (pos: number, attrs: IngredientAttrs) => void
   onEditSection: (pos: number, title: string) => void
   onEditTimer: (pos: number, attrs: TimerAttrs) => void
+  placeholder?: string
   value: string
 }
 
 export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEditorProps>(
   function RecipeBodyEditor(
-    { onChange, onEditCookware, onEditIngredient, onEditSection, onEditTimer, value },
+    { onChange, onEditCookware, onEditIngredient, onEditSection, onEditTimer, placeholder, value },
     ref
   ) {
     const onChangeRef = useRef(onChange)
@@ -251,7 +252,16 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
       [editor]
     )
 
-    return <EditorContent editor={editor} />
+    return (
+      <div className="relative">
+        <EditorContent editor={editor} />
+        {placeholder && !value.trim() ? (
+          <p className="pointer-events-none absolute inset-x-3 top-3 text-sm leading-7 text-stone-400 dark:text-stone-500">
+            {placeholder}
+          </p>
+        ) : null}
+      </div>
+    )
   }
 )
 

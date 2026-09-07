@@ -21,7 +21,13 @@ from app.config import Settings, get_settings
 from app.density_estimate import estimate_ingredient_densities
 from app.extract import ExtractError, extract_text_from_path
 from app.fireworks_llm import LLMError
-from app.importer import ImportError, import_from_slug_file, import_from_upload, import_from_url
+from app.importer import (
+    ImportError,
+    import_from_slug_file,
+    import_from_text,
+    import_from_upload,
+    import_from_url,
+)
 from app.ingredients import (
     IngredientConflictError,
     IngredientRepository,
@@ -37,6 +43,7 @@ from app.models import (
     ImportFileRequest,
     ImportPreview,
     ImportRequest,
+    ImportTextRequest,
     IngredientCatalog,
     IngredientRenameRequest,
     IngredientRenameResponse,
@@ -235,6 +242,18 @@ def import_recipe(
 ) -> ImportPreview:
     try:
         return import_from_url(str(payload.url), settings=settings, ingredients=ingredients)
+    except ImportError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+
+
+@app.post("/api/import/text", dependencies=[Depends(auth.require_editor)])
+def import_recipe_text(
+    payload: ImportTextRequest,
+    settings: Settings = Depends(get_settings_dep),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> ImportPreview:
+    try:
+        return import_from_text(payload.text, settings=settings, ingredients=ingredients)
     except ImportError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
 
