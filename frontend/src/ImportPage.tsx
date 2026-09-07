@@ -200,10 +200,6 @@ export function ImportPage() {
   }
 
   if (showImportError) {
-    const editorPath = sharedUrl
-      ? `/recipes/new?url=${encodeURIComponent(sharedUrl)}`
-      : '/recipes/new'
-
     return (
       <section className={`mx-auto max-w-md ${cardClassName}`}>
         <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">
@@ -219,7 +215,7 @@ export function ImportPage() {
           </Button>
           <Link
             className="inline-flex rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-            to={editorPath}
+            to="/recipes/new"
           >
             Open editor
           </Link>

@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isEqual } from 'lodash-es'
-import type { ChangeEvent, FormEvent, ReactNode } from 'react'
+import type { ChangeEvent, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import {
   createRecipe,
@@ -45,7 +45,9 @@ import type { ImportPreview, UnitSystem } from './types'
 import { defaultEditorUnit, editorUnitItems, isUsCookingVolumeUnit, normalizeUnit } from './units'
 import { useUnitSystem } from './UnitSystemContext'
 
-const emptyBody = 'Add @ingredient{1%cup}.\n'
+const emptyBody = ''
+const RECIPE_PLACEHOLDER =
+  'Start writing your recipe from scratch, or paste text and click Rewrite.'
 const MAX_SERVINGS = 12
 
 interface IngredientFormState {
@@ -74,7 +76,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const { '*': slug = '' } = useParams()
   const { auth } = useAuth()
   const location = useLocation()
-  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { localRevision, sync } = useRecipeSync()
@@ -83,13 +84,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const { ingredients: catalog } = useIngredientCatalog()
   const { startImport, updateProgress, completeImport, failImport } = useImportProgress()
   const bodyEditorRef = useRef<RecipeBodyEditorHandle | null>(null)
-  const [activeTab, setActiveTab] = useState(mode === 'edit' ? 'recipe' : 'info')
+  const [activeTab, setActiveTab] = useState('recipe')
   const [baseMetadata, setBaseMetadata] = useState<Record<string, unknown>>({})
   const [bookmarked, setBookmarked] = useState(false)
   const [body, setBody] = useState(emptyBody)
   const [description, setDescription] = useState('')
   const [image, setImage] = useState('')
-  const [importUrl, setImportUrl] = useState(searchParams.get('url') ?? '')
   const [ingredientDialogOpen, setIngredientDialogOpen] = useState(false)
   const [editingPos, setEditingPos] = useState<number | null>(null)
   const [ingredientInitial, setIngredientInitial] =
@@ -177,24 +177,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       navigate(`/recipes/${recipe.slug}`, { replace: true })
     },
   })
-  const importMutation = useMutation({
-    mutationFn: (url: string) => importRecipe(url),
-    onMutate: () => {
-      startImport({ title: 'Importing recipe', total: 1 })
-      updateProgress({ status: 'Fetching and parsing…' })
-    },
-    onSuccess: preview => {
-      handleImportPreview(preview, { suggestedSlug: preview.suggested_slug })
-      setImportUrl('')
-      completeImport({
-        saved: 1,
-        unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
-      })
-    },
-    onError: error => {
-      failImport(error instanceof Error ? error.message : 'Import failed')
-    },
-  })
   const reimportMutation = useMutation({
     mutationFn: async () => {
       if (isRefFile(source)) {
@@ -226,15 +208,22 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     mutationFn: (text: string) => importRecipeText(text),
     onMutate: () => {
       startImport({ title: 'Rewriting recipe', total: 1 })
-      updateProgress({ status: 'Converting recipe text…' })
+      updateProgress({
+        status: isNew ? 'Turning your text into Cooklang…' : 'Converting recipe text…',
+      })
     },
     onSuccess: preview => {
-      handleImportPreview(preview, {
-        preserveBookmarked: true,
-        preserveImage: true,
-        preserveSource: true,
-        preserveTags: true,
-      })
+      handleImportPreview(
+        preview,
+        isNew
+          ? { suggestedSlug: preview.suggested_slug }
+          : {
+              preserveBookmarked: true,
+              preserveImage: true,
+              preserveSource: true,
+              preserveTags: true,
+            }
+      )
       completeImport({
         saved: 1,
         unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
@@ -361,27 +350,63 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </div>
         </div>
 
-        {isNew ? <ImportPanel /> : null}
-
         <div className="mt-6">
           <Tabs
             active={activeTab}
-            items={
-              isNew
-                ? [
-                    { id: 'info', label: 'Info' },
-                    { id: 'recipe', label: 'Recipe' },
-                  ]
-                : [
-                    { id: 'recipe', label: 'Recipe' },
-                    { id: 'info', label: 'Info' },
-                  ]
-            }
+            items={[
+              { id: 'recipe', label: 'Recipe' },
+              { id: 'info', label: 'Info' },
+            ]}
             onChange={setActiveTab}
           />
         </div>
 
         <div className="mt-6">
+          <TabPanel active={activeTab} id="recipe">
+            <div
+              className={`mb-3 flex flex-wrap items-center gap-2 ${
+                isNew ? 'justify-between' : 'justify-end'
+              }`}
+            >
+              {isNew ? (
+                <Button
+                  disabled={!body.trim() || rewriteMutation.isPending}
+                  onClick={handleRewrite}
+                  variant="secondary"
+                >
+                  {rewriteMutation.isPending ? 'Rewriting...' : 'Rewrite'}
+                </Button>
+              ) : null}
+              <div
+                className="inline-flex overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-800 ring-1 ring-orange-200 dark:bg-stone-700 dark:text-orange-200 dark:ring-stone-600"
+                role="group"
+              >
+                <InsertSegmentButton first onClick={openAddIngredient}>
+                  ingredient
+                </InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddNote}>note</InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddTimer}>time</InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddSection}>header</InsertSegmentButton>
+                <InsertSegmentButton onClick={openAddCookware}>cookware</InsertSegmentButton>
+              </div>
+            </div>
+            {rewriteMutation.error ? (
+              <p className={`mb-3 text-sm ${errorTextClassName}`}>
+                {rewriteMutation.error.message}
+              </p>
+            ) : null}
+            <RecipeBodyEditor
+              onChange={setBody}
+              onEditCookware={handleEditCookware}
+              onEditIngredient={handleEditIngredient}
+              onEditSection={handleEditSection}
+              onEditTimer={handleEditTimer}
+              placeholder={isNew ? RECIPE_PLACEHOLDER : undefined}
+              ref={bodyEditorRef}
+              value={body}
+            />
+          </TabPanel>
+
           <TabPanel active={activeTab} id="info">
             <div className="grid gap-4 lg:grid-cols-2">
               <Field label="Title">
@@ -445,32 +470,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 <TagMultiSelect availableTags={availableTags} onChange={setTags} value={tags} />
               </Field>
             </div>
-          </TabPanel>
-
-          <TabPanel active={activeTab} id="recipe">
-            <div className="mb-3 flex items-center justify-end gap-2">
-              <div
-                className="inline-flex overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-800 ring-1 ring-orange-200 dark:bg-stone-700 dark:text-orange-200 dark:ring-stone-600"
-                role="group"
-              >
-                <InsertSegmentButton first onClick={openAddIngredient}>
-                  ingredient
-                </InsertSegmentButton>
-                <InsertSegmentButton onClick={openAddNote}>note</InsertSegmentButton>
-                <InsertSegmentButton onClick={openAddTimer}>time</InsertSegmentButton>
-                <InsertSegmentButton onClick={openAddSection}>header</InsertSegmentButton>
-                <InsertSegmentButton onClick={openAddCookware}>cookware</InsertSegmentButton>
-              </div>
-            </div>
-            <RecipeBodyEditor
-              onChange={setBody}
-              onEditCookware={handleEditCookware}
-              onEditIngredient={handleEditIngredient}
-              onEditSection={handleEditSection}
-              onEditTimer={handleEditTimer}
-              ref={bodyEditorRef}
-              value={body}
-            />
           </TabPanel>
         </div>
         {saveMutation.error ? (
@@ -744,29 +743,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     </section>
   )
 
-  function ImportPanel() {
-    return (
-      <form className="mt-6 rounded-2xl bg-orange-50 p-4 dark:bg-stone-800" onSubmit={handleImport}>
-        <h2 className="font-semibold">Import via URL</h2>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-          <input
-            className={inputClassName}
-            onChange={event => setImportUrl(event.target.value)}
-            placeholder="https://example.com/recipe"
-            type="url"
-            value={importUrl}
-          />
-          <Button disabled={!importUrl || importMutation.isPending} type="submit">
-            Import
-          </Button>
-        </div>
-        {importMutation.error ? (
-          <p className={`mt-2 text-sm ${errorTextClassName}`}>{importMutation.error.message}</p>
-        ) : null}
-      </form>
-    )
-  }
-
   function applyDocumentState(
     metadata: Record<string, unknown>,
     nextBody: string,
@@ -831,9 +807,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     await saveMutation.mutateAsync()
   }
 
-  async function handleImport(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    await importMutation.mutateAsync(importUrl.trim())
+  async function handleRewrite() {
+    const text = body.trim()
+    if (!text) {
+      return
+    }
+    await rewriteMutation.mutateAsync(text)
   }
 
   function handleReimportFromSource() {
