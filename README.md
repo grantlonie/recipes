@@ -124,6 +124,7 @@ python scripts/backfill_recipe_images.py --enqueue-missing
 
 Set `FIREWORKS_API_KEY` in `.env` for import to work. Model names and token limits are
 configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.example`).
+Retired Fireworks IDs such as `qwen3p7-plus` are remapped to a current serverless model.
 
 ## Environment variables
 

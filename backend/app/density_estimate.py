@@ -4,10 +4,14 @@ import json
 import re
 from typing import Any
 
-from openai import APIStatusError
-
 from app.config import Settings
-from app.fireworks_llm import LLMError, create_client, reasoning_extra_body, strip_think_blocks
+from app.fireworks_llm import (
+    LLMError,
+    create_client,
+    reasoning_extra_body,
+    request_with_model_fallback,
+    strip_think_blocks,
+)
 from app.models import DensityEstimate
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
@@ -40,30 +44,28 @@ def estimate_ingredient_densities(
         raise LLMError("FIREWORKS_API_KEY is not configured")
 
     client = create_client(settings)
-    model = settings.import_model_bulk
     user_message = "Estimate densities for:\n" + "\n".join(f"- {name}" for name in cleaned)
-    request: dict[str, Any] = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ],
-        "temperature": 0.1,
-        "max_tokens": 512,
-    }
-    extra_body = reasoning_extra_body(model)
-    if extra_body:
-        request["extra_body"] = extra_body
 
-    try:
-        response = client.chat.completions.create(**request)
-    except APIStatusError as error:
-        if error.status_code == 404:
-            raise LLMError(
-                f"Fireworks model not found: {model}. "
-                "Check IMPORT_MODEL_BULK in your environment."
-            ) from error
-        raise LLMError(f"Fireworks request failed: {error.message}") from error
+    def send(attempt_model: str) -> Any:
+        request: dict[str, Any] = {
+            "model": attempt_model,
+            "messages": [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            "temperature": 0.1,
+            "max_tokens": 512,
+        }
+        extra_body = reasoning_extra_body(attempt_model)
+        if extra_body:
+            request["extra_body"] = extra_body
+        return client.chat.completions.create(**request)
+
+    response = request_with_model_fallback(
+        model=settings.import_model_bulk,
+        not_found_hint="Check IMPORT_MODEL_BULK in your environment.",
+        send=send,
+    )
 
     content = ""
     if response.choices:

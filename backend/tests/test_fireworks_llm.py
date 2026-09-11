@@ -1,19 +1,32 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-
-from app.config import Settings
+from app.config import DEFAULT_FIREWORKS_MODEL, Settings
 from app.fireworks_llm import (
+    LLMError,
     complete_cooklang,
+    fireworks_model_attempts,
     import_request_kwargs,
     normalize_model_output,
     reasoning_extra_body,
+    request_with_model_fallback,
+    reset_unavailable_fireworks_models,
+    resolve_fireworks_model,
 )
+from openai import APIStatusError
 
 
 @pytest.fixture
 def settings() -> Settings:
     return Settings(fireworks_api_key="test-key")
+
+
+@pytest.fixture(autouse=True)
+def _reset_unavailable_models():
+    reset_unavailable_fireworks_models()
+    yield
+    reset_unavailable_fireworks_models()
 
 
 def test_normalize_model_output_strips_trailing_reasoning():
@@ -124,6 +137,23 @@ def test_reasoning_extra_body_is_model_aware():
     assert reasoning_extra_body("accounts/fireworks/models/gpt-oss-120b") is None
 
 
+def test_resolve_fireworks_model_maps_retired_ids():
+    assert (
+        resolve_fireworks_model("accounts/fireworks/models/qwen3p7-plus") == DEFAULT_FIREWORKS_MODEL
+    )
+    assert (
+        resolve_fireworks_model("accounts/fireworks/models/deepseek-v4-flash")
+        == DEFAULT_FIREWORKS_MODEL
+    )
+    assert fireworks_model_attempts("accounts/fireworks/models/qwen3p7-plus") == (
+        DEFAULT_FIREWORKS_MODEL,
+    )
+    assert fireworks_model_attempts("accounts/fireworks/models/gpt-oss-120b") == (
+        "accounts/fireworks/models/gpt-oss-120b",
+        DEFAULT_FIREWORKS_MODEL,
+    )
+
+
 def test_import_request_kwargs_uses_unique_user_without_sticky_affinity(settings: Settings):
     first = import_request_kwargs(
         settings=settings,
@@ -210,9 +240,72 @@ def test_complete_cooklang_disables_thinking_for_deepseek(settings: Settings):
             settings=settings,
             system_prompt="system",
             user_message="user",
-            model="accounts/fireworks/models/deepseek-v4-flash",
+            model="accounts/fireworks/models/deepseek-v4p1-flash",
         )
 
     request_kwargs = create_client.return_value.chat.completions.create.call_args.kwargs
     assert request_kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
     assert "reasoning_effort" not in request_kwargs["extra_body"]
+    assert request_kwargs["model"] == "accounts/fireworks/models/deepseek-v4p1-flash"
+
+
+def _not_found_error(model: str) -> APIStatusError:
+    request = httpx.Request("POST", "https://api.fireworks.ai/inference/v1/chat/completions")
+    response = httpx.Response(404, request=request)
+    return APIStatusError(
+        f"Model not found: {model}",
+        response=response,
+        body={"error": {"message": f"Model not found: {model}"}},
+    )
+
+
+def _cooklang_stream(text: str = "---\ntitle: Soup\n---\n\nCook @onion{1}.") -> MagicMock:
+    chunk = MagicMock()
+    chunk.choices = [MagicMock(delta=MagicMock(content=text))]
+    fake_stream = MagicMock()
+    fake_stream.__iter__ = MagicMock(return_value=iter([chunk]))
+    return fake_stream
+
+
+def test_complete_cooklang_remaps_retired_qwen_model(settings: Settings):
+    stale = Settings(
+        fireworks_api_key="test-key",
+        import_model_text="accounts/fireworks/models/qwen3p7-plus",
+    )
+    with patch("app.fireworks_llm.create_client") as create_client:
+        create_client.return_value.chat.completions.create.return_value = _cooklang_stream()
+        complete_cooklang(settings=stale, system_prompt="system", user_message="user")
+
+    create_client.return_value.chat.completions.create.assert_called_once()
+    request_kwargs = create_client.return_value.chat.completions.create.call_args.kwargs
+    assert request_kwargs["model"] == DEFAULT_FIREWORKS_MODEL
+
+
+def test_complete_cooklang_retries_when_configured_model_404s(settings: Settings):
+    missing = "accounts/fireworks/models/gone-model"
+    stale = Settings(fireworks_api_key="test-key", import_model_text=missing)
+    create = MagicMock()
+    create.side_effect = [_not_found_error(missing), _cooklang_stream()]
+
+    with patch("app.fireworks_llm.create_client") as create_client:
+        create_client.return_value.chat.completions.create = create
+        result = complete_cooklang(settings=stale, system_prompt="system", user_message="user")
+
+    assert create.call_count == 2
+    assert create.call_args_list[0].kwargs["model"] == missing
+    assert create.call_args_list[1].kwargs["model"] == DEFAULT_FIREWORKS_MODEL
+    assert "Cook @onion{1}." in result
+
+
+def test_request_with_model_fallback_raises_after_exhausted_404s():
+    missing = "accounts/fireworks/models/gone-model"
+
+    def send(model: str) -> str:
+        raise _not_found_error(model)
+
+    with pytest.raises(LLMError, match="Fireworks model not found"):
+        request_with_model_fallback(
+            model=missing,
+            not_found_hint="Check IMPORT_MODEL_TEXT / IMPORT_MODEL_VISION in your environment.",
+            send=send,
+        )

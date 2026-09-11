@@ -4,6 +4,11 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Current Fireworks serverless default: multimodal, so rewrite/import and image
+# import can share one ID. Retired IDs are remapped in fireworks_llm.
+DEFAULT_FIREWORKS_MODEL = "accounts/fireworks/models/deepseek-v4p1-flash"
+DEFAULT_FIREWORKS_REPAIR_MODEL = "accounts/fireworks/models/gpt-oss-120b"
+
 
 class Settings(BaseSettings):
     app_base_url: str = "http://localhost:8000"
@@ -14,10 +19,10 @@ class Settings(BaseSettings):
     frontend_dist: Path = Path("frontend/dist")
     import_max_output_tokens: int = 4096
     import_max_source_chars: int = 6000
-    import_model_bulk: str = "accounts/fireworks/models/deepseek-v4-flash"
-    import_model_repair: str = "accounts/fireworks/models/gpt-oss-120b"
-    import_model_text: str = "accounts/fireworks/models/qwen3p7-plus"
-    import_model_vision: str = "accounts/fireworks/models/qwen3p7-plus"
+    import_model_bulk: str = DEFAULT_FIREWORKS_MODEL
+    import_model_repair: str = DEFAULT_FIREWORKS_REPAIR_MODEL
+    import_model_text: str = DEFAULT_FIREWORKS_MODEL
+    import_model_vision: str = DEFAULT_FIREWORKS_MODEL
     jina_api_key: str = ""
     image_queue_concurrency: int = 6
     image_queue_host_cooldown_seconds: int = 1800
