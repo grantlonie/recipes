@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isEqual } from 'lodash-es'
 import type { FormEvent } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { estimateIngredientDensities, getIngredientCatalog, upsertIngredient } from '../api'
 import { putIngredientCatalog } from '../db'
@@ -9,6 +10,7 @@ import { errorTextClassName, inputClassName } from '../themeClasses'
 import type { CatalogIngredient } from '../types'
 import { findCatalogIngredient } from '../units'
 import { Button } from './Button'
+import { DensityCalculator } from './DensityCalculator'
 import { DensitySearchLink } from './DensitySearchLink'
 import { Dialog } from './Dialog'
 
@@ -24,6 +26,18 @@ interface DraftState {
   name: string
 }
 
+function emptyDraft(): DraftState {
+  return { aliases: '', density: '', name: '' }
+}
+
+function draftFromCatalog(item: CatalogIngredient, fallbackName: string): DraftState {
+  return {
+    aliases: item.aliases.join(', '),
+    density: item.density_kg_m3 != null && item.density_kg_m3 > 0 ? String(item.density_kg_m3) : '',
+    name: item.name || fallbackName,
+  }
+}
+
 export function AddCatalogIngredientDialog({
   ingredientName,
   onClose,
@@ -31,22 +45,25 @@ export function AddCatalogIngredientDialog({
 }: AddCatalogIngredientDialogProps) {
   const queryClient = useQueryClient()
   const { ingredients, refresh } = useIngredientCatalog()
-  const [draft, setDraft] = useState<DraftState>({ aliases: '', density: '', name: '' })
+  const [draft, setDraft] = useState<DraftState>(emptyDraft)
+  const [initial, setInitial] = useState<DraftState>(emptyDraft)
   const { aliases, density, name } = draft
+  const existing = useMemo(
+    () => (ingredientName ? findCatalogIngredient(ingredientName, ingredients) : undefined),
+    [ingredientName, ingredients]
+  )
+  const dirty = !isEqual(initial, draft)
 
   useEffect(() => {
     if (!open || !ingredientName) {
       return
     }
-    const existing = findCatalogIngredient(ingredientName, ingredients)
-    setDraft({
-      aliases: existing?.aliases.join(', ') ?? '',
-      density:
-        existing?.density_kg_m3 != null && existing.density_kg_m3 > 0
-          ? String(existing.density_kg_m3)
-          : '',
-      name: existing?.name ?? ingredientName,
-    })
+    const matched = findCatalogIngredient(ingredientName, ingredients)
+    const snapshot = matched
+      ? draftFromCatalog(matched, ingredientName)
+      : { aliases: '', density: '', name: ingredientName }
+    setInitial(snapshot)
+    setDraft(snapshot)
   }, [ingredientName, ingredients, open])
 
   useEffect(() => {
@@ -55,8 +72,8 @@ export function AddCatalogIngredientDialog({
     }
     let cancelled = false
     void (async () => {
-      const existing = findCatalogIngredient(ingredientName, ingredients)
-      if (existing?.density_kg_m3 != null && existing.density_kg_m3 > 0) {
+      const matched = findCatalogIngredient(ingredientName, ingredients)
+      if (matched?.density_kg_m3 != null && matched.density_kg_m3 > 0) {
         return
       }
       try {
@@ -93,28 +110,28 @@ export function AddCatalogIngredientDialog({
   return (
     <Dialog
       footer={
-        <>
-          <Button onClick={onClose} type="button" variant="ghost">
-            Cancel
-          </Button>
+        <div className="flex gap-2">
+          {!existing || dirty ? (
+            <Button onClick={onClose} type="button" variant="ghost">
+              Cancel
+            </Button>
+          ) : null}
           <Button
+            className={existing ? 'w-[80px] justify-center' : undefined}
             disabled={saveMutation.isPending || !name.trim()}
             form="add-catalog-ingredient-form"
             type="submit"
           >
-            {saveMutation.isPending ? 'Saving...' : 'Save'}
+            {saveMutation.isPending ? 'Saving...' : existing ? (dirty ? 'Update' : 'Done') : 'Save'}
           </Button>
-        </>
+        </div>
       }
       onClose={onClose}
       open={open}
-      title="Add ingredient density"
+      title={existing ? 'Edit ingredient' : 'Add ingredient'}
       titleId="add-catalog-ingredient-title"
     >
-      <p className="text-sm text-stone-600 dark:text-stone-400">
-        Density is needed to convert this ingredient between volume and weight.
-      </p>
-      <form className="mt-4 space-y-4" id="add-catalog-ingredient-form" onSubmit={handleSave}>
+      <form className="space-y-4" id="add-catalog-ingredient-form" onSubmit={handleSave}>
         <label className="block">
           <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Name</span>
           <input
@@ -127,25 +144,32 @@ export function AddCatalogIngredientDialog({
             value={name}
           />
         </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-            Density (kg/m³)
-          </span>
-          <div className="mt-1 flex items-center gap-1">
-            <input
-              className={`${inputClassName} min-w-0 flex-1`}
-              inputMode="decimal"
-              onChange={event => setDraft(current => ({ ...current, density: event.target.value }))}
-              placeholder="Required for volume conversion"
-              required
-              value={density}
-            />
-            <DensitySearchLink ingredientName={name} />
-          </div>
-          <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
-            Water is 1000. Used to convert between cups/ml and grams.
-          </span>
-        </label>
+        <div>
+          <label className="block">
+            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+              Density (kg/m³)
+            </span>
+            <div className="mt-1 flex items-center gap-1">
+              <input
+                className={`${inputClassName} min-w-0 flex-1`}
+                inputMode="decimal"
+                onChange={event =>
+                  setDraft(current => ({ ...current, density: event.target.value }))
+                }
+                placeholder="Leave blank to show weight (lb/oz)"
+                value={density}
+              />
+              <DensitySearchLink ingredientName={name} />
+            </div>
+            <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
+              Leave blank to show weight (lb/oz) in US mode. Water is 1000.
+            </span>
+          </label>
+          <DensityCalculator
+            key={ingredientName ?? 'closed'}
+            onDensityChange={value => setDraft(current => ({ ...current, density: value }))}
+          />
+        </div>
         <label className="block">
           <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Aliases</span>
           <input
@@ -186,23 +210,24 @@ export function AddCatalogIngredientDialog({
 
   function handleSave(event: FormEvent) {
     event.preventDefault()
+    if (existing && !dirty) {
+      onClose()
+      return
+    }
     const densityValue = density.trim()
     const parsedDensity = densityValue ? Number(densityValue) : null
     if (densityValue && Number.isNaN(parsedDensity)) {
       return
     }
-    if (parsedDensity == null || parsedDensity <= 0) {
-      return
-    }
     const normalizedName = name.trim().toLowerCase()
-    const existing = findCatalogIngredient(normalizedName, ingredients)
+    const matched = findCatalogIngredient(normalizedName, ingredients)
     saveMutation.mutate({
       aliases: aliases
         .split(',')
         .map(item => item.trim().toLowerCase())
         .filter(Boolean),
       density_kg_m3: parsedDensity,
-      name: existing?.name ?? normalizedName,
+      name: matched?.name ?? normalizedName,
     })
   }
 }

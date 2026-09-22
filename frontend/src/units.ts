@@ -160,6 +160,33 @@ export function toGrams(
   return null
 }
 
+export function toMl(quantity: number, unit: string | null | undefined): number | null {
+  const canonical = normalizeUnit(unit)
+  if (!canonical || !(canonical in VOLUME_TO_ML)) {
+    return null
+  }
+  return quantity * VOLUME_TO_ML[canonical]
+}
+
+/** Density in kg/m³ from a weighed volume, or null when inputs cannot be converted. */
+export function densityFromMassVolume(
+  massQuantity: number,
+  massUnit: string | null | undefined,
+  volumeQuantity: number,
+  volumeUnit: string | null | undefined
+): number | null {
+  const grams = toGrams(massQuantity, massUnit)
+  const ml = toMl(volumeQuantity, volumeUnit)
+  if (grams == null || ml == null || grams <= 0 || ml <= 0) {
+    return null
+  }
+  return (grams / ml) * 1000
+}
+
+export function isMassUnitSystem(unitSystem: UnitSystem): boolean {
+  return unitSystem === 'metric' || unitSystem === 'us_weight'
+}
+
 export function formatGramsValue(grams: number): string {
   return formatStoredGrams(grams)
 }
@@ -260,10 +287,11 @@ export function prefersFluidVolume(tags: string[] | null | undefined): boolean {
 function formatAmountFromGrams(
   grams: number,
   options: {
-    unitSystem: UnitSystem
     densityKgM3?: number | null
     preferFluidVolume?: boolean
+    preferSmallSpoons?: boolean
     preferTbsp?: boolean
+    unitSystem: UnitSystem
   }
 ): DisplayAmount {
   const hasDensity = options.densityKgM3 != null && options.densityKgM3 > 0
@@ -272,6 +300,12 @@ function formatAmountFromGrams(
       return formatMetricVolume(grams, options.densityKgM3 as number)
     }
     return formatUsVolume(grams, options.densityKgM3 as number, { preferFlOz: true })
+  }
+  if (options.preferSmallSpoons && hasDensity && isMassUnitSystem(options.unitSystem)) {
+    const ml = (grams * 1000) / (options.densityKgM3 as number)
+    if (ml <= ML_PER_TBSP * 1.01) {
+      return formatUsVolume(grams, options.densityKgM3 as number, { preferTbsp: true })
+    }
   }
   if (options.unitSystem === 'us_weight') {
     return formatUsMass(grams)
@@ -291,10 +325,11 @@ export function formatAmount(
   quantity: number | null,
   unit: string | null | undefined,
   options: {
-    unitSystem: UnitSystem
     densityKgM3?: number | null
     preferFluidVolume?: boolean
+    preferSmallSpoons?: boolean
     preferTbsp?: boolean
+    unitSystem: UnitSystem
   }
 ): DisplayAmount {
   if (quantity === null) {
@@ -332,10 +367,11 @@ export function formatIngredientAmount(
   quantityText: string | null | undefined,
   unit: string | null | undefined,
   options: {
-    unitSystem: UnitSystem
     densityKgM3?: number | null
     preferFluidVolume?: boolean
+    preferSmallSpoons?: boolean
     preferTbsp?: boolean
+    unitSystem: UnitSystem
   }
 ): DisplayAmount {
   if (!quantityText) {
@@ -1008,6 +1044,9 @@ const UNIT_DISPLAY_LABELS: Record<string, string> = {
 export function unitDisplayLabel(unit: string): string {
   return UNIT_DISPLAY_LABELS[unit] ?? unit
 }
+
+export const DENSITY_MASS_UNITS = ['g', 'oz', 'kg', 'lb'] as const
+export const DENSITY_VOLUME_UNITS = ['cup', 'Tbsp', 'tsp', 'ml', 'l', 'fl oz'] as const
 
 export function editorUnitItems(
   unitSystem: UnitSystem

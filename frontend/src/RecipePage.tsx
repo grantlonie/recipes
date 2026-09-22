@@ -79,9 +79,19 @@ const SCALED_INGREDIENT_MARKER_CLASS =
 
 type StepMarker = {
   index: number
+  ingredientName?: string
   length: number
   text: string
   type: keyof typeof STEP_MARKER_CLASS
+}
+
+interface StepRenderOptions {
+  catalog: CatalogIngredient[]
+  isScaled: boolean
+  onIngredientClick?: (name: string) => void
+  preferFluidVolume: boolean
+  preferSmallSpoons: boolean
+  unitSystem: UnitSystem
 }
 
 export function RecipePage() {
@@ -91,7 +101,7 @@ export function RecipePage() {
   const queryClient = useQueryClient()
   const { addRecentRecipe, removeRecentRecipe } = useRecipeListState()
   const { notifyLocalChange, revision, sync } = useRecipeSync()
-  const { unitSystem, setUnitSystem } = useUnitSystem()
+  const { preferSmallSpoons, setUnitSystem, unitSystem } = useUnitSystem()
   const { ingredients: catalog } = useIngredientCatalog()
   const { setTitle, setTitleInHeader } = useRecipeDetailHeader()
   const titleRef = useRef<HTMLHeadingElement>(null)
@@ -110,7 +120,7 @@ export function RecipePage() {
   const [overflowOpen, setOverflowOpen] = useState(false)
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false)
   const [manualUnitSystem, setManualUnitSystem] = useState<UnitSystem | null>(null)
-  const [densityGapName, setDensityGapName] = useState<string | null>(null)
+  const [editingIngredientName, setEditingIngredientName] = useState<string | null>(null)
   const [imageFailed, setImageFailed] = useState(false)
   const baseServings = recipeQuery.data?.servings ?? 1
   const targetServings = baseServings * scaleFactor
@@ -195,7 +205,7 @@ export function RecipePage() {
   useEffect(() => {
     setCompletedSteps(new Set())
     setManualUnitSystem(null)
-    setDensityGapName(null)
+    setEditingIngredientName(null)
   }, [slug])
 
   useLayoutEffect(() => {
@@ -440,9 +450,9 @@ export function RecipePage() {
 
       {auth.authenticated ? (
         <AddCatalogIngredientDialog
-          ingredientName={densityGapName}
-          onClose={() => setDensityGapName(null)}
-          open={densityGapName != null}
+          ingredientName={editingIngredientName}
+          onClose={() => setEditingIngredientName(null)}
+          open={editingIngredientName != null}
         />
       ) : null}
 
@@ -510,6 +520,9 @@ export function RecipePage() {
                   : isScaled
                     ? SCALED_TEXT_CLASS
                     : undefined
+                const label = titleCaseIngredient(
+                  formatIngredientLabel(ingredient.name, ingredient.note)
+                )
                 return (
                   <Fragment key={`${ingredient.name}-${index}`}>
                     <span
@@ -523,29 +536,26 @@ export function RecipePage() {
                     >
                       {formatIngredientListAmount(
                         ingredient,
-                        effectiveUnitSystem,
                         catalog,
-                        fluidVolumePreferred
+                        effectiveUnitSystem,
+                        fluidVolumePreferred,
+                        preferSmallSpoons
                       )}
                       {ingredient.fixed ? ' fixed' : ''}
                     </span>
-                    {needsDensity ? (
+                    {auth.authenticated ? (
                       <button
-                        className={`text-left ${nameClass}`}
-                        onClick={() => setDensityGapName(ingredient.name)}
-                        title="Add density to convert units"
+                        className={`cursor-pointer text-left ${nameClass ?? 'text-stone-800 dark:text-stone-200'} ${
+                          needsDensity ? '' : 'hover:underline'
+                        }`}
+                        onClick={() => setEditingIngredientName(ingredient.name)}
+                        title={needsDensity ? 'Add density to convert units' : 'Edit ingredient'}
                         type="button"
                       >
-                        {titleCaseIngredient(
-                          formatIngredientLabel(ingredient.name, ingredient.note)
-                        )}
+                        {label}
                       </button>
                     ) : (
-                      <span className={nameClass}>
-                        {titleCaseIngredient(
-                          formatIngredientLabel(ingredient.name, ingredient.note)
-                        )}
-                      </span>
+                      <span className={nameClass}>{label}</span>
                     )}
                   </Fragment>
                 )
@@ -598,13 +608,16 @@ export function RecipePage() {
                       className="px-1 text-sm italic text-stone-600 dark:text-stone-400"
                       key={`note-${index}`}
                     >
-                      {renderCooklangStep(
-                        block.text,
-                        effectiveUnitSystem,
+                      {renderCooklangStep(block.text, {
                         catalog,
                         isScaled,
-                        fluidVolumePreferred
-                      )}
+                        onIngredientClick: auth.authenticated
+                          ? setEditingIngredientName
+                          : undefined,
+                        preferFluidVolume: fluidVolumePreferred,
+                        preferSmallSpoons,
+                        unitSystem: effectiveUnitSystem,
+                      })}
                     </p>
                   )
                 }
@@ -644,13 +657,16 @@ export function RecipePage() {
                             completed ? 'mt-0 opacity-0' : 'mt-2 opacity-100'
                           }`}
                         >
-                          {renderCooklangStep(
-                            block.text,
-                            effectiveUnitSystem,
+                          {renderCooklangStep(block.text, {
                             catalog,
                             isScaled,
-                            fluidVolumePreferred
-                          )}
+                            onIngredientClick: auth.authenticated
+                              ? setEditingIngredientName
+                              : undefined,
+                            preferFluidVolume: fluidVolumePreferred,
+                            preferSmallSpoons,
+                            unitSystem: effectiveUnitSystem,
+                          })}
                         </p>
                       </div>
                     </div>
@@ -880,39 +896,28 @@ function cleanDescriptionText(value: string) {
     .trim()
 }
 
-function renderCooklangStep(
-  step: string,
-  unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
-  isScaled: boolean,
-  preferFluidVolume: boolean
-) {
+function renderCooklangStep(step: string, options: StepRenderOptions) {
   const lines = step.split('\n')
   if (lines.length === 1) {
-    return renderCooklangLine(step, unitSystem, catalog, isScaled, preferFluidVolume)
+    return renderCooklangLine(step, options)
   }
   return lines.map((line, index) => (
     <Fragment key={`${index}-${line}`}>
       {index > 0 ? '\n' : null}
-      {renderCooklangLine(line, unitSystem, catalog, isScaled, preferFluidVolume)}
+      {renderCooklangLine(line, options)}
     </Fragment>
   ))
 }
 
-function renderCooklangLine(
-  line: string,
-  unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
-  isScaled: boolean,
-  preferFluidVolume: boolean
-) {
+function renderCooklangLine(line: string, options: StepRenderOptions) {
   const markers: StepMarker[] = []
 
   for (const token of extractTokens(line)) {
     markers.push({
       index: token.start,
+      ingredientName: token.name,
       length: token.end - token.start,
-      text: formatIngredientFromToken(token, unitSystem, catalog, preferFluidVolume),
+      text: formatIngredientFromToken(token, options),
       type: 'ingredient',
     })
   }
@@ -948,17 +953,30 @@ function renderCooklangLine(
     if (marker.index > cursor) {
       rendered.push(line.slice(cursor, marker.index))
     }
+    const className =
+      marker.type === 'ingredient' && options.isScaled
+        ? SCALED_INGREDIENT_MARKER_CLASS
+        : STEP_MARKER_CLASS[marker.type]
+    const canOpenIngredient =
+      marker.type === 'ingredient' &&
+      Boolean(marker.ingredientName) &&
+      options.onIngredientClick != null
     rendered.push(
-      <span
-        className={
-          marker.type === 'ingredient' && isScaled
-            ? SCALED_INGREDIENT_MARKER_CLASS
-            : STEP_MARKER_CLASS[marker.type]
-        }
-        key={`${marker.index}-${markerIndex}`}
-      >
-        {marker.text}
-      </span>
+      canOpenIngredient ? (
+        <button
+          className={`cursor-pointer ${className}`}
+          key={`${marker.index}-${markerIndex}`}
+          onClick={() => options.onIngredientClick?.(marker.ingredientName as string)}
+          title="Edit ingredient"
+          type="button"
+        >
+          {marker.text}
+        </button>
+      ) : (
+        <span className={className} key={`${marker.index}-${markerIndex}`}>
+          {marker.text}
+        </span>
+      )
     )
     cursor = marker.index + marker.length
     markerIndex += 1
@@ -1011,9 +1029,10 @@ function resolveSource(recipe: {
 
 function formatIngredientListAmount(
   ingredient: Ingredient,
-  unitSystem: UnitSystem,
   catalog: CatalogIngredient[],
-  preferFluidVolume: boolean
+  unitSystem: UnitSystem,
+  preferFluidVolume: boolean,
+  preferSmallSpoons: boolean
 ) {
   const amount = formatIngredientAmount(
     ingredient.scaled_quantity ?? ingredient.quantity,
@@ -1021,6 +1040,7 @@ function formatIngredientListAmount(
     {
       densityKgM3: densityForName(ingredient.name, catalog),
       preferFluidVolume,
+      preferSmallSpoons,
       preferTbsp: prefersTablespoons(ingredient.name, catalog),
       unitSystem,
     }
@@ -1030,18 +1050,17 @@ function formatIngredientListAmount(
 
 function formatIngredientFromToken(
   token: ReturnType<typeof extractTokens>[number],
-  unitSystem: UnitSystem,
-  catalog: CatalogIngredient[],
-  preferFluidVolume: boolean
+  options: StepRenderOptions
 ) {
   if (!token.quantity) {
     return formatIngredientLabel(token.name, token.note)
   }
   const display = formatIngredientAmount(token.quantity, token.unit, {
-    densityKgM3: densityForName(token.name, catalog),
-    preferFluidVolume,
-    preferTbsp: prefersTablespoons(token.name, catalog),
-    unitSystem,
+    densityKgM3: densityForName(token.name, options.catalog),
+    preferFluidVolume: options.preferFluidVolume,
+    preferSmallSpoons: options.preferSmallSpoons,
+    preferTbsp: prefersTablespoons(token.name, options.catalog),
+    unitSystem: options.unitSystem,
   })
   const formatted = formatDisplayAmount(display)
   if (!formatted) {

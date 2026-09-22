@@ -150,6 +150,10 @@ def is_volume_unit(unit: str | None) -> bool:
     return normalize_unit(unit) in VOLUME_TO_ML
 
 
+def is_mass_unit_system(unit_system: str) -> bool:
+    return unit_system in {"metric", "us_weight"}
+
+
 def to_grams(
     quantity: float,
     unit: str | None,
@@ -167,6 +171,26 @@ def to_grams(
         ml = quantity * VOLUME_TO_ML[canonical]
         return ml * density_kg_m3 / 1000.0
     return None
+
+
+def to_ml(quantity: float, unit: str | None) -> float | None:
+    canonical = normalize_unit(unit)
+    if canonical is None or canonical not in VOLUME_TO_ML:
+        return None
+    return quantity * VOLUME_TO_ML[canonical]
+
+
+def density_from_mass_volume(
+    mass_quantity: float,
+    mass_unit: str | None,
+    volume_quantity: float,
+    volume_unit: str | None,
+) -> float | None:
+    grams = to_grams(mass_quantity, mass_unit)
+    ml = to_ml(volume_quantity, volume_unit)
+    if grams is None or ml is None or grams <= 0 or ml <= 0:
+        return None
+    return grams / ml * 1000.0
 
 
 def grams_to_ml(grams: float, density_kg_m3: float) -> float:
@@ -308,6 +332,7 @@ def format_amount(
     unit_system: str,
     density_kg_m3: float | None = None,
     prefer_fluid_volume: bool = False,
+    prefer_small_spoons: bool = False,
     prefer_tbsp: bool = False,
 ) -> DisplayAmount:
     if quantity is None:
@@ -316,9 +341,7 @@ def format_amount(
     canonical = normalize_unit(unit)
     authored = DisplayAmount(format_fraction(quantity), canonical or unit)
 
-    if canonical is None or (
-        canonical not in MASS_TO_GRAMS and canonical not in VOLUME_TO_ML
-    ):
+    if canonical is None or (canonical not in MASS_TO_GRAMS and canonical not in VOLUME_TO_ML):
         return authored
 
     grams = to_grams(quantity, canonical, density_kg_m3=density_kg_m3)
@@ -331,6 +354,11 @@ def format_amount(
         if unit_system == "metric":
             return format_metric_volume(grams, density_kg_m3)
         return format_us_volume(grams, density_kg_m3, prefer_fl_oz=True)
+    if prefer_small_spoons and has_density and is_mass_unit_system(unit_system):
+        assert density_kg_m3 is not None
+        ml = grams_to_ml(grams, density_kg_m3)
+        if ml <= ML_PER_TBSP * 1.01:
+            return format_us_volume(grams, density_kg_m3, prefer_tbsp=True)
     if unit_system == "us_weight":
         return format_us_mass(grams)
     if unit_system == "us":
