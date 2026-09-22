@@ -29,6 +29,10 @@ export function DensityCalculator({ onDensityChange }: DensityCalculatorProps) {
     volumeUnit: 'cup',
   }))
 
+  const computedDensity = densityFromFields(measurement)
+  const roundedDensity =
+    computedDensity != null && Math.round(computedDensity) > 0 ? Math.round(computedDensity) : null
+
   function handleVolumeQuantityChange(event: ChangeEvent<HTMLInputElement>) {
     updateMeasurement({ volumeQuantity: event.target.value })
   }
@@ -66,6 +70,7 @@ export function DensityCalculator({ onDensityChange }: DensityCalculatorProps) {
       </p>
       <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
         Weigh a known volume to fill density automatically.
+        {roundedDensity != null ? ` Currently ${roundedDensity} kg/m³.` : ''}
       </p>
       <div className="mt-3 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2">
         <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">Volume</span>
@@ -74,7 +79,7 @@ export function DensityCalculator({ onDensityChange }: DensityCalculatorProps) {
           className={inputClassName}
           inputMode="decimal"
           onChange={handleVolumeQuantityChange}
-          placeholder="2"
+          placeholder="e.g. 2"
           value={measurement.volumeQuantity}
         />
         <select
@@ -95,7 +100,7 @@ export function DensityCalculator({ onDensityChange }: DensityCalculatorProps) {
           className={inputClassName}
           inputMode="decimal"
           onChange={handleMassQuantityChange}
-          placeholder="180"
+          placeholder="e.g. 180"
           value={measurement.massQuantity}
         />
         <select
