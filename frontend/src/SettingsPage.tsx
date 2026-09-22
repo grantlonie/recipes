@@ -7,9 +7,12 @@ import { ThemePicker } from './components/ThemePicker'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
 import { buildLoginUrl } from './shareImport'
 import { cardClassName } from './themeClasses'
+import { isMassUnitSystem } from './units'
+import { useUnitSystem } from './UnitSystemContext'
 
 export function SettingsPage() {
   const { auth, logoutPending, signOut } = useAuth()
+  const { preferSmallSpoons, setPreferSmallSpoons, unitSystem } = useUnitSystem()
   const navigate = useNavigate()
 
   function requireEditor(run: () => void) {
@@ -53,6 +56,24 @@ export function SettingsPage() {
           <div className="mt-3">
             <UnitSystemToggle fullWidth />
           </div>
+          {isMassUnitSystem(unitSystem) ? (
+            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-200 bg-white px-4 py-3 dark:border-stone-600 dark:bg-stone-900">
+              <input
+                checked={preferSmallSpoons}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-orange-600"
+                onChange={event => setPreferSmallSpoons(event.target.checked)}
+                type="checkbox"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  Show 1 Tbsp and under as tbsp/tsp
+                </span>
+                <span className="mt-0.5 block text-xs text-stone-600 dark:text-stone-400">
+                  Small amounts stay as measuring spoons instead of grams or ounces.
+                </span>
+              </span>
+            </label>
+          ) : null}
         </div>
 
         <div>

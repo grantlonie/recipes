@@ -107,6 +107,7 @@ def test_format_metric_and_us():
     assert prefers_tablespoons("butter")
     assert not prefers_tablespoons("peanut butter")
 
+
 def test_format_fraction_single_unit():
     assert format_fraction(2.25) == "2 ¼"
     assert format_fraction(0.5) == "½"
@@ -146,3 +147,68 @@ def test_format_amount_from_authored_volume():
     # Without density, keep authored volume
     authored = format_amount(2, "Tbsp", unit_system="metric")
     assert authored.format() == "2 Tbsp"
+
+
+def test_prefer_small_spoons_uses_tbsp_and_tsp():
+    tbsp_water = format_amount(
+        1,
+        "Tbsp",
+        unit_system="metric",
+        density_kg_m3=1000,
+        prefer_small_spoons=True,
+    )
+    assert tbsp_water.unit == "Tbsp"
+    assert tbsp_water.quantity == "1"
+
+    tsp_salt = format_amount(
+        1,
+        "tsp",
+        unit_system="us_weight",
+        density_kg_m3=1200,
+        prefer_small_spoons=True,
+    )
+    assert tsp_salt.unit == "tsp"
+
+    cup_water = format_amount(
+        1,
+        "cup",
+        unit_system="metric",
+        density_kg_m3=1000,
+        prefer_small_spoons=True,
+    )
+    assert cup_water.unit == "g"
+
+    cups_mode = format_amount(
+        1,
+        "Tbsp",
+        unit_system="us",
+        density_kg_m3=1000,
+        prefer_small_spoons=True,
+    )
+    assert cups_mode.unit == "Tbsp"
+
+    cocktail = format_amount(
+        1,
+        "tsp",
+        unit_system="metric",
+        density_kg_m3=1330,
+        prefer_fluid_volume=True,
+        prefer_small_spoons=True,
+    )
+    assert cocktail.unit == "ml"
+
+
+def test_density_from_mass_volume():
+    from app.units import density_from_mass_volume, to_ml
+
+    assert to_ml(1, "cup") == 236.5882365
+    water = density_from_mass_volume(236.5882365, "g", 1, "cup")
+    assert water is not None
+    assert abs(water - 1000) < 0.01
+
+    oats = density_from_mass_volume(180, "g", 2, "cup")
+    assert oats is not None
+    assert abs(oats - 380.4) < 1
+
+    assert density_from_mass_volume(0, "g", 1, "cup") is None
+    assert density_from_mass_volume(100, "g", 1, "lb") is None

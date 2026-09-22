@@ -15,6 +15,7 @@ import {
 import { useAuth } from './AuthContext'
 import { Button } from './components/Button'
 import { ConfirmDialog } from './components/ConfirmDialog'
+import { DensityCalculator } from './components/DensityCalculator'
 import { DensitySearchLink } from './components/DensitySearchLink'
 import { Dialog } from './components/Dialog'
 import { IconButton } from './components/IconButton'
@@ -368,26 +369,32 @@ export function IngredientsPage() {
               value={name}
             />
           </label>
-          <label className="block">
-            <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-              Density (kg/m³)
-            </span>
-            <div className="mt-1 flex items-center gap-1">
-              <input
-                className={`${inputClassName} min-w-0 flex-1`}
-                inputMode="decimal"
-                onChange={event =>
-                  setDraft(current => ({ ...current, density: event.target.value }))
-                }
-                placeholder="Leave blank to show weight (lb/oz)"
-                value={density}
-              />
-              <DensitySearchLink ingredientName={name} />
-            </div>
-            <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
-              Leave blank to show weight (lb/oz) in US mode. Water is 1000.
-            </span>
-          </label>
+          <div>
+            <label className="block">
+              <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+                Density (kg/m³)
+              </span>
+              <div className="mt-1 flex items-center gap-1">
+                <input
+                  className={`${inputClassName} min-w-0 flex-1`}
+                  inputMode="decimal"
+                  onChange={event =>
+                    setDraft(current => ({ ...current, density: event.target.value }))
+                  }
+                  placeholder="Leave blank to show weight (lb/oz)"
+                  value={density}
+                />
+                <DensitySearchLink ingredientName={name} />
+              </div>
+              <span className="mt-1 block text-xs text-stone-500 dark:text-stone-400">
+                Leave blank to show weight (lb/oz) in US mode. Water is 1000.
+              </span>
+            </label>
+            <DensityCalculator
+              key={editing?.name ?? 'create'}
+              onDensityChange={value => setDraft(current => ({ ...current, density: value }))}
+            />
+          </div>
           <label className="block">
             <span className="text-sm font-semibold text-stone-700 dark:text-stone-200">
               Aliases
