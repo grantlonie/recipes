@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 from app.config import Settings
 from app.image_queue import (
+    HostState,
     ImageJob,
     ImageQueueState,
     apply_job_result,
@@ -14,6 +16,9 @@ from app.image_queue import (
     enqueue_missing_recipes,
     load_queue,
     mark_recipe_image_pending,
+    next_utc_midnight,
+    save_queue,
+    utc_day,
 )
 from app.page_fetch import ImageScrapeResult
 from app.sources import RECIPE_FILENAME
@@ -41,11 +46,9 @@ def test_claim_jobs_selects_distinct_hosts_only(tmp_path: Path):
     assert [job.slug for job in claimed] == ["a", "c", "d"]
 
 
-def test_claim_jobs_respects_host_cooldown(tmp_path: Path):
-    from app.image_queue import HostState
-
+def test_claim_jobs_respects_host_gap(tmp_path: Path):
     state = ImageQueueState(
-        hosts={"food52.com": HostState(next_ok_at=100, cooldown_seconds=60)},
+        hosts={"food52.com": HostState(next_ok_at=100)},
         jobs=[
             ImageJob(slug="a", source_url="https://food52.com/a", next_attempt_at=0),
             ImageJob(slug="b", source_url="https://bbc.com/b", next_attempt_at=0),
@@ -55,18 +58,49 @@ def test_claim_jobs_respects_host_cooldown(tmp_path: Path):
     assert [job.slug for job in claimed] == ["b"]
 
 
-def test_claim_jobs_skips_blocked_hosts(tmp_path: Path):
-    from app.image_queue import HostState
-
+def test_claim_jobs_skips_blocked_hosts_for_today(tmp_path: Path):
+    now = datetime(2026, 10, 21, 15, 0, tzinfo=UTC).timestamp()
+    day = utc_day(now)
     state = ImageQueueState(
-        hosts={"food52.com": HostState(blocked=True)},
+        hosts={"food52.com": HostState(blocked_day=day)},
         jobs=[
             ImageJob(slug="a", source_url="https://food52.com/a", next_attempt_at=0),
             ImageJob(slug="b", source_url="https://bbc.com/b", next_attempt_at=0),
         ],
     )
-    claimed = claim_jobs(state, concurrency=6, now=0)
+    claimed = claim_jobs(state, concurrency=6, now=now)
     assert [job.slug for job in claimed] == ["b"]
+
+
+def test_claim_jobs_skips_hosts_at_daily_limit(tmp_path: Path):
+    now = datetime(2026, 10, 21, 15, 0, tzinfo=UTC).timestamp()
+    day = utc_day(now)
+    state = ImageQueueState(
+        hosts={"food52.com": HostState(day=day, fetches_today=50)},
+        jobs=[
+            ImageJob(slug="a", source_url="https://food52.com/a", next_attempt_at=0),
+            ImageJob(slug="b", source_url="https://bbc.com/b", next_attempt_at=0),
+        ],
+    )
+    claimed = claim_jobs(state, concurrency=6, daily_limit=50, now=now)
+    assert [job.slug for job in claimed] == ["b"]
+
+
+def test_claim_jobs_allows_host_again_next_day(tmp_path: Path):
+    blocked_day = "2026-10-20"
+    now = datetime(2026, 10, 21, 0, 1, tzinfo=UTC).timestamp()
+    state = ImageQueueState(
+        hosts={
+            "food52.com": HostState(
+                blocked_day=blocked_day,
+                day=blocked_day,
+                fetches_today=50,
+            )
+        },
+        jobs=[ImageJob(slug="a", source_url="https://food52.com/a", next_attempt_at=0)],
+    )
+    claimed = claim_jobs(state, concurrency=6, daily_limit=50, now=now)
+    assert [job.slug for job in claimed] == ["a"]
 
 
 def test_enqueue_image_job_dedupes_by_slug(tmp_path: Path):
@@ -79,13 +113,12 @@ def test_enqueue_image_job_dedupes_by_slug(tmp_path: Path):
     assert state.jobs[0].source_url == "https://example.com/b"
 
 
-def test_enqueue_image_job_skips_blocked_host(tmp_path: Path):
-    from app.image_queue import HostState, save_queue
-
+def test_enqueue_image_job_still_queues_when_host_blocked_today(tmp_path: Path):
     path = tmp_path / "image_queue.json"
-    save_queue(path, ImageQueueState(hosts={"food52.com": HostState(blocked=True)}))
-    assert not enqueue_image_job(path, slug="chili", source_url="https://food52.com/chili")
-    assert load_queue(path).jobs == []
+    day = utc_day(datetime(2026, 10, 21, 12, 0, tzinfo=UTC).timestamp())
+    save_queue(path, ImageQueueState(hosts={"food52.com": HostState(blocked_day=day)}))
+    assert enqueue_image_job(path, slug="chili", source_url="https://food52.com/chili")
+    assert len(load_queue(path).jobs) == 1
 
 
 def test_apply_job_result_success_writes_image(tmp_path: Path):
@@ -112,9 +145,10 @@ def test_apply_job_result_success_writes_image(tmp_path: Path):
     assert "image_pending" not in content
     assert state.jobs == []
     assert state.hosts["example.com"].next_ok_at == 1030
+    assert state.hosts["example.com"].fetches_today == 1
 
 
-def test_apply_job_result_blocked_marks_host_and_abandons_jobs(tmp_path: Path):
+def test_apply_job_result_blocked_defers_host_jobs_until_tomorrow(tmp_path: Path):
     settings = _settings(tmp_path, image_queue_max_attempts=8)
     for slug in ("chili", "soup"):
         recipe_dir = settings.recipe_root / slug
@@ -124,6 +158,7 @@ def test_apply_job_result_blocked_marks_host_and_abandons_jobs(tmp_path: Path):
             "image_source: https://food52.com/x\n---\n\nCook.\n",
             encoding="utf-8",
         )
+    now = datetime(2026, 10, 21, 15, 30, tzinfo=UTC).timestamp()
     state = ImageQueueState(
         jobs=[
             ImageJob(slug="chili", source_url="https://food52.com/chili"),
@@ -136,15 +171,46 @@ def test_apply_job_result_blocked_marks_host_and_abandons_jobs(tmp_path: Path):
         result=ImageScrapeResult(blocked=True, status_code=429, error="status=429"),
         settings=settings,
         state=state,
-        now=1000,
+        now=now,
     )
-    assert [job.slug for job in state.jobs] == ["other"]
-    assert state.hosts["food52.com"].blocked is True
+    until = next_utc_midnight(now)
+    assert {job.slug for job in state.jobs} == {"chili", "soup", "other"}
+    food52_jobs = [job for job in state.jobs if "food52" in job.source_url]
+    assert all(job.next_attempt_at == until for job in food52_jobs)
+    assert state.hosts["food52.com"].blocked_day == "2026-10-21"
     chili = (settings.recipe_root / "chili" / RECIPE_FILENAME).read_text(encoding="utf-8")
     soup = (settings.recipe_root / "soup" / RECIPE_FILENAME).read_text(encoding="utf-8")
-    assert "image_pending: false" in chili
-    assert "image_pending: false" in soup
-    assert "Image scrape blocked for food52.com" in chili
+    assert "image_pending: true" in chili
+    assert "image_pending: true" in soup
+
+
+def test_apply_job_result_daily_limit_defers_remaining(tmp_path: Path):
+    settings = _settings(tmp_path, image_queue_host_daily_limit=1, image_queue_host_gap_seconds=1)
+    for slug in ("a", "b"):
+        recipe_dir = settings.recipe_root / slug
+        recipe_dir.mkdir(parents=True)
+        (recipe_dir / RECIPE_FILENAME).write_text(
+            f"---\ntitle: {slug}\nimage_pending: true\n"
+            f"image_source: https://food52.com/{slug}\n---\n\nCook.\n",
+            encoding="utf-8",
+        )
+    now = datetime(2026, 10, 21, 12, 0, tzinfo=UTC).timestamp()
+    state = ImageQueueState(
+        jobs=[
+            ImageJob(slug="a", source_url="https://food52.com/a"),
+            ImageJob(slug="b", source_url="https://food52.com/b"),
+        ]
+    )
+    apply_job_result(
+        state.jobs[0],
+        result=ImageScrapeResult(image_url="https://cdn.example.com/a.jpg"),
+        settings=settings,
+        state=state,
+        now=now,
+    )
+    assert [job.slug for job in state.jobs] == ["b"]
+    assert state.jobs[0].next_attempt_at == next_utc_midnight(now)
+    assert state.hosts["food52.com"].fetches_today == 1
 
 
 def test_enqueue_missing_recipes_marks_pending(tmp_path: Path):

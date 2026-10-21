@@ -117,8 +117,9 @@ Cooklang system prompt, and returns a preview for mapping ingredients before sav
 Remote recipe images are not scraped on the request path (except when the import already has HTML
 with `og:image`, or a URL import that already fetched the page). Missing images are marked
 `image_pending` and filled by the `image-worker` Compose service, which scrapes politely across
-distinct hosts. When a host blocks scraping (and Iframely cannot recover an image), that host is
-marked blocked in `image_queue.json` and remaining jobs for it are abandoned — no cooldown retries.
+distinct hosts. Each host is capped at 50 fetch attempts per UTC day. When a host blocks scraping
+(and Iframely cannot recover an image), remaining jobs for that host are deferred until the next
+UTC day — they stay queued and retry once daily.
 Seed existing gaps with:
 
 ```bash
@@ -147,7 +148,7 @@ env-configurable via `IMPORT_MAX_*` (see `.env.example`).
 | `PAGE_FETCH_*` | Direct page-fetch retries, concurrency, and spacing |
 | `IMAGE_QUEUE_CONCURRENCY` | Max parallel image scrapes (distinct hosts only) |
 | `IMAGE_QUEUE_HOST_GAP_SECONDS` | Minimum gap between requests to the same host |
-| `IMAGE_QUEUE_HOST_COOLDOWN_SECONDS` | Unused for blocks (hosts are marked blocked once); kept for compatibility |
+| `IMAGE_QUEUE_HOST_DAILY_LIMIT` | Max fetch attempts per host per UTC day (default 50) |
 | `IMAGE_QUEUE_MAX_ATTEMPTS` | Give up and clear `image_pending` after N non-block failures |
 
 ## Docker

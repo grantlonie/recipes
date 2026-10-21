@@ -31,9 +31,18 @@ async def run_batch(settings: Settings) -> float:
         if not state.jobs:
             return 5.0
         now = time.time()
-        claimed = claim_jobs(state, concurrency=settings.image_queue_concurrency, now=now)
+        claimed = claim_jobs(
+            state,
+            concurrency=settings.image_queue_concurrency,
+            daily_limit=settings.image_queue_host_daily_limit,
+            now=now,
+        )
         if not claimed:
-            return seconds_until_next_wake(state, now=now)
+            return seconds_until_next_wake(
+                state,
+                daily_limit=settings.image_queue_host_daily_limit,
+                now=now,
+            )
 
     logger.info(
         "processing %s job(s): %s",
@@ -67,10 +76,10 @@ def registrable(url: str) -> str:
 
 async def run_forever(settings: Settings) -> None:
     logger.info(
-        "starting worker concurrency=%s host_gap=%ss cooldown=%ss queue=%s",
+        "starting worker concurrency=%s host_gap=%ss daily_limit=%s queue=%s",
         settings.image_queue_concurrency,
         settings.image_queue_host_gap_seconds,
-        settings.image_queue_host_cooldown_seconds,
+        settings.image_queue_host_daily_limit,
         settings.image_queue_path,
     )
     while True:

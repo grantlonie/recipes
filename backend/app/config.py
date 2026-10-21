@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     import_model_vision: str = "accounts/fireworks/models/gpt-oss-120b"
     iframely_api_key: str = ""
     image_queue_concurrency: int = 6
-    image_queue_host_cooldown_seconds: int = 1800
+    image_queue_host_daily_limit: int = 50
     image_queue_host_gap_seconds: int = 20
     image_queue_max_attempts: int = 8
     page_fetch_concurrency: int = 1

@@ -6,7 +6,7 @@ import logging
 import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -22,8 +22,11 @@ QUEUE_VERSION = 1
 
 @dataclass
 class HostState:
-    blocked: bool = False
-    cooldown_seconds: float = 0
+    """Per-host pacing and daily caps (UTC calendar day)."""
+
+    blocked_day: str = ""
+    day: str = ""
+    fetches_today: int = 0
     next_ok_at: float = 0
 
 
@@ -54,6 +57,45 @@ def now_ts() -> float:
     return time.time()
 
 
+def utc_day(now: float) -> str:
+    return datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%d")
+
+
+def next_utc_midnight(now: float) -> float:
+    current = datetime.fromtimestamp(now, UTC)
+    midnight = datetime(current.year, current.month, current.day, tzinfo=UTC) + timedelta(days=1)
+    return midnight.timestamp()
+
+
+def host_blocked_today(host_state: HostState | None, *, day: str) -> bool:
+    return bool(host_state and host_state.blocked_day == day)
+
+
+def host_at_daily_limit(
+    host_state: HostState | None, *, day: str, daily_limit: int
+) -> bool:
+    if not host_state or host_state.day != day:
+        return False
+    return host_state.fetches_today >= max(1, daily_limit)
+
+
+def host_ready_at(
+    host_state: HostState | None,
+    *,
+    day: str,
+    daily_limit: int,
+    now: float,
+) -> float:
+    if host_state is None:
+        return 0.0
+    ready = float(host_state.next_ok_at or 0)
+    if host_blocked_today(host_state, day=day) or host_at_daily_limit(
+        host_state, day=day, daily_limit=daily_limit
+    ):
+        ready = max(ready, next_utc_midnight(now))
+    return ready
+
+
 def load_queue(path: Path) -> ImageQueueState:
     if not path.exists():
         return ImageQueueState()
@@ -64,13 +106,19 @@ def load_queue(path: Path) -> ImageQueueState:
     if not isinstance(raw, dict):
         return ImageQueueState()
 
+    today = utc_day(now_ts())
     hosts: dict[str, HostState] = {}
     for host, value in (raw.get("hosts") or {}).items():
         if not isinstance(value, dict):
             continue
+        blocked_day = str(value.get("blocked_day") or "").strip()
+        # Migrate legacy permanent blocked flag into a same-day block.
+        if not blocked_day and value.get("blocked"):
+            blocked_day = today
         hosts[str(host)] = HostState(
-            blocked=bool(value.get("blocked")),
-            cooldown_seconds=float(value.get("cooldown_seconds") or 0),
+            blocked_day=blocked_day,
+            day=str(value.get("day") or "").strip(),
+            fetches_today=int(value.get("fetches_today") or 0),
             next_ok_at=float(value.get("next_ok_at") or 0),
         )
 
@@ -101,8 +149,9 @@ def save_queue(path: Path, state: ImageQueueState) -> None:
     payload = {
         "hosts": {
             host: {
-                "blocked": host_state.blocked,
-                "cooldown_seconds": host_state.cooldown_seconds,
+                "blocked_day": host_state.blocked_day,
+                "day": host_state.day,
+                "fetches_today": host_state.fetches_today,
                 "next_ok_at": host_state.next_ok_at,
             }
             for host, host_state in sorted(state.hosts.items())
@@ -140,13 +189,9 @@ def enqueue_image_job(
     if not slug.strip() or not cleaned.startswith(("http://", "https://")):
         return False
 
-    host = registrable_host(cleaned)
     current = now if now is not None else now_ts()
     with queue_lock(path):
         state = load_queue(path)
-        host_state = state.hosts.get(host) if host else None
-        if host_state and host_state.blocked:
-            return False
         for job in state.jobs:
             if job.slug == slug:
                 if job.source_url == cleaned:
@@ -167,10 +212,12 @@ def claim_jobs(
     state: ImageQueueState,
     *,
     concurrency: int,
+    daily_limit: int = 50,
     now: float | None = None,
 ) -> list[ImageJob]:
     """Pick up to N due jobs on distinct eligible hosts."""
     current = now if now is not None else now_ts()
+    day = utc_day(current)
     limit = max(1, concurrency)
     claimed: list[ImageJob] = []
     claimed_hosts: set[str] = set()
@@ -184,7 +231,9 @@ def claim_jobs(
         if not host or host in claimed_hosts:
             continue
         host_state = state.hosts.get(host)
-        if host_state and host_state.blocked:
+        if host_blocked_today(host_state, day=day):
+            continue
+        if host_at_daily_limit(host_state, day=day, daily_limit=daily_limit):
             continue
         if host_state and host_state.next_ok_at > current:
             continue
@@ -193,16 +242,20 @@ def claim_jobs(
     return claimed
 
 
-def seconds_until_next_wake(state: ImageQueueState, *, now: float | None = None) -> float:
+def seconds_until_next_wake(
+    state: ImageQueueState,
+    *,
+    daily_limit: int = 50,
+    now: float | None = None,
+) -> float:
     current = now if now is not None else now_ts()
+    day = utc_day(current)
     wakes: list[float] = []
     for job in state.jobs:
         host = registrable_host(job.source_url)
         host_state = state.hosts.get(host)
-        if host_state and host_state.blocked:
-            continue
-        host_ready = host_state.next_ok_at if host_state else 0.0
-        wakes.append(max(job.next_attempt_at, host_ready))
+        ready = host_ready_at(host_state, day=day, daily_limit=daily_limit, now=current)
+        wakes.append(max(job.next_attempt_at, ready))
     if not wakes:
         return 5.0
     return max(0.5, min(wakes) - current)
@@ -244,19 +297,6 @@ def maybe_enqueue_from_recipe(
     source_url = resolve_image_source_url(recipe_dir, metadata)
     if not source_url:
         return False
-
-    host = registrable_host(source_url)
-    with queue_lock(settings.image_queue_path):
-        state = load_queue(settings.image_queue_path)
-        host_state = state.hosts.get(host) if host else None
-        if host_state and host_state.blocked:
-            clear_image_pending(
-                settings.recipe_root,
-                slug=slug,
-                note=f"Image scrape skipped: host {host} is blocked",
-            )
-            return False
-
     return enqueue_image_job(settings.image_queue_path, slug=slug, source_url=source_url)
 
 
@@ -322,40 +362,39 @@ def clear_image_pending(
     path.write_text(content, encoding="utf-8")
 
 
-def record_host_success(
-    state: ImageQueueState, host: str, *, settings: Settings, now: float
-) -> None:
+def record_host_attempt(
+    state: ImageQueueState,
+    host: str,
+    *,
+    settings: Settings,
+    now: float,
+    blocked: bool = False,
+) -> HostState:
+    """Count one fetch toward the host's UTC daily quota and apply spacing."""
+    day = utc_day(now)
     previous = state.hosts.get(host)
-    state.hosts[host] = HostState(
-        blocked=bool(previous and previous.blocked),
-        cooldown_seconds=0,
+    fetches = 0 if not previous or previous.day != day else previous.fetches_today
+    blocked_day = day if blocked else (previous.blocked_day if previous and previous.blocked_day == day else "")
+    host_state = HostState(
+        blocked_day=blocked_day,
+        day=day,
+        fetches_today=fetches + 1,
         next_ok_at=now + max(1, settings.image_queue_host_gap_seconds),
     )
+    state.hosts[host] = host_state
+    return host_state
 
 
-def record_host_blocked(state: ImageQueueState, host: str, *, now: float) -> None:
-    """Permanently mark a host blocked so we do not retry or spend fallback credits."""
-    state.hosts[host] = HostState(blocked=True, cooldown_seconds=0, next_ok_at=now)
-
-
-def abandon_host_jobs(
-    state: ImageQueueState,
-    *,
-    host: str,
-    settings: Settings,
-    note: str,
-) -> int:
-    """Drop all jobs for a host and clear image_pending on each recipe."""
-    kept: list[ImageJob] = []
-    abandoned = 0
+def defer_host_jobs(state: ImageQueueState, *, host: str, until: float) -> int:
+    """Push all jobs for a host out until `until` (keeps them queued)."""
+    deferred = 0
     for job in state.jobs:
         if registrable_host(job.source_url) != host:
-            kept.append(job)
             continue
-        clear_image_pending(settings.recipe_root, slug=job.slug, note=note)
-        abandoned += 1
-    state.jobs = kept
-    return abandoned
+        if job.next_attempt_at < until:
+            job.next_attempt_at = until
+            deferred += 1
+    return deferred
 
 
 def apply_job_result(
@@ -371,11 +410,20 @@ def apply_job_result(
     remaining = [entry for entry in state.jobs if entry.slug != job.slug]
     # Prefer live queue entry when present (attempts may have advanced).
     live = next((entry for entry in state.jobs if entry.slug == job.slug), job)
+    daily_limit = max(1, settings.image_queue_host_daily_limit)
 
     if result.image_url:
         apply_image_to_recipe(settings.recipe_root, slug=live.slug, image_url=result.image_url)
-        record_host_success(state, host, settings=settings, now=now)
+        host_state = record_host_attempt(state, host, settings=settings, now=now)
         state.jobs = remaining
+        if host_state.fetches_today >= daily_limit:
+            deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
+            logger.info(
+                "image queue: daily limit reached for %s (%s); deferred %s job(s)",
+                host,
+                daily_limit,
+                deferred,
+            )
         logger.info("image queue: fetched %s for %s", result.image_url, live.slug)
         return
 
@@ -383,18 +431,20 @@ def apply_job_result(
     live.last_error = result.error or f"status={result.status_code}"
 
     if result.blocked:
-        note = f"Image scrape blocked for {host}: {live.last_error}"
-        record_host_blocked(state, host, now=now)
-        abandoned = abandon_host_jobs(state, host=host, settings=settings, note=note)
+        record_host_attempt(state, host, settings=settings, now=now, blocked=True)
+        until = next_utc_midnight(now)
+        live.next_attempt_at = until
+        state.jobs = remaining + [live]
+        deferred = defer_host_jobs(state, host=host, until=until)
         logger.warning(
-            "image queue: blocked host %s after %s (%s job(s) abandoned)",
+            "image queue: blocked host %s for today after %s; deferred %s job(s) until tomorrow",
             host,
             live.slug,
-            abandoned,
+            deferred,
         )
         return
 
-    record_host_success(state, host, settings=settings, now=now)
+    host_state = record_host_attempt(state, host, settings=settings, now=now)
     live.next_attempt_at = now + max(1, settings.image_queue_host_gap_seconds)
 
     if live.attempts >= settings.image_queue_max_attempts:
@@ -405,10 +455,26 @@ def apply_job_result(
         )
         state.jobs = remaining
         logger.warning("image queue: giving up on %s (%s)", live.slug, live.last_error)
+        if host_state.fetches_today >= daily_limit:
+            deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
+            logger.info(
+                "image queue: daily limit reached for %s (%s); deferred %s job(s)",
+                host,
+                daily_limit,
+                deferred,
+            )
         return
 
     remaining.append(live)
     state.jobs = remaining
+    if host_state.fetches_today >= daily_limit:
+        deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
+        logger.info(
+            "image queue: daily limit reached for %s (%s); deferred %s job(s)",
+            host,
+            daily_limit,
+            deferred,
+        )
 
 
 def process_claimed_job(
@@ -431,7 +497,7 @@ def enqueue_missing_recipes(*, settings: Settings, dry_run: bool = False) -> tup
     for path in sorted(settings.recipe_root.glob(f"*/{RECIPE_FILENAME}")):
         slug = path.parent.name
         content = path.read_text(encoding="utf-8")
-        metadata, body = cooklang.parse_document(content)
+        metadata, _body = cooklang.parse_document(content)
         if cooklang.metadata_image_url(metadata) or cooklang.metadata_image_file(metadata):
             skipped += 1
             continue
@@ -439,13 +505,6 @@ def enqueue_missing_recipes(*, settings: Settings, dry_run: bool = False) -> tup
         if not source_url:
             skipped += 1
             continue
-        host = registrable_host(source_url)
-        with queue_lock(settings.image_queue_path):
-            queue_state = load_queue(settings.image_queue_path)
-            host_state = queue_state.hosts.get(host) if host else None
-            if host_state and host_state.blocked:
-                skipped += 1
-                continue
         next_content = mark_recipe_image_pending(content, source_url=source_url)
         if not dry_run:
             if next_content != content:
