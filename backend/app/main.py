@@ -21,6 +21,7 @@ from app.config import Settings, get_settings
 from app.density_estimate import estimate_ingredient_densities
 from app.extract import ExtractError, extract_text_from_path
 from app.fireworks_llm import LLMError
+from app.hydration import HydrationError, apply_hydration, summarize_hydration_from_content
 from app.importer import (
     ImportError,
     import_from_slug_file,
@@ -40,6 +41,7 @@ from app.models import (
     CatalogIngredient,
     DensityEstimateRequest,
     DensityEstimateResponse,
+    HydrationUpdate,
     ImportFileRequest,
     ImportPreview,
     ImportRequest,
@@ -50,6 +52,7 @@ from app.models import (
     LoginRequest,
     MetadataUpdate,
     RecipeDetail,
+    RecipeHydration,
     RecipeSummary,
     RecipeUpdate,
     RecipeWrite,
@@ -96,6 +99,32 @@ def get_settings_dep() -> Settings:
     return get_settings()
 
 
+def _density_lookup(ingredients: IngredientRepository):
+    def density_for_name(name: str) -> float | None:
+        item = ingredients.find_by_name(name)
+        return item.density_kg_m3 if item is not None else None
+
+    return density_for_name
+
+
+def with_hydration(recipe: RecipeDetail, ingredients: IngredientRepository) -> RecipeDetail:
+    summary = summarize_hydration_from_content(recipe.content, _density_lookup(ingredients))
+    if summary is None:
+        return recipe.model_copy(update={"hydration": None})
+    return recipe.model_copy(
+        update={
+            "hydration": RecipeHydration(
+                adjustable=summary.adjustable,
+                flour_g=summary.flour_g,
+                issues=summary.issues,
+                liquid_g=summary.liquid_g,
+                percent=summary.percent,
+                starter_g=summary.starter_g,
+            )
+        }
+    )
+
+
 settings = get_settings()
 assets_path = settings.frontend_dist / "assets"
 if assets_path.exists():
@@ -132,8 +161,11 @@ def sync_manifest(repository: RecipeRepository = Depends(get_repository)) -> Syn
 
 
 @app.get("/api/sync/recipes")
-def sync_recipes(repository: RecipeRepository = Depends(get_repository)) -> list[RecipeDetail]:
-    return repository.list_all_details()
+def sync_recipes(
+    repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> list[RecipeDetail]:
+    return [with_hydration(recipe, ingredients) for recipe in repository.list_all_details()]
 
 
 @app.get("/api/recipes")
@@ -367,12 +399,16 @@ def get_recipe_asset(
 def create_recipe(
     payload: RecipeWrite,
     repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
 ) -> RecipeDetail:
     try:
-        return repository.write_recipe(
-            payload.slug,
-            payload.content,
-            previous_slug=payload.previous_slug,
+        return with_hydration(
+            repository.write_recipe(
+                payload.slug,
+                payload.content,
+                previous_slug=payload.previous_slug,
+            ),
+            ingredients,
         )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
@@ -383,17 +419,23 @@ def get_scaled_recipe(
     slug: str,
     servings: float,
     repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
 ) -> RecipeDetail:
     try:
-        return repository.get_recipe(slug, scaled_servings=servings)
+        # Hydration is always from the base recipe (independent of scale).
+        return with_hydration(repository.get_recipe(slug, scaled_servings=servings), ingredients)
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
 
 
 @app.get("/api/recipes/{slug:path}")
-def get_recipe(slug: str, repository: RecipeRepository = Depends(get_repository)) -> RecipeDetail:
+def get_recipe(
+    slug: str,
+    repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> RecipeDetail:
     try:
-        return repository.get_recipe(slug)
+        return with_hydration(repository.get_recipe(slug), ingredients)
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
 
@@ -403,15 +445,44 @@ def update_recipe(
     slug: str,
     payload: RecipeUpdate,
     repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
 ) -> RecipeDetail:
     try:
         target_slug = payload.slug or slug
         previous_slug = slug if target_slug != slug else None
-        return repository.write_recipe(
-            target_slug,
-            payload.content,
-            previous_slug=previous_slug,
+        return with_hydration(
+            repository.write_recipe(
+                target_slug,
+                payload.content,
+                previous_slug=previous_slug,
+            ),
+            ingredients,
         )
+    except StorageError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@app.post(
+    "/api/recipes/{slug:path}/hydration",
+    dependencies=[Depends(auth.require_editor)],
+)
+def update_recipe_hydration(
+    slug: str,
+    payload: HydrationUpdate,
+    repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
+) -> RecipeDetail:
+    try:
+        recipe = repository.get_recipe(slug)
+    except StorageError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    try:
+        new_content, _summary = apply_hydration(
+            recipe.content, payload.percent, _density_lookup(ingredients)
+        )
+        return with_hydration(repository.write_recipe(slug, new_content), ingredients)
+    except HydrationError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
 
@@ -434,6 +505,7 @@ def update_metadata(
     slug: str,
     payload: MetadataUpdate,
     repository: RecipeRepository = Depends(get_repository),
+    ingredients: IngredientRepository = Depends(get_ingredients),
 ) -> RecipeDetail:
     try:
         scale_options = (
@@ -441,15 +513,18 @@ def update_metadata(
             if payload.scale_options is not None
             else None
         )
-        return repository.update_metadata(
-            slug,
-            bookmarked=payload.bookmarked,
-            image=payload.image,
-            servings=payload.servings,
-            tags=payload.tags,
-            review=payload.review,
-            scale_default=payload.scale_default,
-            scale_options=scale_options,
+        return with_hydration(
+            repository.update_metadata(
+                slug,
+                bookmarked=payload.bookmarked,
+                image=payload.image,
+                servings=payload.servings,
+                tags=payload.tags,
+                review=payload.review,
+                scale_default=payload.scale_default,
+                scale_options=scale_options,
+            ),
+            ingredients,
         )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

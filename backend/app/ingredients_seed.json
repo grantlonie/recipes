@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "ingredients": [
     {
       "name": "00 flour",
@@ -2367,6 +2367,11 @@
       "name": "sourdough bread",
       "density_kg_m3": null,
       "aliases": []
+    },
+    {
+      "name": "sourdough starter",
+      "density_kg_m3": 1000.0,
+      "aliases": ["starter", "levain", "preferment"]
     },
     {
       "name": "soy flour",

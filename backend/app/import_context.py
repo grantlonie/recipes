@@ -32,9 +32,14 @@ Output rules:
   (example: 2 ounces vodka → @vodka{{2%fl oz}}).
   Keep weight %oz only for true mass (meat, cheese, chocolate, canned goods by weight).
 - Tag drink recipes in front matter as tags: [cocktail] or tags: [mocktail] when the
-  source is a cocktail, mocktail, or mixed drink. Do not invent other tags.
+  source is a cocktail, mocktail, or mixed drink.
+  Tag loaf / yeasted / sourdough / quick-bread recipes as tags: [bread] when the
+  source is itself a bread (loaf, baguette, focaccia, brioche, pita, bagel, rolls,
+  etc.). Do not invent other tags.
   Do not tag baked goods or cooked dishes as cocktail/mocktail just because a drink
   name appears in the title or description (example: "Old Fashioned" chocolate cake).
+  Do not tag sandwiches, bread pudding, french toast, stuffing, or recipes that only
+  use bread as an ingredient as bread.
 - Tablespoon vs teaspoon is size, not casing: 1 tablespoon ≠ 1 teaspoon.
   Treat source spellings tbsp / tbs / tablespoon(s) (any case) as tablespoon → emit Tbsp.
   Treat source spellings tsp / teaspoon(s) (any case) as teaspoon → emit tsp.
@@ -87,7 +92,7 @@ Output rules:
 - Do not invent app-owned front-matter keys: review, import_time, import_duration_ms,
   import_notes, or site. The app sets those after conversion.
 - Front matter may include: title, source, image, servings, prep time, cook time,
-  time, description, tags (only cocktail or mocktail when applicable).
+  time, description, tags (only cocktail, mocktail, or bread when applicable).
 - When the source lists prep and cook times separately, store BOTH as separate keys:
   prep time: 20 minutes
   cook time: 1 hour 30 minutes

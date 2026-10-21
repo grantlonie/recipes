@@ -55,9 +55,19 @@ export type RecipeBlock =
   | { kind: 'section'; title: string }
   | { kind: 'step'; text: string }
 
+export interface RecipeHydration {
+  adjustable: boolean
+  flour_g: number
+  issues: string[]
+  liquid_g: number
+  percent: number | null
+  starter_g: number
+}
+
 export interface RecipeDetail extends RecipeSummary {
   content: string
   cookware: string[]
+  hydration?: RecipeHydration | null
   ingredients: Ingredient[]
   metadata: Record<string, unknown>
   public_url: string

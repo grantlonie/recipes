@@ -398,6 +398,7 @@ def _finalize_import(
     content = cooklang.prepare_imported_content(content)
     metadata, body = cooklang.parse_document(content)
     _ensure_drink_tags(metadata, body)
+    _ensure_bread_tags(metadata, body)
     fluid_volume = prefers_fluid_volume(cooklang.metadata_tags(metadata))
     mapped_body, unmatched = apply_catalog_mapping(
         body,
@@ -416,6 +417,7 @@ def _finalize_import(
         source_text=source_text,
     )
     _ensure_drink_tags(metadata, body)
+    _ensure_bread_tags(metadata, body)
     _apply_recipe_site(metadata, source_url=source_url, source_text=source_text, body=body)
     content = cooklang.render_document(metadata, body)
     validation = validate_imported_cooklang(
@@ -642,6 +644,38 @@ _DRINK_TECHNIQUE_RE = re.compile(
 )
 _FLUID_POUR_UNITS = frozenset({"fl oz", "ml", "cl"})
 _DRINK_TAGS = frozenset({"cocktail", "drink", "mocktail"})
+_BREAD_TAG = "bread"
+_BREAD_EXPLICIT_RE = re.compile(
+    r"\b(?:"
+    r"sourdough(?:\s+bread)?|yeasted?\s+bread|quick\s+bread|"
+    r"baguettes?|focaccia|brioche|ciabatta|boules?|batards?|"
+    r"pita|naan|bagels?|sandwich\s+loaves?|sandwich\s+loaf|"
+    r"dinner\s+rolls?|bread\s+rolls?|loaves\b|loaf\b"
+    r")\b",
+    re.IGNORECASE,
+)
+_BREAD_TECHNIQUE_RE = re.compile(
+    r"\b(?:"
+    r"knead(?:ed|ing)?|proof(?:ed|ing)?|prove(?:d|ing)?|"
+    r"bulk\s+ferment(?:ation)?|autolyse|autolyze|"
+    r"stretch(?:es|ing)?\s+and\s+folds?|baker(?:'s)?\s+percentage|"
+    r"score(?:d|ing)?\s+the\s+(?:loaf|dough)|"
+    r"shape(?:d|ing)?\s+(?:into\s+)?(?:a\s+)?(?:loaf|boule|batard)"
+    r")\b",
+    re.IGNORECASE,
+)
+_BREAD_VETO_RE = re.compile(
+    r"\b(?:"
+    r"bread\s+puddings?|breadcrumbs?|breadcrumb|croutons?|"
+    r"french\s+toast|stuffing|dressing|"
+    r"sandwiches?|paninis?|wraps?|burgers?"
+    r")\b",
+    re.IGNORECASE,
+)
+_BREAD_FLOUR_NAME_RE = re.compile(
+    r"\b(?:all[- ]?purpose|bread|whole[- ]?wheat|rye|spelt|00)\s+flour\b|\bflour\b",
+    re.IGNORECASE,
+)
 
 
 def _ensure_drink_tags(metadata: dict, body: str = "") -> None:
@@ -684,6 +718,53 @@ def _looks_like_mixed_drink(body: str) -> bool:
         if unit in _FLUID_POUR_UNITS:
             pours += 1
     return (pours >= 2 and techniques >= 1) or pours >= 3
+
+
+def _ensure_bread_tags(metadata: dict, body: str = "") -> None:
+    """Tag bread recipes so hydration controls can activate on the recipe page.
+
+    Prefers an existing LLM bread tag, strips it when vetoes apply (sandwiches,
+    bread pudding, etc.), and otherwise infers from explicit bread wording or
+    bread-making structure (flour + knead/proof/autolyse cues).
+    """
+    tags = cooklang.metadata_tags(metadata)
+    meta_blob = " ".join(
+        str(metadata.get(key) or "") for key in ("title", "description", "servings")
+    )
+    scan_blob = f"{meta_blob}\n{body}"
+    has_bread = any(tag.strip().casefold() == _BREAD_TAG for tag in tags)
+
+    if _BREAD_VETO_RE.search(scan_blob):
+        if has_bread:
+            cleaned = [tag for tag in tags if tag.strip().casefold() != _BREAD_TAG]
+            if cleaned:
+                metadata["tags"] = cleaned
+            else:
+                metadata.pop("tags", None)
+        return
+
+    if has_bread:
+        return
+
+    explicit = _BREAD_EXPLICIT_RE.search(meta_blob)
+    if not explicit and not _looks_like_bread(body, meta_blob):
+        return
+    metadata["tags"] = sorted({*tags, _BREAD_TAG}, key=str.casefold)
+
+
+def _looks_like_bread(body: str, meta_blob: str = "") -> bool:
+    """True when flour plus bread technique cues suggest a bread bake."""
+    if not body.strip():
+        return False
+    techniques = len(_BREAD_TECHNIQUE_RE.findall(f"{meta_blob}\n{body}"))
+    if techniques < 1:
+        return False
+    has_flour = False
+    for ingredient in cooklang.parse_ingredients(body):
+        if _BREAD_FLOUR_NAME_RE.search(ingredient.name or ""):
+            has_flour = True
+            break
+    return has_flour and techniques >= 1
 
 
 def _apply_import_image(

@@ -76,9 +76,19 @@ class RecipeSummary(BaseModel):
     title: str
 
 
+class RecipeHydration(BaseModel):
+    adjustable: bool
+    flour_g: float
+    issues: list[str] = Field(default_factory=list)
+    liquid_g: float
+    percent: float | None = None
+    starter_g: float = 0
+
+
 class RecipeDetail(RecipeSummary):
     content: str
     cookware: list[str] = Field(default_factory=list)
+    hydration: RecipeHydration | None = None
     ingredients: list[Ingredient] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
     public_url: str
@@ -96,6 +106,10 @@ class RecipeWrite(BaseModel):
 class RecipeUpdate(BaseModel):
     content: str
     slug: str | None = None
+
+
+class HydrationUpdate(BaseModel):
+    percent: float
 
 
 class ScaleOption(BaseModel):

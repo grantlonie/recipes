@@ -22,6 +22,7 @@ import { AddCatalogIngredientDialog } from './components/AddCatalogIngredientDia
 import { BookmarkButton } from './components/BookmarkButton'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Dialog } from './components/Dialog'
+import { HydrationPopover } from './components/HydrationPopover'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { SourceDialog } from './components/SourceDialog'
@@ -625,6 +626,15 @@ export function RecipePage() {
                 value={effectiveUnitSystem}
               />
             </div>
+            {recipeQuery.data?.hydration ? (
+              <div className="mt-1 text-sm">
+                <HydrationPopover
+                  canEdit={auth.authenticated}
+                  hydration={recipeQuery.data.hydration}
+                  slug={slug}
+                />
+              </div>
+            ) : null}
             <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               {recipe.ingredients.map((ingredient, index) => {
                 const needsDensity = auth.authenticated && densityGapNames.has(ingredient.name)

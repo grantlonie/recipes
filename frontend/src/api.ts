@@ -245,6 +245,13 @@ export async function updateRecipeMetadata(
   })
 }
 
+export async function updateRecipeHydration(slug: string, percent: number): Promise<RecipeDetail> {
+  return request(`/api/recipes/${slug}/hydration`, {
+    body: JSON.stringify({ percent }),
+    method: 'POST',
+  })
+}
+
 async function uploadRequest(url: string, body: FormData): Promise<AssetUploadResponse> {
   const response = await fetch(url, {
     cache: 'no-store',

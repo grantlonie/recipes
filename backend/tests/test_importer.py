@@ -7,6 +7,7 @@ from app import cooklang as cooklang_mod
 from app.config import Settings
 from app.importer import (
     ImportError,
+    _ensure_bread_tags,
     _ensure_drink_tags,
     import_from_file,
     import_from_text,
@@ -592,4 +593,65 @@ def test_ensure_drink_tags_ignores_single_spirit_in_food():
     }
     body = "Simmer @bourbon{2%fl oz} with @brown sugar{0.5%cup} until thick."
     _ensure_drink_tags(metadata, body)
+    assert "tags" not in metadata
+
+
+def test_ensure_bread_tags_keeps_llm_bread_tag():
+    metadata = {
+        "title": "Country Loaf",
+        "description": "A crusty everyday bread.",
+        "tags": ["bread"],
+    }
+    body = "Mix @bread flour{500%g} and @water{350%g}. Knead and proof."
+    _ensure_bread_tags(metadata, body)
+    assert metadata["tags"] == ["bread"]
+
+
+def test_ensure_bread_tags_infers_from_explicit_word():
+    metadata = {
+        "title": "Overnight Sourdough",
+        "description": "A tangy sourdough bread.",
+    }
+    _ensure_bread_tags(metadata, "Mix and bake.")
+    assert metadata["tags"] == ["bread"]
+
+
+def test_ensure_bread_tags_infers_from_technique():
+    metadata = {"title": "Simple White", "description": "Weeknight bake."}
+    body = (
+        "Mix @all-purpose flour{500%g} with @water{350%g}. "
+        "Knead until smooth. Proof until doubled."
+    )
+    _ensure_bread_tags(metadata, body)
+    assert metadata["tags"] == ["bread"]
+
+
+def test_ensure_bread_tags_strips_on_veto():
+    metadata = {
+        "title": "Bread Pudding",
+        "description": "Uses leftover loaf.",
+        "tags": ["bread"],
+    }
+    body = "Tear @bread{4%cup} into cubes and soak in custard."
+    _ensure_bread_tags(metadata, body)
+    assert "tags" not in metadata
+
+
+def test_ensure_bread_tags_ignores_sandwich():
+    metadata = {
+        "title": "Turkey Sandwich",
+        "description": "Quick lunch.",
+    }
+    body = "Layer turkey on @bread{2%slices}."
+    _ensure_bread_tags(metadata, body)
+    assert "tags" not in metadata
+
+
+def test_ensure_bread_tags_ignores_cake_with_flour():
+    metadata = {
+        "title": "Chocolate Cake",
+        "description": "A rich dessert.",
+    }
+    body = "Mix @all-purpose flour{2%cup} with @cocoa powder{0.75%cup}. Bake."
+    _ensure_bread_tags(metadata, body)
     assert "tags" not in metadata
