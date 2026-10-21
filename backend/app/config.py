@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     import_model_repair: str = "accounts/fireworks/models/gpt-oss-120b"
     import_model_text: str = "accounts/fireworks/models/qwen3p7-plus"
     import_model_vision: str = "accounts/fireworks/models/qwen3p7-plus"
-    jina_api_key: str = ""
+    iframely_api_key: str = ""
     image_queue_concurrency: int = 6
     image_queue_host_cooldown_seconds: int = 1800
     image_queue_host_gap_seconds: int = 20

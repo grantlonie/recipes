@@ -5,6 +5,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 import httpx
 
@@ -13,8 +14,8 @@ from app.extract import ExtractError, extract_html_text, extract_page_image_url
 
 DEFAULT_TIMEOUT_SECONDS = 90.0
 IMAGE_SCRAPE_TIMEOUT_SECONDS = 8.0
-JINA_IMAGE_TIMEOUT_SECONDS = 45.0
-JINA_READER_PREFIX = "https://r.jina.ai/"
+IFRAMELY_TIMEOUT_SECONDS = 45.0
+IFRAMELY_API_URL = "https://iframe.ly/api/iframely"
 RETRYABLE_STATUS = frozenset({403, 429})
 CURL_CFFI_IMPERSONATE = "chrome131"
 
@@ -34,14 +35,6 @@ BROWSER_HEADERS = {
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ),
-}
-
-# Jina rejects browser-like header sets with 403; keep this minimal.
-# Request full HTML so og:image / JSON-LD extraction stays on the shared path.
-JINA_HEADERS = {
-    "Accept": "text/html,*/*;q=0.8",
-    "User-Agent": "recipes-importer/1.0",
-    "X-Respond-With": "html",
 }
 
 SOURCE_HTTP_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
@@ -93,32 +86,13 @@ def first_http_url(text: str) -> str | None:
 
 
 def fetch_recipe_page(url: str, *, settings: Settings) -> FetchedPage:
-    """Fetch a recipe page with retry/backoff and optional reader fallback."""
+    """Fetch a recipe page with retry/backoff (no HTML reader fallback)."""
     recipe_url = url.strip()
     if not recipe_url:
         raise PageFetchError("Recipe URL is required")
 
     with _acquire_fetch_slot(settings):
-        try:
-            return _fetch_direct(recipe_url, settings=settings)
-        except PageFetchError as error:
-            if not settings.page_fetch_fallback_enabled:
-                raise
-            if error.status_code not in RETRYABLE_STATUS and error.status_code is not None:
-                raise
-            logger.info(
-                "Direct fetch failed for %s (%s); trying reader fallback", recipe_url, error
-            )
-            try:
-                return _fetch_via_jina(recipe_url, settings=settings)
-            except PageFetchError as fallback_error:
-                logger.warning(
-                    "Reader fallback failed for %s (%s); surfacing original error",
-                    recipe_url,
-                    fallback_error,
-                )
-                # Prefer the site-facing error over raw r.jina.ai auth failures.
-                raise error from fallback_error
+        return _fetch_direct(recipe_url, settings=settings)
 
 
 @dataclass(frozen=True)
@@ -157,11 +131,9 @@ def fetch_page_image_result(url: str, *, settings: Settings | None = None) -> Im
         if (
             settings is not None
             and settings.page_fetch_fallback_enabled
-            and settings.jina_api_key.strip()
+            and settings.iframely_api_key.strip()
         ):
-            fallback = _image_via_jina(page_url, settings=settings)
-            if fallback.image_url or not fallback.blocked:
-                return fallback
+            return _image_via_iframely(page_url, settings=settings)
         return blocked_result
     if response.status_code >= 400:
         return ImageScrapeResult(
@@ -185,7 +157,7 @@ def rate_limit_message(status_code: int | None = None) -> str:
         )
     if status_code == 401:
         return (
-            "Reader fallback needs authentication. Set JINA_API_KEY in the server "
+            "Image fallback needs authentication. Set IFRAMELY_API_KEY in the server "
             "environment, or import via pasted text/HTML instead."
         )
     return "Recipe import failed"
@@ -299,82 +271,84 @@ def _get_page_httpx(url: str, *, timeout_seconds: float = DEFAULT_TIMEOUT_SECOND
         )
 
 
-def _jina_request_headers(settings: Settings) -> dict[str, str]:
-    headers = dict(JINA_HEADERS)
-    api_key = settings.jina_api_key.strip()
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-        # Hosted proxy pool (residential/datacenter rotation); requires API key.
-        headers["X-Proxy"] = "auto"
-    return headers
+def _image_via_iframely(url: str, *, settings: Settings) -> ImageScrapeResult:
+    logger.info("Direct image scrape blocked for %s; trying Iframely fallback", url)
+    api_key = settings.iframely_api_key.strip()
+    if not api_key:
+        return ImageScrapeResult(blocked=True, error="missing IFRAMELY_API_KEY", status_code=401)
 
-
-def _fetch_jina_html(
-    url: str, *, settings: Settings, timeout_seconds: float
-) -> str:
-    timeout = httpx.Timeout(timeout_seconds, connect=min(15.0, timeout_seconds))
-    reader_url = f"{JINA_READER_PREFIX}{url}"
-    headers = _jina_request_headers(settings)
+    params = urlencode({"url": url, "api_key": api_key})
+    request_url = f"{IFRAMELY_API_URL}?{params}"
+    timeout = httpx.Timeout(IFRAMELY_TIMEOUT_SECONDS, connect=min(15.0, IFRAMELY_TIMEOUT_SECONDS))
     try:
-        with httpx.Client(follow_redirects=True, timeout=timeout, headers=headers) as client:
-            response = client.get(reader_url)
-            response.raise_for_status()
-            text = response.text.strip()
-    except httpx.TimeoutException as error:
-        raise PageFetchError("Recipe import timed out") from error
-    except httpx.HTTPStatusError as error:
-        status = error.response.status_code
-        if status in RETRYABLE_STATUS or status == 401:
-            raise PageFetchError(rate_limit_message(status), status_code=status) from error
-        raise PageFetchError(
-            f"Recipe import failed: {error}",
-            status_code=status,
-        ) from error
+        with httpx.Client(follow_redirects=True, timeout=timeout) as client:
+            response = client.get(request_url)
+    except httpx.TimeoutException:
+        logger.warning("Iframely image fallback timed out for %s", url)
+        return ImageScrapeResult(blocked=True, error="iframely timeout", status_code=408)
     except httpx.HTTPError as error:
-        raise PageFetchError(f"Recipe import failed: {error}") from error
-
-    if not text:
-        raise PageFetchError("Recipe import failed: empty reader response")
-    if _looks_like_challenge_page(text):
-        raise PageFetchError(rate_limit_message(403), status_code=403)
-    return text
-
-
-def _fetch_via_jina(url: str, *, settings: Settings) -> FetchedPage:
-    html = _fetch_jina_html(url, settings=settings, timeout_seconds=DEFAULT_TIMEOUT_SECONDS)
-    try:
-        extracted = extract_html_text(html)
-    except ExtractError as error:
-        raise PageFetchError(str(error)) from error
-    return FetchedPage(
-        extracted_text=extracted,
-        final_url=url,
-        image_url=extract_page_image_url(html, url),
-        used_fallback=True,
-    )
-
-
-def _image_via_jina(url: str, *, settings: Settings) -> ImageScrapeResult:
-    logger.info("Direct image scrape blocked for %s; trying Jina HTML fallback", url)
-    try:
-        html = _fetch_jina_html(
-            url, settings=settings, timeout_seconds=JINA_IMAGE_TIMEOUT_SECONDS
-        )
-    except PageFetchError as error:
-        logger.warning("Jina image fallback failed for %s (%s)", url, error)
-        return ImageScrapeResult(
-            blocked=True,
-            error=str(error),
-            status_code=error.status_code or 403,
-        )
-    except Exception as error:  # noqa: BLE001 - image scrape is best-effort
-        logger.warning("Jina image fallback failed for %s (%s)", url, error)
+        logger.warning("Iframely image fallback failed for %s (%s)", url, error)
         return ImageScrapeResult(blocked=True, error=str(error), status_code=403)
 
-    image_url = extract_page_image_url(html, url)
+    if response.status_code in {401, 402, 403, 429}:
+        logger.warning(
+            "Iframely image fallback blocked for %s (status=%s)", url, response.status_code
+        )
+        return ImageScrapeResult(
+            blocked=True,
+            error=f"iframely status={response.status_code}",
+            status_code=response.status_code,
+        )
+    if response.status_code >= 400:
+        logger.warning(
+            "Iframely image fallback failed for %s (status=%s)", url, response.status_code
+        )
+        return ImageScrapeResult(
+            blocked=True,
+            error=f"iframely status={response.status_code}",
+            status_code=response.status_code,
+        )
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return ImageScrapeResult(blocked=True, error="iframely invalid json", status_code=502)
+
+    if isinstance(payload, dict) and payload.get("error"):
+        error = payload.get("error")
+        message = error if isinstance(error, str) else str(error)
+        logger.warning("Iframely image fallback error for %s (%s)", url, message)
+        return ImageScrapeResult(blocked=True, error=f"iframely: {message}", status_code=403)
+
+    image_url = _image_url_from_iframely(payload if isinstance(payload, dict) else {})
     if not image_url:
-        return ImageScrapeResult(error="no og:image", status_code=200)
+        return ImageScrapeResult(error="no iframely thumbnail", status_code=200)
     return ImageScrapeResult(image_url=image_url, status_code=200)
+
+
+def _image_url_from_iframely(payload: dict) -> str | None:
+    links = payload.get("links")
+    if isinstance(links, dict):
+        for key in ("thumbnail", "image"):
+            items = links.get(key)
+            if isinstance(items, dict):
+                items = [items]
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                href = item.get("href")
+                if isinstance(href, str) and href.startswith(("http://", "https://")):
+                    return href.strip()
+
+    meta = payload.get("meta")
+    if isinstance(meta, dict):
+        for key in ("image", "thumbnail", "og_image"):
+            value = meta.get(key)
+            if isinstance(value, str) and value.startswith(("http://", "https://")):
+                return value.strip()
+    return None
 
 
 def _looks_like_challenge_page(text: str) -> bool:

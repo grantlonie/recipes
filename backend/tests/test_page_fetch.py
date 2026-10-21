@@ -117,82 +117,13 @@ def test_fetch_recipe_page_retries_429_then_succeeds(settings: Settings):
     assert page.used_fallback is False
 
 
-def test_fetch_recipe_page_falls_back_to_jina_on_429(settings: Settings):
+def test_fetch_recipe_page_surfaces_block_without_html_fallback(settings: Settings):
     page_url = "https://food52.com/recipes/example"
-    image_url = "https://images.food52.com/dish.jpg"
-    jina_headers: dict[str, str] = {}
-    settings = settings.model_copy(update={"jina_api_key": "jina_test_key"})
+    settings = settings.model_copy(update={"iframely_api_key": "iframely_test_key"})
 
     def handler(request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if url == page_url:
-            return httpx.Response(429, text="slow down", headers={"Retry-After": "0"})
-        if url.startswith("https://r.jina.ai/"):
-            jina_headers.update({key.lower(): value for key, value in request.headers.items()})
-            return httpx.Response(
-                200,
-                text=(
-                    "<html><head>"
-                    f'<meta property="og:image" content="{image_url}" />'
-                    "</head><body><article><h1>Greek Lamb</h1>"
-                    "<p>Ingredients</p><ul><li>lamb</li></ul>"
-                    "<p>Directions</p><p>cook</p></article></body></html>"
-                ),
-            )
-        raise AssertionError(f"Unexpected request: {url}")
-
-    transport = httpx.MockTransport(handler)
-    with patch("app.page_fetch.time.sleep"):
-        with patch("app.page_fetch.extract_html_text", return_value="Greek Lamb\nlamb\ncook"):
-            with _patch_client(transport):
-                page = fetch_recipe_page(page_url, settings=settings)
-
-    assert page.used_fallback is True
-    assert "Greek Lamb" in page.extracted_text
-    assert page.image_url == image_url
-    # Browser-like header sets make Jina return 403.
-    assert "sec-fetch-mode" not in jina_headers
-    assert "mozilla" not in jina_headers.get("user-agent", "").lower()
-    assert jina_headers.get("authorization") == "Bearer jina_test_key"
-    assert jina_headers.get("x-respond-with") == "html"
-    assert jina_headers.get("x-proxy") == "auto"
-
-
-def test_fetch_recipe_page_surfaces_original_error_when_jina_returns_401(settings: Settings):
-    page_url = "https://food52.com/recipes/example"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if url == page_url:
-            return httpx.Response(403, text="forbidden")
-        if url.startswith("https://r.jina.ai/"):
-            return httpx.Response(401, text="auth required")
-        raise AssertionError(f"Unexpected request: {url}")
-
-    transport = httpx.MockTransport(handler)
-    with patch("app.page_fetch.time.sleep"):
-        with _patch_client(transport):
-            with pytest.raises(PageFetchError, match="blocked automated access"):
-                fetch_recipe_page(page_url, settings=settings)
-
-
-def test_fetch_recipe_page_rejects_jina_challenge_page(settings: Settings):
-    page_url = "https://food52.com/recipes/example"
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if url == page_url:
-            return httpx.Response(403, text="forbidden")
-        if url.startswith("https://r.jina.ai/"):
-            return httpx.Response(
-                200,
-                text=(
-                    "Title: Vercel Security Checkpoint\n"
-                    "Warning: Target URL returned 403\n"
-                    "Enable JavaScript and cookies to continue\n"
-                ),
-            )
-        raise AssertionError(f"Unexpected request: {url}")
+        assert str(request.url) == page_url
+        return httpx.Response(403, text="forbidden")
 
     transport = httpx.MockTransport(handler)
     with patch("app.page_fetch.time.sleep"):
@@ -229,28 +160,33 @@ def test_fetch_page_image_url_returns_none_on_blocked_page(settings: Settings):
         assert fetch_page_image_url("https://example.com/recipe", settings=settings) is None
 
 
-def test_fetch_page_image_falls_back_to_jina_html_on_403(settings: Settings):
+def test_fetch_page_image_falls_back_to_iframely_on_403(settings: Settings):
     page_url = "https://www.liquor.com/recipes/corpse-reviver-no-2/"
     image_url = (
         "https://www.liquor.com/thmb/abc=/1500x0/filters:no_upscale()"
         ":max_bytes(150000):strip_icc()/corpse-reviver.jpg"
     )
-    jina_headers: dict[str, str] = {}
-    settings = settings.model_copy(update={"jina_api_key": "jina_test_key"})
+    settings = settings.model_copy(update={"iframely_api_key": "iframely_test_key"})
+    seen: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if url == page_url:
             return httpx.Response(403, text="forbidden")
-        if url.startswith("https://r.jina.ai/"):
-            jina_headers.update({key.lower(): value for key, value in request.headers.items()})
+        if url.startswith("https://iframe.ly/api/iframely"):
+            seen["url"] = url
+            assert "api_key=iframely_test_key" in url
+            assert "url=" in url
             return httpx.Response(
                 200,
-                text=(
-                    "<html><head>"
-                    f'<meta property="og:image" content="{image_url}" />'
-                    "</head><body>recipe</body></html>"
-                ),
+                json={
+                    "meta": {"title": "Corpse Reviver"},
+                    "links": {
+                        "thumbnail": [
+                            {"href": image_url, "type": "image", "rel": ["thumbnail"]}
+                        ]
+                    },
+                },
             )
         raise AssertionError(f"Unexpected request: {url}")
 
@@ -260,20 +196,19 @@ def test_fetch_page_image_falls_back_to_jina_html_on_403(settings: Settings):
 
     assert result.image_url == image_url
     assert result.blocked is False
-    assert jina_headers.get("x-respond-with") == "html"
-    assert jina_headers.get("x-proxy") == "auto"
+    assert seen["url"].startswith("https://iframe.ly/api/iframely")
 
 
-def test_fetch_page_image_stays_blocked_when_jina_fallback_fails(settings: Settings):
+def test_fetch_page_image_stays_blocked_when_iframely_fallback_fails(settings: Settings):
     page_url = "https://www.liquor.com/recipes/example/"
-    settings = settings.model_copy(update={"jina_api_key": "jina_test_key"})
+    settings = settings.model_copy(update={"iframely_api_key": "iframely_test_key"})
 
     def handler(request: httpx.Request) -> httpx.Response:
         url = str(request.url)
         if url == page_url:
             return httpx.Response(403, text="forbidden")
-        if url.startswith("https://r.jina.ai/"):
-            return httpx.Response(401, text="auth required")
+        if url.startswith("https://iframe.ly/api/iframely"):
+            return httpx.Response(402, json={"error": "Payment Required"})
         raise AssertionError(f"Unexpected request: {url}")
 
     transport = httpx.MockTransport(handler)
@@ -282,7 +217,7 @@ def test_fetch_page_image_stays_blocked_when_jina_fallback_fails(settings: Setti
 
     assert result.image_url is None
     assert result.blocked is True
-    assert result.status_code == 403
+    assert result.status_code == 402
 
 
 def test_fetch_recipe_page_total_failure(settings: Settings):

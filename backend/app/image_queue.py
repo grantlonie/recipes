@@ -22,6 +22,7 @@ QUEUE_VERSION = 1
 
 @dataclass
 class HostState:
+    blocked: bool = False
     cooldown_seconds: float = 0
     next_ok_at: float = 0
 
@@ -68,6 +69,7 @@ def load_queue(path: Path) -> ImageQueueState:
         if not isinstance(value, dict):
             continue
         hosts[str(host)] = HostState(
+            blocked=bool(value.get("blocked")),
             cooldown_seconds=float(value.get("cooldown_seconds") or 0),
             next_ok_at=float(value.get("next_ok_at") or 0),
         )
@@ -99,6 +101,7 @@ def save_queue(path: Path, state: ImageQueueState) -> None:
     payload = {
         "hosts": {
             host: {
+                "blocked": host_state.blocked,
                 "cooldown_seconds": host_state.cooldown_seconds,
                 "next_ok_at": host_state.next_ok_at,
             }
@@ -137,9 +140,13 @@ def enqueue_image_job(
     if not slug.strip() or not cleaned.startswith(("http://", "https://")):
         return False
 
+    host = registrable_host(cleaned)
     current = now if now is not None else now_ts()
     with queue_lock(path):
         state = load_queue(path)
+        host_state = state.hosts.get(host) if host else None
+        if host_state and host_state.blocked:
+            return False
         for job in state.jobs:
             if job.slug == slug:
                 if job.source_url == cleaned:
@@ -177,6 +184,8 @@ def claim_jobs(
         if not host or host in claimed_hosts:
             continue
         host_state = state.hosts.get(host)
+        if host_state and host_state.blocked:
+            continue
         if host_state and host_state.next_ok_at > current:
             continue
         claimed.append(job)
@@ -189,10 +198,10 @@ def seconds_until_next_wake(state: ImageQueueState, *, now: float | None = None)
     wakes: list[float] = []
     for job in state.jobs:
         host = registrable_host(job.source_url)
-        host_ready = 0.0
         host_state = state.hosts.get(host)
-        if host_state:
-            host_ready = host_state.next_ok_at
+        if host_state and host_state.blocked:
+            continue
+        host_ready = host_state.next_ok_at if host_state else 0.0
         wakes.append(max(job.next_attempt_at, host_ready))
     if not wakes:
         return 5.0
@@ -235,6 +244,19 @@ def maybe_enqueue_from_recipe(
     source_url = resolve_image_source_url(recipe_dir, metadata)
     if not source_url:
         return False
+
+    host = registrable_host(source_url)
+    with queue_lock(settings.image_queue_path):
+        state = load_queue(settings.image_queue_path)
+        host_state = state.hosts.get(host) if host else None
+        if host_state and host_state.blocked:
+            clear_image_pending(
+                settings.recipe_root,
+                slug=slug,
+                note=f"Image scrape skipped: host {host} is blocked",
+            )
+            return False
+
     return enqueue_image_job(settings.image_queue_path, slug=slug, source_url=source_url)
 
 
@@ -303,22 +325,37 @@ def clear_image_pending(
 def record_host_success(
     state: ImageQueueState, host: str, *, settings: Settings, now: float
 ) -> None:
+    previous = state.hosts.get(host)
     state.hosts[host] = HostState(
+        blocked=bool(previous and previous.blocked),
         cooldown_seconds=0,
         next_ok_at=now + max(1, settings.image_queue_host_gap_seconds),
     )
 
 
-def record_host_block(
-    state: ImageQueueState, host: str, *, settings: Settings, now: float
-) -> None:
-    previous = state.hosts.get(host)
-    base = float(settings.image_queue_host_cooldown_seconds)
-    if previous and previous.cooldown_seconds > 0:
-        cooldown = min(previous.cooldown_seconds * 2, 6 * 3600)
-    else:
-        cooldown = base
-    state.hosts[host] = HostState(cooldown_seconds=cooldown, next_ok_at=now + cooldown)
+def record_host_blocked(state: ImageQueueState, host: str, *, now: float) -> None:
+    """Permanently mark a host blocked so we do not retry or spend fallback credits."""
+    state.hosts[host] = HostState(blocked=True, cooldown_seconds=0, next_ok_at=now)
+
+
+def abandon_host_jobs(
+    state: ImageQueueState,
+    *,
+    host: str,
+    settings: Settings,
+    note: str,
+) -> int:
+    """Drop all jobs for a host and clear image_pending on each recipe."""
+    kept: list[ImageJob] = []
+    abandoned = 0
+    for job in state.jobs:
+        if registrable_host(job.source_url) != host:
+            kept.append(job)
+            continue
+        clear_image_pending(settings.recipe_root, slug=job.slug, note=note)
+        abandoned += 1
+    state.jobs = kept
+    return abandoned
 
 
 def apply_job_result(
@@ -344,13 +381,21 @@ def apply_job_result(
 
     live.attempts += 1
     live.last_error = result.error or f"status={result.status_code}"
+
     if result.blocked:
-        record_host_block(state, host, settings=settings, now=now)
-        host_state = state.hosts[host]
-        live.next_attempt_at = host_state.next_ok_at
-    else:
-        record_host_success(state, host, settings=settings, now=now)
-        live.next_attempt_at = now + max(1, settings.image_queue_host_gap_seconds)
+        note = f"Image scrape blocked for {host}: {live.last_error}"
+        record_host_blocked(state, host, now=now)
+        abandoned = abandon_host_jobs(state, host=host, settings=settings, note=note)
+        logger.warning(
+            "image queue: blocked host %s after %s (%s job(s) abandoned)",
+            host,
+            live.slug,
+            abandoned,
+        )
+        return
+
+    record_host_success(state, host, settings=settings, now=now)
+    live.next_attempt_at = now + max(1, settings.image_queue_host_gap_seconds)
 
     if live.attempts >= settings.image_queue_max_attempts:
         clear_image_pending(
@@ -394,6 +439,13 @@ def enqueue_missing_recipes(*, settings: Settings, dry_run: bool = False) -> tup
         if not source_url:
             skipped += 1
             continue
+        host = registrable_host(source_url)
+        with queue_lock(settings.image_queue_path):
+            queue_state = load_queue(settings.image_queue_path)
+            host_state = queue_state.hosts.get(host) if host else None
+            if host_state and host_state.blocked:
+                skipped += 1
+                continue
         next_content = mark_recipe_image_pending(content, source_url=source_url)
         if not dry_run:
             if next_content != content:

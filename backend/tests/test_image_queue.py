@@ -55,6 +55,20 @@ def test_claim_jobs_respects_host_cooldown(tmp_path: Path):
     assert [job.slug for job in claimed] == ["b"]
 
 
+def test_claim_jobs_skips_blocked_hosts(tmp_path: Path):
+    from app.image_queue import HostState
+
+    state = ImageQueueState(
+        hosts={"food52.com": HostState(blocked=True)},
+        jobs=[
+            ImageJob(slug="a", source_url="https://food52.com/a", next_attempt_at=0),
+            ImageJob(slug="b", source_url="https://bbc.com/b", next_attempt_at=0),
+        ],
+    )
+    claimed = claim_jobs(state, concurrency=6, now=0)
+    assert [job.slug for job in claimed] == ["b"]
+
+
 def test_enqueue_image_job_dedupes_by_slug(tmp_path: Path):
     path = tmp_path / "image_queue.json"
     assert enqueue_image_job(path, slug="chili", source_url="https://example.com/a")
@@ -63,6 +77,15 @@ def test_enqueue_image_job_dedupes_by_slug(tmp_path: Path):
     state = load_queue(path)
     assert len(state.jobs) == 1
     assert state.jobs[0].source_url == "https://example.com/b"
+
+
+def test_enqueue_image_job_skips_blocked_host(tmp_path: Path):
+    from app.image_queue import HostState, save_queue
+
+    path = tmp_path / "image_queue.json"
+    save_queue(path, ImageQueueState(hosts={"food52.com": HostState(blocked=True)}))
+    assert not enqueue_image_job(path, slug="chili", source_url="https://food52.com/chili")
+    assert load_queue(path).jobs == []
 
 
 def test_apply_job_result_success_writes_image(tmp_path: Path):
@@ -91,14 +114,22 @@ def test_apply_job_result_success_writes_image(tmp_path: Path):
     assert state.hosts["example.com"].next_ok_at == 1030
 
 
-def test_apply_job_result_blocked_sets_cooldown(tmp_path: Path):
-    settings = _settings(
-        tmp_path,
-        image_queue_host_cooldown_seconds=1800,
-        image_queue_max_attempts=8,
-    )
+def test_apply_job_result_blocked_marks_host_and_abandons_jobs(tmp_path: Path):
+    settings = _settings(tmp_path, image_queue_max_attempts=8)
+    for slug in ("chili", "soup"):
+        recipe_dir = settings.recipe_root / slug
+        recipe_dir.mkdir(parents=True)
+        (recipe_dir / RECIPE_FILENAME).write_text(
+            "---\ntitle: Recipe\nimage_pending: true\n"
+            "image_source: https://food52.com/x\n---\n\nCook.\n",
+            encoding="utf-8",
+        )
     state = ImageQueueState(
-        jobs=[ImageJob(slug="chili", source_url="https://food52.com/chili")]
+        jobs=[
+            ImageJob(slug="chili", source_url="https://food52.com/chili"),
+            ImageJob(slug="soup", source_url="https://food52.com/soup"),
+            ImageJob(slug="other", source_url="https://example.com/other"),
+        ]
     )
     apply_job_result(
         state.jobs[0],
@@ -107,10 +138,13 @@ def test_apply_job_result_blocked_sets_cooldown(tmp_path: Path):
         state=state,
         now=1000,
     )
-    assert len(state.jobs) == 1
-    assert state.jobs[0].attempts == 1
-    assert state.jobs[0].next_attempt_at == 2800
-    assert state.hosts["food52.com"].cooldown_seconds == 1800
+    assert [job.slug for job in state.jobs] == ["other"]
+    assert state.hosts["food52.com"].blocked is True
+    chili = (settings.recipe_root / "chili" / RECIPE_FILENAME).read_text(encoding="utf-8")
+    soup = (settings.recipe_root / "soup" / RECIPE_FILENAME).read_text(encoding="utf-8")
+    assert "image_pending: false" in chili
+    assert "image_pending: false" in soup
+    assert "Image scrape blocked for food52.com" in chili
 
 
 def test_enqueue_missing_recipes_marks_pending(tmp_path: Path):
