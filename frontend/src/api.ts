@@ -3,6 +3,8 @@ import type {
   AuthState,
   CatalogIngredient,
   DensityEstimate,
+  ImportModels,
+  ImportModelsInput,
   ImportPreview,
   IngredientCatalog,
   IngredientRenameResult,
@@ -249,6 +251,17 @@ export async function updateRecipeHydration(slug: string, percent: number): Prom
   return request(`/api/recipes/${slug}/hydration`, {
     body: JSON.stringify({ percent }),
     method: 'POST',
+  })
+}
+
+export async function getImportModels(): Promise<ImportModels> {
+  return request('/api/settings/import-models')
+}
+
+export async function updateImportModels(input: ImportModelsInput): Promise<ImportModels> {
+  return request('/api/settings/import-models', {
+    body: JSON.stringify(input),
+    method: 'PUT',
   })
 }
 

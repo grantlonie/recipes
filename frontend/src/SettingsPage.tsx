@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { BulkImportControls } from './components/BulkImportControls'
 import { Button } from './components/Button'
+import { ImportModelsSettings } from './components/ImportModelsSettings'
 import { ThemePicker } from './components/ThemePicker'
 import { UnitSystemToggle } from './components/UnitSystemToggle'
 import { buildLoginUrl } from './shareImport'
@@ -29,12 +30,12 @@ export function SettingsPage() {
   }
 
   return (
-    <section className={`mx-auto max-w-md ${cardClassName}`}>
+    <section className={`mx-auto max-w-lg ${cardClassName}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-stone-900 dark:text-stone-100">Settings</h1>
           <p className="mt-1 text-sm text-stone-600 dark:text-stone-400">
-            Customize how the app looks and displays measurements.
+            Customize look, units, imports, and Fireworks models.
           </p>
         </div>
         <Link
@@ -92,6 +93,8 @@ export function SettingsPage() {
             )}
           </BulkImportControls>
         </div>
+
+        <ImportModelsSettings />
 
         {auth.authenticated ? (
           <div>

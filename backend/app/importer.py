@@ -27,6 +27,7 @@ from app.import_context import (
     build_system_prompt,
     build_user_message,
 )
+from app.import_models import resolve_import_models
 from app.import_validate import validate_imported_cooklang
 from app.ingredients import IngredientRepository
 from app.models import ImportPreview
@@ -225,7 +226,7 @@ def _import_image_file(
     ingredients: IngredientRepository,
 ) -> ImportPreview:
     trace = ImportTrace()
-    primary_model = settings.import_model_vision
+    primary_model = resolve_import_models(settings).vision
     system_prompt = build_system_prompt()
     user_message = build_user_message(
         "The recipe is provided as an image. Extract the recipe faithfully.",
@@ -275,7 +276,8 @@ def _import_extracted_text(
     trace = ImportTrace()
     if image_scrape_note:
         trace.add(image_scrape_note)
-    primary_model = settings.import_model_text
+    models = resolve_import_models(settings)
+    primary_model = models.text
     system_prompt = build_system_prompt()
     user_message = build_user_message(
         extracted_text,
@@ -306,7 +308,7 @@ def _import_extracted_text(
             content=raw,
             source_url=source_url,
         )
-        repair_model = settings.import_model_repair
+        repair_model = models.repair
         trace.add(
             f"pass2: invalid Cooklang after {_model_label(primary_model)} ({reason}); "
             f"repair via {_model_label(repair_model)}"
@@ -470,7 +472,7 @@ def _maybe_quality_repair(
         content=preview.content,
         source_url=source_url,
     )
-    repair_model = settings.import_model_repair
+    repair_model = resolve_import_models(settings).repair
     warning_summary = "; ".join(validation.warnings[:4])
     if len(validation.warnings) > 4:
         warning_summary += f"; +{len(validation.warnings) - 4} more"

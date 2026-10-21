@@ -110,6 +110,17 @@ export interface RecipeMetadataInput {
   tags?: string[] | null
 }
 
+export interface ImportModels {
+  bulk: string
+  fireworks_dashboard_url: string
+  fireworks_models_url: string
+  repair: string
+  text: string
+  vision: string
+}
+
+export type ImportModelsInput = Pick<ImportModels, 'bulk' | 'repair' | 'text' | 'vision'>
+
 export interface ManifestEntry {
   slug: string
   updated_at: string

@@ -167,6 +167,22 @@ class AuthState(BaseModel):
     username: str | None = None
 
 
+class ImportModelsUpdate(BaseModel):
+    bulk: str
+    repair: str
+    text: str
+    vision: str
+
+
+class ImportModelsResponse(BaseModel):
+    bulk: str
+    fireworks_dashboard_url: str
+    fireworks_models_url: str
+    repair: str
+    text: str
+    vision: str
+
+
 class SearchResult(BaseModel):
     match: str
     recipe: RecipeSummary

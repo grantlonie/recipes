@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     frontend_dist: Path = Path("frontend/dist")
     import_max_output_tokens: int = 4096
     import_max_source_chars: int = 6000
-    import_model_bulk: str = "accounts/fireworks/models/deepseek-v4-flash"
+    import_model_bulk: str = "accounts/fireworks/models/gpt-oss-120b"
     import_model_repair: str = "accounts/fireworks/models/gpt-oss-120b"
-    import_model_text: str = "accounts/fireworks/models/qwen3p7-plus"
-    import_model_vision: str = "accounts/fireworks/models/qwen3p7-plus"
+    import_model_text: str = "accounts/fireworks/models/gpt-oss-120b"
+    import_model_vision: str = "accounts/fireworks/models/gpt-oss-120b"
     iframely_api_key: str = ""
     image_queue_concurrency: int = 6
     image_queue_host_cooldown_seconds: int = 1800
@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     @property
     def image_queue_path(self) -> Path:
         return self.data_root / "image_queue.json"
+
+    @property
+    def import_models_path(self) -> Path:
+        return self.data_root / "import_models.json"
 
 
 @lru_cache

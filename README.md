@@ -78,6 +78,7 @@ Copy `.env.example` to `.env` and change `RECIPE_EDITOR_PASSWORD` and `SESSION_S
       source.pdf       # optional uploaded source
       image.jpg        # optional uploaded image
   ingredients.json      Ingredient catalog (densities, aliases)
+  import_models.json    Fireworks model IDs (edited in Settings)
   image_queue.json      Deferred remote image scrape queue
 ```
 
@@ -124,8 +125,9 @@ Seed existing gaps with:
 python scripts/backfill_recipe_images.py --enqueue-missing
 ```
 
-Set `FIREWORKS_API_KEY` in `.env` for import to work. Model names and token limits are
-configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.example`).
+Set `FIREWORKS_API_KEY` in `.env` for import to work. Choose Fireworks model IDs in
+**Settings → Import models** (stored under `/data/import_models.json`). Token limits remain
+env-configurable via `IMPORT_MAX_*` (see `.env.example`).
 
 ## Environment variables
 
@@ -140,7 +142,7 @@ configurable via `IMPORT_MODEL_*` and `IMPORT_MAX_*` variables (see `.env.exampl
 | `SESSION_SECRET` | Signed session cookie secret |
 | `FIREWORKS_API_KEY` | Fireworks API key for recipe import |
 | `IFRAMELY_API_KEY` | Optional Iframely key for image scrape fallback on 403/429 |
-| `IMPORT_MODEL_TEXT` / `IMPORT_MODEL_VISION` / `IMPORT_MODEL_REPAIR` / `IMPORT_MODEL_BULK` | LLM models for import stages |
+| `IMPORT_MODEL_TEXT` / `IMPORT_MODEL_VISION` / `IMPORT_MODEL_REPAIR` / `IMPORT_MODEL_BULK` | Optional bootstrap defaults until models are saved in Settings |
 | `IMPORT_MAX_SOURCE_CHARS` / `IMPORT_MAX_OUTPUT_TOKENS` | Import size limits |
 | `PAGE_FETCH_*` | Direct page-fetch retries, concurrency, and spacing |
 | `IMAGE_QUEUE_CONCURRENCY` | Max parallel image scrapes (distinct hosts only) |

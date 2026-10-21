@@ -10,6 +10,7 @@ from openai import APIStatusError, OpenAI
 
 from app.config import Settings
 from app.cooklang import sanitize_front_matter, trim_cooklang_document
+from app.import_models import resolve_import_models
 from app.sources import guess_media_type
 
 COOKLANG_FENCE_RE = re.compile(
@@ -79,10 +80,11 @@ def complete_cooklang(
     image_path: Path | None = None,
 ) -> str:
     client = create_client(settings)
-    selected_model = model or settings.import_model_text
+    models = resolve_import_models(settings)
+    selected_model = model or models.text
 
     if image_path is not None:
-        selected_model = settings.import_model_vision
+        selected_model = models.vision
         media_type = guess_media_type(image_path)
         encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
         user_content: str | list[dict[str, object]] = [
@@ -121,7 +123,8 @@ def complete_cooklang(
         if error.status_code == 404:
             raise LLMError(
                 f"Fireworks model not found: {selected_model}. "
-                "Check IMPORT_MODEL_TEXT / IMPORT_MODEL_VISION in your environment."
+                "Update import models in Settings, or check that the model is "
+                "deployed for your Fireworks account."
             ) from error
         raise LLMError(f"Fireworks request failed: {error.message}") from error
 

@@ -22,6 +22,14 @@ from app.density_estimate import estimate_ingredient_densities
 from app.extract import ExtractError, extract_text_from_path
 from app.fireworks_llm import LLMError
 from app.hydration import HydrationError, apply_hydration, summarize_hydration_from_content
+from app.import_models import (
+    FIREWORKS_DASHBOARD_URL,
+    FIREWORKS_MODELS_URL,
+    ImportModelSettings,
+    ImportModelStorageError,
+    resolve_import_models,
+    save_import_models,
+)
 from app.importer import (
     ImportError,
     import_from_slug_file,
@@ -43,6 +51,8 @@ from app.models import (
     DensityEstimateResponse,
     HydrationUpdate,
     ImportFileRequest,
+    ImportModelsResponse,
+    ImportModelsUpdate,
     ImportPreview,
     ImportRequest,
     ImportTextRequest,
@@ -153,6 +163,50 @@ def login(
 @app.post("/api/auth/logout")
 def logout(response: Response) -> AuthState:
     return auth.logout(response)
+
+
+def _import_models_response(models: ImportModelSettings) -> ImportModelsResponse:
+    return ImportModelsResponse(
+        bulk=models.bulk,
+        fireworks_dashboard_url=FIREWORKS_DASHBOARD_URL,
+        fireworks_models_url=FIREWORKS_MODELS_URL,
+        repair=models.repair,
+        text=models.text,
+        vision=models.vision,
+    )
+
+
+@app.get(
+    "/api/settings/import-models",
+    dependencies=[Depends(auth.require_editor)],
+)
+def get_import_models_settings(
+    settings: Settings = Depends(get_settings_dep),
+) -> ImportModelsResponse:
+    return _import_models_response(resolve_import_models(settings))
+
+
+@app.put(
+    "/api/settings/import-models",
+    dependencies=[Depends(auth.require_editor)],
+)
+def update_import_models_settings(
+    payload: ImportModelsUpdate,
+    settings: Settings = Depends(get_settings_dep),
+) -> ImportModelsResponse:
+    try:
+        saved = save_import_models(
+            settings,
+            ImportModelSettings(
+                bulk=payload.bulk,
+                repair=payload.repair,
+                text=payload.text,
+                vision=payload.vision,
+            ),
+        )
+    except ImportModelStorageError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    return _import_models_response(saved)
 
 
 @app.get("/api/sync/manifest")

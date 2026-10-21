@@ -8,6 +8,7 @@ from openai import APIStatusError
 
 from app.config import Settings
 from app.fireworks_llm import LLMError, create_client, reasoning_extra_body, strip_think_blocks
+from app.import_models import resolve_import_models
 from app.models import DensityEstimate
 
 _JSON_OBJECT_RE = re.compile(r"\{.*\}", re.DOTALL)
@@ -40,7 +41,7 @@ def estimate_ingredient_densities(
         raise LLMError("FIREWORKS_API_KEY is not configured")
 
     client = create_client(settings)
-    model = settings.import_model_bulk
+    model = resolve_import_models(settings).bulk
     user_message = "Estimate densities for:\n" + "\n".join(f"- {name}" for name in cleaned)
     request: dict[str, Any] = {
         "model": model,
@@ -61,7 +62,7 @@ def estimate_ingredient_densities(
         if error.status_code == 404:
             raise LLMError(
                 f"Fireworks model not found: {model}. "
-                "Check IMPORT_MODEL_BULK in your environment."
+                "Update the bulk import model in Settings."
             ) from error
         raise LLMError(f"Fireworks request failed: {error.message}") from error
 
