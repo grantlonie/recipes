@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: deploy-main
-  cancel-in-progress: true
+  # Never cancel mid-compose: interrupted recreates leave containers named
+  # <id>_recipes that block the next deploy with a name conflict.
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -25,5 +27,9 @@ jobs:
             git fetch origin main
             git checkout main
             git pull --ff-only origin main
+            # Drop leftovers from a failed/cancelled recreate (<id>_recipes, etc.)
+            docker ps -a --format '{{.ID}} {{.Names}}' \
+              | awk '$2 ~ /^[a-f0-9]+_(recipes|recipes-image-worker)$/ { print $1 }' \
+              | xargs -r docker rm -f
             docker compose up -d --build --remove-orphans
             docker compose ps
