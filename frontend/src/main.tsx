@@ -7,6 +7,7 @@ import { App } from './App'
 import { AuthProvider } from './AuthContext'
 import { IngredientCatalogProvider } from './IngredientCatalogContext'
 import { ThemeProvider } from './ThemeContext'
+import { TimerProvider } from './TimerContext'
 import { UnitSystemProvider } from './UnitSystemContext'
 import './index.css'
 import { registerServiceWorker } from './registerServiceWorker'
@@ -20,9 +21,11 @@ createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
           <UnitSystemProvider>
             <IngredientCatalogProvider>
-              <BrowserRouter>
-                <App />
-              </BrowserRouter>
+              <TimerProvider>
+                <BrowserRouter>
+                  <App />
+                </BrowserRouter>
+              </TimerProvider>
             </IngredientCatalogProvider>
           </UnitSystemProvider>
         </ThemeProvider>

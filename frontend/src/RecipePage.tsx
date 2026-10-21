@@ -29,7 +29,12 @@ import { UnitSystemToggle } from './components/UnitSystemToggle'
 import { extractCookwareTokens } from './cooklangCookware'
 import { getRecipeBlocks } from './cooklangEditor'
 import { extractTokens, formatIngredientLabel } from './cooklangTokens'
-import { extractTimerTokens, formatTimerLabel } from './cooklangTimers'
+import {
+  extractTimerTokens,
+  formatTimerLabel,
+  timerAttrsToDurationMs,
+  type TimerAttrs,
+} from './cooklangTimers'
 import { useIngredientCatalog } from './IngredientCatalogContext'
 import { titleCaseIngredient } from './ingredientDisplay'
 import { useRecipeDetailHeader } from './RecipeDetailHeaderContext'
@@ -65,6 +70,7 @@ import {
   prefersFluidVolume,
   prefersTablespoons,
 } from './units'
+import { useTimer } from './TimerContext'
 import { useUnitSystem } from './UnitSystemContext'
 import { isRefFile, resolveRefDisplay } from './importMapping'
 
@@ -86,12 +92,14 @@ type StepMarker = {
   ingredientName?: string
   length: number
   text: string
+  timerAttrs?: TimerAttrs
   type: keyof typeof STEP_MARKER_CLASS
 }
 
 interface StepRenderOptions {
   catalog: CatalogIngredient[]
   onIngredientClick?: (name: string) => void
+  onTimerClick?: (timer: TimerAttrs) => void
   preferFluidVolume: boolean
   preferSmallSpoons: boolean
   unitSystem: UnitSystem
@@ -104,7 +112,17 @@ export function RecipePage() {
   const queryClient = useQueryClient()
   const { addRecentRecipe, removeRecentRecipe } = useRecipeListState()
   const { notifyLocalChange, revision, sync } = useRecipeSync()
+  const { openDialog, start: startTimer } = useTimer()
   const { preferSmallSpoons, setUnitSystem, unitSystem } = useUnitSystem()
+
+  function handleTimerClick(timer: TimerAttrs) {
+    const durationMs = timerAttrsToDurationMs(timer)
+    if (durationMs == null) {
+      return
+    }
+    startTimer(durationMs, formatTimerLabel(timer))
+    openDialog()
+  }
   const { ingredients: catalog } = useIngredientCatalog()
   const { setTitle, setTitleInHeader } = useRecipeDetailHeader()
   const titleRef = useRef<HTMLHeadingElement>(null)
@@ -363,8 +381,7 @@ export function RecipePage() {
   function handleDeleteScale(optionId: string) {
     const remaining = scalePrefs.options.filter(option => option.id !== optionId)
     const next: RecipeScalePrefs = {
-      defaultOptionId:
-        scalePrefs.defaultOptionId === optionId ? null : scalePrefs.defaultOptionId,
+      defaultOptionId: scalePrefs.defaultOptionId === optionId ? null : scalePrefs.defaultOptionId,
       options: remaining,
     }
     if (selectedScaleId === optionId) {
@@ -705,6 +722,7 @@ export function RecipePage() {
                         onIngredientClick: auth.authenticated
                           ? setEditingIngredientName
                           : undefined,
+                        onTimerClick: handleTimerClick,
                         preferFluidVolume: fluidVolumePreferred,
                         preferSmallSpoons,
                         unitSystem: effectiveUnitSystem,
@@ -753,6 +771,7 @@ export function RecipePage() {
                             onIngredientClick: auth.authenticated
                               ? setEditingIngredientName
                               : undefined,
+                            onTimerClick: handleTimerClick,
                             preferFluidVolume: fluidVolumePreferred,
                             preferSmallSpoons,
                             unitSystem: effectiveUnitSystem,
@@ -980,7 +999,9 @@ function ScalePopover({
           return (
             <div
               className={`flex items-center gap-1 rounded-xl px-1.5 py-0.5 ${
-                selectedOption ? 'bg-orange-50 dark:bg-stone-700' : 'hover:bg-orange-50 dark:hover:bg-stone-700'
+                selectedOption
+                  ? 'bg-orange-50 dark:bg-stone-700'
+                  : 'hover:bg-orange-50 dark:hover:bg-stone-700'
               }`}
               key={option.id}
             >
@@ -1192,6 +1213,11 @@ function renderCooklangLine(line: string, options: StepRenderOptions) {
       index: token.start,
       length: token.end - token.start,
       text: formatTimerLabel(token),
+      timerAttrs: {
+        name: token.name,
+        quantity: token.quantity,
+        unit: token.unit,
+      },
       type: 'timer',
     })
   }
@@ -1214,6 +1240,11 @@ function renderCooklangLine(line: string, options: StepRenderOptions) {
       marker.type === 'ingredient' &&
       Boolean(marker.ingredientName) &&
       options.onIngredientClick != null
+    const canStartTimer =
+      marker.type === 'timer' &&
+      marker.timerAttrs != null &&
+      options.onTimerClick != null &&
+      timerAttrsToDurationMs(marker.timerAttrs) != null
     rendered.push(
       canOpenIngredient ? (
         <button
@@ -1221,6 +1252,16 @@ function renderCooklangLine(line: string, options: StepRenderOptions) {
           key={`${marker.index}-${markerIndex}`}
           onClick={() => options.onIngredientClick?.(marker.ingredientName as string)}
           title="Edit ingredient"
+          type="button"
+        >
+          {marker.text}
+        </button>
+      ) : canStartTimer ? (
+        <button
+          className={`cursor-pointer ${className}`}
+          key={`${marker.index}-${markerIndex}`}
+          onClick={() => options.onTimerClick?.(marker.timerAttrs as TimerAttrs)}
+          title="Start timer"
           type="button"
         >
           {marker.text}

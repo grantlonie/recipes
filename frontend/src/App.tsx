@@ -3,6 +3,7 @@ import {
   BeakerIcon,
   BookmarkIcon as BookmarkIconOutline,
   ClipboardDocumentListIcon,
+  ClockIcon,
   Cog6ToothIcon,
   GlobeAltIcon,
   TagIcon,
@@ -29,8 +30,10 @@ import { RecipePage } from './RecipePage'
 import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
+import { formatCountdown, useTimer } from './TimerContext'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
+import { TimerDialog } from './components/TimerDialog'
 
 export function App() {
   return (
@@ -49,6 +52,7 @@ export function App() {
 function AppShell() {
   const { auth } = useAuth()
   const { localRevision } = useRecipeSync()
+  const { openDialog, remainingMs, status } = useTimer()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [needsReviewCount, setNeedsReviewCount] = useState(0)
   const location = useLocation()
@@ -58,6 +62,7 @@ function AppShell() {
     location.pathname.startsWith('/recipes/') &&
     !location.pathname.startsWith('/recipes/edit') &&
     location.pathname !== '/recipes/new'
+  const timerActive = status !== 'idle'
 
   useEffect(() => {
     if (!auth.authenticated) {
@@ -97,6 +102,30 @@ function AppShell() {
               </Link>
             )}
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
+              {timerActive ? (
+                <button
+                  aria-label={`Timer ${formatCountdown(remainingMs)}${status === 'paused' ? ', paused' : status === 'finished' ? ', finished' : ''}`}
+                  className={`cursor-pointer rounded-full px-3 py-2 font-mono text-sm font-semibold tabular-nums transition ${
+                    status === 'finished'
+                      ? 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:hover:bg-orange-900/50'
+                      : status === 'paused'
+                        ? 'text-stone-400 hover:bg-orange-100 dark:text-stone-500 dark:hover:bg-stone-700'
+                        : 'text-orange-700 hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-stone-700'
+                  }`}
+                  onClick={openDialog}
+                  type="button"
+                >
+                  {formatCountdown(remainingMs)}
+                </button>
+              ) : (
+                <IconButton
+                  aria-label="Timer"
+                  className="h-10 w-10"
+                  icon={<ClockIcon aria-hidden="true" className="h-6 w-6" />}
+                  onClick={openDialog}
+                  tooltip={{ content: 'Timer' }}
+                />
+              )}
               <Popover
                 onClose={() => setSettingsOpen(false)}
                 open={settingsOpen}
@@ -202,6 +231,7 @@ function AppShell() {
           </Routes>
         ) : null}
       </main>
+      <TimerDialog />
     </div>
   )
 }

@@ -1,10 +1,8 @@
 import { COOKLANG_TOKEN_CHARS } from './cooklangTokens'
+import { parseQuantity } from './quantities'
 import { splitGluedAmount } from './units'
 
-export const TIMER_TOKEN_RE = new RegExp(
-  `~([${COOKLANG_TOKEN_CHARS}]*?)\\{([^}]*)\\}`,
-  'g',
-)
+export const TIMER_TOKEN_RE = new RegExp(`~([${COOKLANG_TOKEN_CHARS}]*?)\\{([^}]*)\\}`, 'g')
 
 export type TimerUnit = 'hours' | 'minutes'
 
@@ -84,6 +82,18 @@ export function normalizeTimerUnitForStorage(quantity: string, unit: string): st
     return quantity.trim() === '1' ? 'hour' : 'hours'
   }
   return 'minutes'
+}
+
+export function timerAttrsToDurationMs(attrs: TimerAttrs): number | null {
+  const quantity = parseQuantity(attrs.quantity)
+  if (quantity == null || quantity <= 0) {
+    return null
+  }
+  const unit = timerUnitSelectValue(attrs.unit)
+  if (unit === 'hours') {
+    return Math.round(quantity * 60 * 60 * 1000)
+  }
+  return Math.round(quantity * 60 * 1000)
 }
 
 function splitTimerAmount(amount: string) {

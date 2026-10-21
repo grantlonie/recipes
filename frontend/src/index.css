@@ -82,3 +82,161 @@ button:disabled {
     transform: rotate(-28deg);
   }
 }
+
+.timer-done-clock {
+  position: relative;
+  width: 7.5rem;
+  height: 7.5rem;
+  margin-inline: auto;
+}
+
+.timer-done-clock__face {
+  position: absolute;
+  inset: 0.85rem;
+  border-radius: 9999px;
+  border: 3px solid #fb923c;
+  background:
+    radial-gradient(circle at 50% 45%, #fff7ed 0%, #ffedd5 70%, #fed7aa 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
+}
+
+.dark .timer-done-clock__face {
+  border-color: #ea580c;
+  background:
+    radial-gradient(circle at 50% 45%, #44403c 0%, #292524 75%, #1c1917 100%);
+}
+
+.timer-done-clock__hand {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.18rem;
+  height: 1.85rem;
+  margin-left: -0.09rem;
+  margin-top: -1.85rem;
+  border-radius: 9999px;
+  background: #ea580c;
+  transform-origin: 50% 100%;
+  animation: timer-hand-spin 1.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.timer-done-clock__hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: -0.275rem;
+  margin-top: -0.275rem;
+  border-radius: 9999px;
+  background: #ea580c;
+}
+
+.timer-done-clock__lid {
+  position: absolute;
+  top: 0.35rem;
+  width: 50%;
+  height: calc(100% - 0.7rem);
+  overflow: hidden;
+  z-index: 2;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.timer-done-clock__lid--left {
+  left: 0;
+  transform-origin: 100% 50%;
+  animation: timer-lid-open-left 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+.timer-done-clock__lid--right {
+  right: 0;
+  transform-origin: 0% 50%;
+  animation: timer-lid-open-right 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+.timer-done-clock__lid-panel {
+  width: 200%;
+  height: 100%;
+  border-radius: 9999px;
+  border: 3px solid #f97316;
+  background: linear-gradient(160deg, #fdba74 0%, #fb923c 45%, #ea580c 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+
+.dark .timer-done-clock__lid-panel {
+  border-color: #c2410c;
+  background: linear-gradient(160deg, #9a3412 0%, #c2410c 50%, #7c2d12 100%);
+}
+
+.timer-done-clock__lid--left .timer-done-clock__lid-panel {
+  margin-left: 0;
+}
+
+.timer-done-clock__lid--right .timer-done-clock__lid-panel {
+  margin-left: -100%;
+}
+
+.timer-done-clock__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid rgb(251 146 60 / 0.35);
+  animation: timer-ring-pulse 1.4s ease-out 0.4s both;
+  pointer-events: none;
+}
+
+@keyframes timer-lid-open-left {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(-118deg);
+  }
+}
+
+@keyframes timer-lid-open-right {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(118deg);
+  }
+}
+
+@keyframes timer-hand-spin {
+  from {
+    transform: rotate(-40deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes timer-ring-pulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.28);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-done-clock__lid--left,
+  .timer-done-clock__lid--right,
+  .timer-done-clock__hand,
+  .timer-done-clock__ring {
+    animation: none;
+  }
+
+  .timer-done-clock__lid--left {
+    transform: rotateY(-118deg);
+  }
+
+  .timer-done-clock__lid--right {
+    transform: rotateY(118deg);
+  }
+}
