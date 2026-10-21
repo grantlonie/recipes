@@ -165,6 +165,8 @@ class RecipeRepository:
         servings: float | None = None,
         tags: list[str] | None = None,
         review: list[str] | None = None,
+        scale_default: str | None = None,
+        scale_options: list[dict[str, object]] | None = None,
     ) -> RecipeDetail:
         recipe = self.sync_slug(slug)
         metadata, body = cooklang.parse_document(recipe.content)
@@ -175,6 +177,8 @@ class RecipeRepository:
             servings=servings,
             tags=tags,
             review=review,
+            scale_default=scale_default,
+            scale_options=scale_options,
         )
         return self.write_recipe(slug, cooklang.render_document(updated_metadata, body))
 

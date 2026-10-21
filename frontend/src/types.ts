@@ -84,10 +84,18 @@ export interface AssetUploadResponse {
   path: string
 }
 
+export interface ScaleOptionInput {
+  id: string
+  label: string
+  value: number
+}
+
 export interface RecipeMetadataInput {
   bookmarked?: boolean
   image?: string | null
   review?: string[] | null
+  scale_default?: string | null
+  scale_options?: ScaleOptionInput[] | null
   servings?: number | null
   tags?: string[] | null
 }

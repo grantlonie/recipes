@@ -11,8 +11,10 @@ import {
   PencilSquareIcon,
   ShareIcon,
   Square3Stack3DIcon,
+  StarIcon as StarIconOutline,
   TrashIcon,
 } from '@heroicons/react/24/outline'
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 
 import { deleteRecipe, getScaledRecipe, updateRecipeMetadata } from './api'
 import { useAuth } from './AuthContext'
@@ -41,7 +43,18 @@ import {
   stepIngredientMarkerClassName,
   stepTimerMarkerClassName,
 } from './themeClasses'
-import type { CatalogIngredient, Ingredient, UnitSystem } from './types'
+import {
+  builtinScaleId,
+  createCustomScaleOption,
+  defaultScaleOption,
+  formatScaleMultiplier,
+  isNamedScaleOption,
+  mergeScalePrefs,
+  scaleOptionsForPersist,
+  type RecipeScalePrefs,
+  type ScaleOption,
+} from './scalePrefs'
+import type { CatalogIngredient, Ingredient, RecipeDetail, UnitSystem } from './types'
 import {
   densityForName,
   detectRecipeUnitSystem,
@@ -57,25 +70,16 @@ import { isRefFile, resolveRefDisplay } from './importMapping'
 
 const ICON_CLASS = 'h-5 w-5'
 
-const SCALE_OPTIONS = [
-  { label: '0.5X', value: 0.5 },
-  { label: '1X', value: 1 },
-  { label: '1.5X', value: 1.5 },
-  { label: '2X', value: 2 },
-] as const
-
-type ScaleFactor = (typeof SCALE_OPTIONS)[number]['value']
-
-const SCALED_TEXT_CLASS = 'font-semibold text-orange-700 dark:text-orange-300'
+const SCALE_ROW_ICON_CLASS = 'h-3.5 w-3.5'
+const SCALE_ROW_BUTTON_CLASS = '!h-7 !w-7'
+const SCALE_TRIGGER_CLASS =
+  'inline-flex items-center gap-1 border-0 bg-transparent py-0.5 text-xs font-semibold tabular-nums text-orange-600 focus:outline-none focus:ring-0 dark:text-orange-300'
 
 const STEP_MARKER_CLASS = {
   cookware: stepCookwareMarkerClassName,
   ingredient: stepIngredientMarkerClassName,
   timer: stepTimerMarkerClassName,
 } as const
-
-const SCALED_INGREDIENT_MARKER_CLASS =
-  'inline rounded-md border border-orange-400 bg-orange-100 px-1 font-semibold text-orange-800 dark:border-orange-500 dark:bg-orange-950/60 dark:text-orange-200'
 
 type StepMarker = {
   index: number
@@ -87,7 +91,6 @@ type StepMarker = {
 
 interface StepRenderOptions {
   catalog: CatalogIngredient[]
-  isScaled: boolean
   onIngredientClick?: (name: string) => void
   preferFluidVolume: boolean
   preferSmallSpoons: boolean
@@ -112,7 +115,7 @@ export function RecipePage() {
     queryKey: ['recipe', slug],
     retry: false,
   })
-  const [scaleFactor, setScaleFactor] = useState<ScaleFactor>(1)
+  const [selectedScaleId, setSelectedScaleId] = useState(builtinScaleId(1))
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
   const [cookwareDialogOpen, setCookwareDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -122,6 +125,15 @@ export function RecipePage() {
   const [manualUnitSystem, setManualUnitSystem] = useState<UnitSystem | null>(null)
   const [editingIngredientName, setEditingIngredientName] = useState<string | null>(null)
   const [imageFailed, setImageFailed] = useState(false)
+  const scaleSlugRef = useRef<string | null>(null)
+  const scalePrefs = useMemo(
+    () => mergeScalePrefs(recipeQuery.data?.metadata),
+    [recipeQuery.data?.metadata]
+  )
+  const selectedScale =
+    scalePrefs.options.find(option => option.id === selectedScaleId) ??
+    defaultScaleOption(scalePrefs)
+  const scaleFactor = selectedScale.value
   const baseServings = recipeQuery.data?.servings ?? 1
   const targetServings = baseServings * scaleFactor
   const isScaled = scaleFactor !== 1
@@ -140,6 +152,18 @@ export function RecipePage() {
   })
   const dismissReviewMutation = useMutation({
     mutationFn: () => updateRecipeMetadata(slug, { review: [] }),
+    onSuccess: async recipe => {
+      queryClient.setQueryData(['recipe', slug], recipe)
+      await storeRecipe(recipe)
+      notifyLocalChange()
+    },
+  })
+  const scalePrefsMutation = useMutation({
+    mutationFn: (prefs: RecipeScalePrefs) =>
+      updateRecipeMetadata(slug, {
+        scale_default: prefs.defaultOptionId,
+        scale_options: scaleOptionsForPersist(prefs.options),
+      }),
     onSuccess: async recipe => {
       queryClient.setQueryData(['recipe', slug], recipe)
       await storeRecipe(recipe)
@@ -196,11 +220,16 @@ export function RecipePage() {
   }, [catalog, effectiveUnitSystem, fluidVolumePreferred, recipe])
 
   useEffect(() => {
-    if (recipeQuery.data) {
-      setScaleFactor(1)
-      addRecentRecipe(recipeQuery.data)
+    if (!recipeQuery.data) {
+      return
     }
-  }, [addRecentRecipe, recipeQuery.data])
+    addRecentRecipe(recipeQuery.data)
+    if (scaleSlugRef.current === slug) {
+      return
+    }
+    scaleSlugRef.current = slug
+    setSelectedScaleId(defaultScaleOption(mergeScalePrefs(recipeQuery.data.metadata)).id)
+  }, [addRecentRecipe, recipeQuery.data, slug])
 
   useEffect(() => {
     setCompletedSteps(new Set())
@@ -278,6 +307,71 @@ export function RecipePage() {
       cancelled = true
     }
   }, [navigate, queryClient, removeRecentRecipe, revision, slug])
+
+  function persistScalePrefs(next: RecipeScalePrefs) {
+    const current = queryClient.getQueryData<RecipeDetail>(['recipe', slug])
+    if (current) {
+      const metadata = { ...current.metadata }
+      const persisted = scaleOptionsForPersist(next.options)
+      if (persisted.length) {
+        metadata.scale_options = persisted
+      } else {
+        delete metadata.scale_options
+      }
+      if (next.defaultOptionId) {
+        metadata.scale_default = next.defaultOptionId
+      } else {
+        delete metadata.scale_default
+      }
+      queryClient.setQueryData(['recipe', slug], { ...current, metadata })
+    }
+    scalePrefsMutation.mutate(next)
+  }
+
+  function handleSelectScale(optionId: string) {
+    setSelectedScaleId(optionId)
+  }
+
+  function handleToggleScaleDefault(optionId: string) {
+    const nextDefault = scalePrefs.defaultOptionId === optionId ? null : optionId
+    persistScalePrefs({ ...scalePrefs, defaultOptionId: nextDefault })
+  }
+
+  function handleRenameScale(optionId: string, label: string) {
+    const trimmed = label.trim()
+    if (!trimmed) {
+      return
+    }
+    persistScalePrefs({
+      ...scalePrefs,
+      options: scalePrefs.options.map(option =>
+        option.id === optionId ? { ...option, label: trimmed } : option
+      ),
+    })
+  }
+
+  function handleAddScale(value: number) {
+    const option = createCustomScaleOption(value)
+    const next: RecipeScalePrefs = {
+      ...scalePrefs,
+      options: [...scalePrefs.options, option],
+    }
+    setSelectedScaleId(option.id)
+    persistScalePrefs(next)
+  }
+
+  function handleDeleteScale(optionId: string) {
+    const remaining = scalePrefs.options.filter(option => option.id !== optionId)
+    const next: RecipeScalePrefs = {
+      defaultOptionId:
+        scalePrefs.defaultOptionId === optionId ? null : scalePrefs.defaultOptionId,
+      options: remaining,
+    }
+    if (selectedScaleId === optionId) {
+      setSelectedScaleId(defaultScaleOption(next).id)
+    }
+    persistScalePrefs(next)
+  }
 
   if (recipeQuery.isLoading && !recipeQuery.data) {
     return (
@@ -493,33 +587,33 @@ export function RecipePage() {
           <section className={panelClassName}>
             <h2 className="text-lg font-semibold">Ingredients</h2>
             <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-              <output
-                aria-live="polite"
-                className={`tabular-nums font-semibold ${isScaled ? SCALED_TEXT_CLASS : 'text-stone-600 dark:text-stone-400'}`}
-                id="servings"
-              >
-                Serves {formatServings(targetServings)}
-              </output>
-              <div className="flex items-center gap-5">
-                <ScalePopover onChange={setScaleFactor} value={scaleFactor} />
-                <UnitSystemToggle
-                  onChange={system => {
-                    setManualUnitSystem(system)
-                    setUnitSystem(system)
-                  }}
-                  originalUnitSystem={originalUnitSystem}
-                  value={effectiveUnitSystem}
-                />
-              </div>
+              <ScalePopover
+                canEdit={auth.authenticated}
+                defaultOptionId={scalePrefs.defaultOptionId}
+                onAdd={handleAddScale}
+                onDelete={handleDeleteScale}
+                onRename={handleRenameScale}
+                onSelect={handleSelectScale}
+                onToggleDefault={handleToggleScaleDefault}
+                options={scalePrefs.options}
+                selectedId={selectedScale.id}
+                servings={targetServings}
+              />
+              <UnitSystemToggle
+                onChange={system => {
+                  setManualUnitSystem(system)
+                  setUnitSystem(system)
+                }}
+                originalUnitSystem={originalUnitSystem}
+                value={effectiveUnitSystem}
+              />
             </div>
             <ul className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
               {recipe.ingredients.map((ingredient, index) => {
                 const needsDensity = auth.authenticated && densityGapNames.has(ingredient.name)
                 const nameClass = needsDensity
                   ? 'text-amber-800 underline decoration-amber-500/80 decoration-dotted underline-offset-2 dark:text-amber-200'
-                  : isScaled
-                    ? SCALED_TEXT_CLASS
-                    : undefined
+                  : undefined
                 const label = titleCaseIngredient(
                   formatIngredientLabel(ingredient.name, ingredient.note)
                 )
@@ -529,9 +623,7 @@ export function RecipePage() {
                       className={`tabular-nums ${
                         needsDensity
                           ? 'text-amber-800 dark:text-amber-200'
-                          : isScaled
-                            ? SCALED_TEXT_CLASS
-                            : 'text-stone-600 dark:text-stone-400'
+                          : 'text-stone-600 dark:text-stone-400'
                       }`}
                     >
                       {formatIngredientListAmount(
@@ -610,7 +702,6 @@ export function RecipePage() {
                     >
                       {renderCooklangStep(block.text, {
                         catalog,
-                        isScaled,
                         onIngredientClick: auth.authenticated
                           ? setEditingIngredientName
                           : undefined,
@@ -659,7 +750,6 @@ export function RecipePage() {
                         >
                           {renderCooklangStep(block.text, {
                             catalog,
-                            isScaled,
                             onIngredientClick: auth.authenticated
                               ? setEditingIngredientName
                               : undefined,
@@ -800,53 +890,219 @@ export function RecipePage() {
 }
 
 interface ScalePopoverProps {
-  onChange: (value: ScaleFactor) => void
-  value: ScaleFactor
+  canEdit: boolean
+  defaultOptionId: string | null
+  onAdd: (value: number) => void
+  onDelete: (optionId: string) => void
+  onRename: (optionId: string, label: string) => void
+  onSelect: (optionId: string) => void
+  onToggleDefault: (optionId: string) => void
+  options: ScaleOption[]
+  selectedId: string
+  servings: number
 }
 
-function ScalePopover({ onChange, value }: ScalePopoverProps) {
+function ScalePopover({
+  canEdit,
+  defaultOptionId,
+  onAdd,
+  onDelete,
+  onRename,
+  onSelect,
+  onToggleDefault,
+  options,
+  selectedId,
+  servings,
+}: ScalePopoverProps) {
   const [open, setOpen] = useState(false)
-  const currentLabel = SCALE_OPTIONS.find(option => option.value === value)?.label ?? '1X'
+  const [customValue, setCustomValue] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draftLabel, setDraftLabel] = useState('')
+  const selected = options.find(option => option.id === selectedId) ?? options[0]
+  const triggerLabel = `${selected?.label ?? '1X'} (Serves ${formatServings(servings)})`
+
+  function closePopover() {
+    setOpen(false)
+    setEditingId(null)
+    setDraftLabel('')
+  }
+
+  function startRename(option: ScaleOption) {
+    setEditingId(option.id)
+    setDraftLabel(option.label)
+  }
+
+  function commitRename() {
+    if (!editingId) {
+      return
+    }
+    onRename(editingId, draftLabel)
+    setEditingId(null)
+    setDraftLabel('')
+  }
+
+  function handleAddCustom() {
+    const parsed = Number(customValue)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return
+    }
+    onAdd(parsed)
+    setCustomValue('')
+  }
 
   return (
     <Popover
-      align="right"
-      onClose={() => setOpen(false)}
+      align="left"
+      onClose={closePopover}
       open={open}
       trigger={
         <button
           aria-expanded={open}
           aria-haspopup="listbox"
-          aria-label="Recipe scale"
-          className="inline-flex items-center gap-1 border-0 bg-transparent py-0.5 text-xs font-semibold text-orange-600 focus:outline-none focus:ring-0 dark:text-orange-300"
+          aria-label="Recipe scale and servings"
+          aria-live="polite"
+          className={SCALE_TRIGGER_CLASS}
+          id="servings"
           onClick={() => setOpen(current => !current)}
           type="button"
         >
-          {currentLabel}
+          {triggerLabel}
           <ChevronDownIcon aria-hidden="true" className="h-3.5 w-3.5" />
         </button>
       }
     >
-      <div className="py-1" role="listbox">
-        {SCALE_OPTIONS.map(option => (
-          <button
-            aria-selected={option.value === value}
-            className={`block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-orange-50 dark:hover:bg-stone-700 ${
-              option.value === value
-                ? 'font-semibold text-orange-700 dark:text-orange-300'
-                : 'text-stone-700 dark:text-stone-200'
-            }`}
-            key={option.value}
-            onClick={() => {
-              onChange(option.value)
-              setOpen(false)
-            }}
-            role="option"
-            type="button"
-          >
-            {option.label}
-          </button>
-        ))}
+      <div className="min-w-[16rem] py-1" role="listbox">
+        {options.map(option => {
+          const selectedOption = option.id === selectedId
+          const isDefault = option.id === defaultOptionId
+          const named = isNamedScaleOption(option)
+          const editing = editingId === option.id
+          return (
+            <div
+              className={`flex items-center gap-1 rounded-xl px-1.5 py-0.5 ${
+                selectedOption ? 'bg-orange-50 dark:bg-stone-700' : 'hover:bg-orange-50 dark:hover:bg-stone-700'
+              }`}
+              key={option.id}
+            >
+              {editing ? (
+                <input
+                  aria-label="Rename scale"
+                  autoFocus
+                  className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm text-stone-800 focus:border-orange-400 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+                  onBlur={commitRename}
+                  onChange={event => setDraftLabel(event.target.value)}
+                  onClick={event => event.stopPropagation()}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitRename()
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      setEditingId(null)
+                      setDraftLabel('')
+                    }
+                  }}
+                  value={draftLabel}
+                />
+              ) : (
+                <button
+                  aria-selected={selectedOption}
+                  className={`min-w-0 flex-1 rounded-lg px-1.5 py-1.5 text-left text-sm ${
+                    selectedOption
+                      ? 'font-semibold text-orange-700 dark:text-orange-300'
+                      : 'text-stone-700 dark:text-stone-200'
+                  }`}
+                  onClick={() => {
+                    onSelect(option.id)
+                    closePopover()
+                  }}
+                  role="option"
+                  type="button"
+                >
+                  <span className="inline-flex items-baseline gap-1.5">
+                    <span>{option.label}</span>
+                    {named ? (
+                      <span className="text-xs font-normal text-stone-500 dark:text-stone-400">
+                        {formatScaleMultiplier(option.value)}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              )}
+              {canEdit ? (
+                <div className="flex shrink-0 items-center">
+                  <IconButton
+                    aria-label={isDefault ? 'Clear default scale' : 'Set as default scale'}
+                    className={SCALE_ROW_BUTTON_CLASS}
+                    icon={
+                      isDefault ? (
+                        <StarIconSolid aria-hidden="true" className={SCALE_ROW_ICON_CLASS} />
+                      ) : (
+                        <StarIconOutline aria-hidden="true" className={SCALE_ROW_ICON_CLASS} />
+                      )
+                    }
+                    onClick={event => {
+                      event.stopPropagation()
+                      onToggleDefault(option.id)
+                    }}
+                    tooltip={{ content: isDefault ? 'Clear default' : 'Set as default' }}
+                  />
+                  <IconButton
+                    aria-label="Rename scale"
+                    className={SCALE_ROW_BUTTON_CLASS}
+                    icon={<PencilSquareIcon aria-hidden="true" className={SCALE_ROW_ICON_CLASS} />}
+                    onClick={event => {
+                      event.stopPropagation()
+                      startRename(option)
+                    }}
+                    tooltip={{ content: 'Rename' }}
+                  />
+                  {!option.builtin ? (
+                    <IconButton
+                      aria-label="Delete scale"
+                      className={SCALE_ROW_BUTTON_CLASS}
+                      icon={<TrashIcon aria-hidden="true" className={SCALE_ROW_ICON_CLASS} />}
+                      onClick={event => {
+                        event.stopPropagation()
+                        onDelete(option.id)
+                      }}
+                      tooltip={{ content: 'Delete' }}
+                    />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
+        {canEdit ? (
+          <div className="mt-1 flex items-center gap-2 border-t border-stone-200 px-2 pt-2 dark:border-stone-600">
+            <input
+              aria-label="Custom scale multiplier"
+              className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm tabular-nums text-stone-800 focus:border-orange-400 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+              min="0.01"
+              onChange={event => setCustomValue(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  handleAddCustom()
+                }
+              }}
+              placeholder='Custom scale "1.75"'
+              step="any"
+              type="number"
+              value={customValue}
+            />
+            <button
+              className="shrink-0 rounded-full bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!customValue || Number(customValue) <= 0}
+              onClick={handleAddCustom}
+              type="button"
+            >
+              Add
+            </button>
+          </div>
+        ) : null}
       </div>
     </Popover>
   )
@@ -953,10 +1209,7 @@ function renderCooklangLine(line: string, options: StepRenderOptions) {
     if (marker.index > cursor) {
       rendered.push(line.slice(cursor, marker.index))
     }
-    const className =
-      marker.type === 'ingredient' && options.isScaled
-        ? SCALED_INGREDIENT_MARKER_CLASS
-        : STEP_MARKER_CLASS[marker.type]
+    const className = STEP_MARKER_CLASS[marker.type]
     const canOpenIngredient =
       marker.type === 'ingredient' &&
       Boolean(marker.ingredientName) &&

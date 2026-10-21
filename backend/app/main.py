@@ -436,6 +436,11 @@ def update_metadata(
     repository: RecipeRepository = Depends(get_repository),
 ) -> RecipeDetail:
     try:
+        scale_options = (
+            [option.model_dump() for option in payload.scale_options]
+            if payload.scale_options is not None
+            else None
+        )
         return repository.update_metadata(
             slug,
             bookmarked=payload.bookmarked,
@@ -443,6 +448,8 @@ def update_metadata(
             servings=payload.servings,
             tags=payload.tags,
             review=payload.review,
+            scale_default=payload.scale_default,
+            scale_options=scale_options,
         )
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

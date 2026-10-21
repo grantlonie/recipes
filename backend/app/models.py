@@ -98,10 +98,18 @@ class RecipeUpdate(BaseModel):
     slug: str | None = None
 
 
+class ScaleOption(BaseModel):
+    id: str
+    label: str
+    value: float
+
+
 class MetadataUpdate(BaseModel):
     bookmarked: bool | None = None
     image: str | None = None
     review: list[str] | None = None
+    scale_default: str | None = None
+    scale_options: list[ScaleOption] | None = None
     servings: float | None = None
     tags: list[str] | None = None
 

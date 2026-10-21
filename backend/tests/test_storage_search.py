@@ -71,6 +71,30 @@ Brown @beef{1%lb}.
     assert "review:" not in cleared.content
     assert not list(tmp_path.rglob("*.jpg"))
 
+    scaled = repository.update_metadata(
+        "dinner-chili",
+        scale_default="custom-pan",
+        scale_options=[
+            {"id": "custom-pan", "label": "7x11", "value": 2},
+            {"id": "builtin-2", "label": "12 inch cast iron", "value": 2},
+        ],
+    )
+    assert scaled.metadata["scale_default"] == "custom-pan"
+    assert scaled.metadata["scale_options"] == [
+        {"id": "custom-pan", "label": "7x11", "value": 2.0},
+        {"id": "builtin-2", "label": "12 inch cast iron", "value": 2.0},
+    ]
+    assert "scale_options:" in scaled.content
+
+    cleared_scales = repository.update_metadata(
+        "dinner-chili",
+        scale_default=None,
+        scale_options=[],
+    )
+    assert "scale_default" not in cleared_scales.metadata
+    assert "scale_options" not in cleared_scales.metadata
+    assert "scale_options:" not in cleared_scales.content
+
 
 def test_recipe_paths_cannot_escape_recipe_root(tmp_path):
     repository = RecipeRepository(

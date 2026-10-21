@@ -1135,6 +1135,8 @@ def set_metadata_values(
     servings: float | None = None,
     tags: list[str] | None = None,
     review: list[str] | None = None,
+    scale_default: str | None = None,
+    scale_options: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     updated = dict(metadata)
     if bookmarked is not None:
@@ -1151,7 +1153,35 @@ def set_metadata_values(
             updated["review"] = cleaned
         else:
             updated.pop("review", None)
+    if scale_options is not None:
+        cleaned_options = normalize_scale_options(scale_options)
+        if cleaned_options:
+            updated["scale_options"] = cleaned_options
+        else:
+            updated.pop("scale_options", None)
+        default_id = (scale_default or "").strip()
+        if default_id:
+            updated["scale_default"] = default_id
+        else:
+            updated.pop("scale_default", None)
     return updated
+
+
+def normalize_scale_options(options: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cleaned: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for raw in options:
+        option_id = str(raw.get("id", "")).strip()
+        label = str(raw.get("label", "")).strip()
+        try:
+            value = float(raw.get("value"))
+        except (TypeError, ValueError):
+            continue
+        if not option_id or not label or value <= 0 or option_id in seen_ids:
+            continue
+        seen_ids.add(option_id)
+        cleaned.append({"id": option_id, "label": label, "value": value})
+    return cleaned
 
 
 def split_amount(amount: str | None) -> tuple[str | None, str | None, bool]:
