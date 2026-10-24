@@ -220,6 +220,68 @@ def test_fetch_page_image_stays_blocked_when_iframely_fallback_fails(settings: S
     assert result.status_code == 402
 
 
+def test_fetch_page_image_marks_gone_on_direct_404(settings: Settings):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text="not found")
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client(transport):
+        result = fetch_page_image_result("https://example.com/recipe", settings=settings)
+
+    assert result.gone is True
+    assert result.blocked is False
+    assert result.status_code == 404
+
+
+def test_fetch_page_image_marks_gone_when_iframely_says_content_unavailable(settings: Settings):
+    page_url = "https://food52.com/recipes/26046-crispy-coconut-kale"
+    settings = settings.model_copy(update={"iframely_api_key": "iframely_test_key"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == page_url:
+            return httpx.Response(429, text="slow down")
+        if url.startswith("https://iframe.ly/api/iframely"):
+            return httpx.Response(
+                200,
+                json={
+                    "error": (
+                        "Iframely could not fetch the given URL. "
+                        "The content is no longer available at the origin"
+                    )
+                },
+            )
+        raise AssertionError(f"Unexpected request: {url}")
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client(transport):
+        result = fetch_page_image_result(page_url, settings=settings)
+
+    assert result.gone is True
+    assert result.blocked is False
+
+
+def test_fetch_page_image_marks_gone_on_iframely_410(settings: Settings):
+    page_url = "https://food52.com/recipes/example"
+    settings = settings.model_copy(update={"iframely_api_key": "iframely_test_key"})
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url == page_url:
+            return httpx.Response(403, text="forbidden")
+        if url.startswith("https://iframe.ly/api/iframely"):
+            return httpx.Response(410, json={"error": "Gone", "status": 410})
+        raise AssertionError(f"Unexpected request: {url}")
+
+    transport = httpx.MockTransport(handler)
+    with _patch_client(transport):
+        result = fetch_page_image_result(page_url, settings=settings)
+
+    assert result.gone is True
+    assert result.blocked is False
+    assert result.status_code == 410
+
+
 def test_fetch_recipe_page_total_failure(settings: Settings):
     settings = settings.model_copy(update={"page_fetch_fallback_enabled": False})
 

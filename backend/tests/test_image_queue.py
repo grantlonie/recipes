@@ -184,6 +184,42 @@ def test_apply_job_result_blocked_defers_host_jobs_until_tomorrow(tmp_path: Path
     assert "image_pending: true" in soup
 
 
+def test_apply_job_result_gone_gives_up_without_pausing_host(tmp_path: Path):
+    settings = _settings(tmp_path, image_queue_max_attempts=8, image_queue_host_gap_seconds=20)
+    for slug in ("dead", "next"):
+        recipe_dir = settings.recipe_root / slug
+        recipe_dir.mkdir(parents=True)
+        (recipe_dir / RECIPE_FILENAME).write_text(
+            f"---\ntitle: {slug}\nimage_pending: true\n"
+            f"image_source: https://food52.com/{slug}\n---\n\nCook.\n",
+            encoding="utf-8",
+        )
+    now = datetime(2026, 10, 24, 0, 0, tzinfo=UTC).timestamp()
+    state = ImageQueueState(
+        jobs=[
+            ImageJob(slug="dead", source_url="https://food52.com/dead"),
+            ImageJob(slug="next", source_url="https://food52.com/next"),
+        ]
+    )
+    apply_job_result(
+        state.jobs[0],
+        result=ImageScrapeResult(gone=True, status_code=404, error="status=404"),
+        settings=settings,
+        state=state,
+        now=now,
+    )
+    assert [job.slug for job in state.jobs] == ["next"]
+    assert state.jobs[0].next_attempt_at == 0
+    host_state = state.hosts["food52.com"]
+    assert host_state.blocked_day == ""
+    assert host_state.next_ok_at == now + 20
+    dead = (settings.recipe_root / "dead" / RECIPE_FILENAME).read_text(encoding="utf-8")
+    assert "image_pending: false" in dead
+    assert "Image source page is gone" in dead
+    claimed = claim_jobs(state, concurrency=6, now=now + 20)
+    assert [job.slug for job in claimed] == ["next"]
+
+
 def test_apply_job_result_daily_limit_defers_remaining(tmp_path: Path):
     settings = _settings(tmp_path, image_queue_host_daily_limit=1, image_queue_host_gap_seconds=1)
     for slug in ("a", "b"):

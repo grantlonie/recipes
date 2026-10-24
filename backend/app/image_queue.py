@@ -71,9 +71,7 @@ def host_blocked_today(host_state: HostState | None, *, day: str) -> bool:
     return bool(host_state and host_state.blocked_day == day)
 
 
-def host_at_daily_limit(
-    host_state: HostState | None, *, day: str, daily_limit: int
-) -> bool:
+def host_at_daily_limit(host_state: HostState | None, *, day: str, daily_limit: int) -> bool:
     if not host_state or host_state.day != day:
         return False
     return host_state.fetches_today >= max(1, daily_limit)
@@ -201,9 +199,7 @@ def enqueue_image_job(
                 save_queue(path, state)
                 return True
 
-        state.jobs.append(
-            ImageJob(slug=slug.strip(), source_url=cleaned, next_attempt_at=current)
-        )
+        state.jobs.append(ImageJob(slug=slug.strip(), source_url=cleaned, next_attempt_at=current))
         save_queue(path, state)
         return True
 
@@ -300,9 +296,7 @@ def maybe_enqueue_from_recipe(
     return enqueue_image_job(settings.image_queue_path, slug=slug, source_url=source_url)
 
 
-def mark_recipe_image_pending(
-    content: str, *, source_url: str | None
-) -> str:
+def mark_recipe_image_pending(content: str, *, source_url: str | None) -> str:
     """Set image_pending (+ optional image_source) when recipe has no image yet."""
     metadata, body = cooklang.parse_document(content)
     if cooklang.metadata_image_url(metadata) or cooklang.metadata_image_file(metadata):
@@ -374,7 +368,8 @@ def record_host_attempt(
     day = utc_day(now)
     previous = state.hosts.get(host)
     fetches = 0 if not previous or previous.day != day else previous.fetches_today
-    blocked_day = day if blocked else (previous.blocked_day if previous and previous.blocked_day == day else "")
+    still_blocked_today = bool(previous and previous.blocked_day == day)
+    blocked_day = day if blocked or still_blocked_today else ""
     host_state = HostState(
         blocked_day=blocked_day,
         day=day,
@@ -412,23 +407,39 @@ def apply_job_result(
     live = next((entry for entry in state.jobs if entry.slug == job.slug), job)
     daily_limit = max(1, settings.image_queue_host_daily_limit)
 
+    def defer_if_at_daily_limit(host_state: HostState) -> None:
+        if host_state.fetches_today < daily_limit:
+            return
+        deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
+        logger.info(
+            "image queue: daily limit reached for %s (%s); deferred %s job(s)",
+            host,
+            daily_limit,
+            deferred,
+        )
+
     if result.image_url:
         apply_image_to_recipe(settings.recipe_root, slug=live.slug, image_url=result.image_url)
         host_state = record_host_attempt(state, host, settings=settings, now=now)
         state.jobs = remaining
-        if host_state.fetches_today >= daily_limit:
-            deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
-            logger.info(
-                "image queue: daily limit reached for %s (%s); deferred %s job(s)",
-                host,
-                daily_limit,
-                deferred,
-            )
+        defer_if_at_daily_limit(host_state)
         logger.info("image queue: fetched %s for %s", result.image_url, live.slug)
         return
 
     live.attempts += 1
     live.last_error = result.error or f"status={result.status_code}"
+
+    if result.gone:
+        host_state = record_host_attempt(state, host, settings=settings, now=now)
+        clear_image_pending(
+            settings.recipe_root,
+            slug=live.slug,
+            note=f"Image source page is gone: {live.last_error}",
+        )
+        state.jobs = remaining
+        logger.warning("image queue: source gone for %s (%s)", live.slug, live.last_error)
+        defer_if_at_daily_limit(host_state)
+        return
 
     if result.blocked:
         record_host_attempt(state, host, settings=settings, now=now, blocked=True)
@@ -455,26 +466,12 @@ def apply_job_result(
         )
         state.jobs = remaining
         logger.warning("image queue: giving up on %s (%s)", live.slug, live.last_error)
-        if host_state.fetches_today >= daily_limit:
-            deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
-            logger.info(
-                "image queue: daily limit reached for %s (%s); deferred %s job(s)",
-                host,
-                daily_limit,
-                deferred,
-            )
+        defer_if_at_daily_limit(host_state)
         return
 
     remaining.append(live)
     state.jobs = remaining
-    if host_state.fetches_today >= daily_limit:
-        deferred = defer_host_jobs(state, host=host, until=next_utc_midnight(now))
-        logger.info(
-            "image queue: daily limit reached for %s (%s); deferred %s job(s)",
-            host,
-            daily_limit,
-            deferred,
-        )
+    defer_if_at_daily_limit(host_state)
 
 
 def process_claimed_job(

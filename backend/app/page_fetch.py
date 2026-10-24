@@ -17,6 +17,9 @@ IMAGE_SCRAPE_TIMEOUT_SECONDS = 8.0
 IFRAMELY_TIMEOUT_SECONDS = 45.0
 IFRAMELY_API_URL = "https://iframe.ly/api/iframely"
 RETRYABLE_STATUS = frozenset({403, 429})
+GONE_STATUS = frozenset({404, 410})
+IFRAMELY_PAUSE_STATUS = frozenset({401, 402, 403, 429})
+IFRAMELY_GONE_MARKERS = ("no longer available",)
 CURL_CFFI_IMPERSONATE = "chrome131"
 
 BROWSER_HEADERS = {
@@ -99,6 +102,8 @@ def fetch_recipe_page(url: str, *, settings: Settings) -> FetchedPage:
 class ImageScrapeResult:
     blocked: bool = False
     error: str | None = None
+    # Page is permanently missing (404/410); give up on this recipe without retries.
+    gone: bool = False
     image_url: str | None = None
     status_code: int | None = None
 
@@ -119,9 +124,7 @@ def fetch_page_image_result(url: str, *, settings: Settings | None = None) -> Im
     except Exception as error:  # noqa: BLE001 - image scrape is best-effort
         return ImageScrapeResult(error=str(error))
 
-    blocked = response.status_code in RETRYABLE_STATUS or _looks_like_challenge_page(
-        response.text
-    )
+    blocked = response.status_code in RETRYABLE_STATUS or _looks_like_challenge_page(response.text)
     if blocked:
         blocked_result = ImageScrapeResult(
             blocked=True,
@@ -138,6 +141,7 @@ def fetch_page_image_result(url: str, *, settings: Settings | None = None) -> Im
     if response.status_code >= 400:
         return ImageScrapeResult(
             error=f"status={response.status_code}",
+            gone=response.status_code in GONE_STATUS,
             status_code=response.status_code,
         )
 
@@ -290,13 +294,20 @@ def _image_via_iframely(url: str, *, settings: Settings) -> ImageScrapeResult:
         logger.warning("Iframely image fallback failed for %s (%s)", url, error)
         return ImageScrapeResult(blocked=True, error=str(error), status_code=403)
 
-    if response.status_code in {401, 402, 403, 429}:
+    if response.status_code in IFRAMELY_PAUSE_STATUS:
         logger.warning(
             "Iframely image fallback blocked for %s (status=%s)", url, response.status_code
         )
         return ImageScrapeResult(
             blocked=True,
             error=f"iframely status={response.status_code}",
+            status_code=response.status_code,
+        )
+    if response.status_code in GONE_STATUS:
+        logger.warning("Iframely reports page gone for %s (status=%s)", url, response.status_code)
+        return ImageScrapeResult(
+            error=f"iframely status={response.status_code}",
+            gone=True,
             status_code=response.status_code,
         )
     if response.status_code >= 400:
@@ -317,8 +328,25 @@ def _image_via_iframely(url: str, *, settings: Settings) -> ImageScrapeResult:
     if isinstance(payload, dict) and payload.get("error"):
         error = payload.get("error")
         message = error if isinstance(error, str) else str(error)
+        try:
+            payload_status = int(payload.get("status") or 0)
+        except (TypeError, ValueError):
+            payload_status = 0
+        if payload_status in GONE_STATUS or any(
+            marker in message.lower() for marker in IFRAMELY_GONE_MARKERS
+        ):
+            logger.warning("Iframely reports page gone for %s (%s)", url, message)
+            return ImageScrapeResult(
+                error=f"iframely: {message}",
+                gone=True,
+                status_code=payload_status or 404,
+            )
         logger.warning("Iframely image fallback error for %s (%s)", url, message)
-        return ImageScrapeResult(blocked=True, error=f"iframely: {message}", status_code=403)
+        return ImageScrapeResult(
+            blocked=True,
+            error=f"iframely: {message}",
+            status_code=payload_status or 403,
+        )
 
     image_url = _image_url_from_iframely(payload if isinstance(payload, dict) else {})
     if not image_url:
