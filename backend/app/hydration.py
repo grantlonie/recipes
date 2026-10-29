@@ -171,28 +171,25 @@ def apply_hydration(
     starter_total = sum(
         mass.grams or 0.0 for _, mass in analyzed if mass.role == "starter" and mass.grams
     )
-    adjustable_total = flour_total + liquid_total
-    if adjustable_total <= 0 or flour_total <= 0:
+    if flour_total <= 0:
         raise HydrationError("Cannot adjust hydration without flour and liquid mass")
     if liquid_total <= 0:
         raise HydrationError("Cannot adjust hydration without liquid mass")
 
     h = target_percent / 100.0
-    flour_target = (adjustable_total + 0.5 * starter_total * (1.0 - h)) / (1.0 + h)
-    liquid_target = adjustable_total - flour_target
-    if flour_target <= 0 or liquid_target < 0:
+    # Keep flour mass fixed; change only liquids so (L + 0.5S) / (F + 0.5S) = h.
+    liquid_target = h * flour_total + 0.5 * starter_total * (h - 1.0)
+    if liquid_target <= 0:
         raise HydrationError("Target hydration is not achievable for this recipe")
 
-    flour_scale = flour_target / flour_total
     liquid_scale = liquid_target / liquid_total
 
     pieces: list[str] = []
     cursor = 0
     for match, mass in analyzed:
         pieces.append(body[cursor : match.start()])
-        if mass.role in {"flour", "liquid"} and mass.grams is not None and mass.grams > 0:
-            scale = flour_scale if mass.role == "flour" else liquid_scale
-            new_grams = mass.grams * scale
+        if mass.role == "liquid" and mass.grams is not None and mass.grams > 0:
+            new_grams = mass.grams * liquid_scale
             grams_text = format_grams_value(new_grams)
             prefix = "=" if mass.fixed else ""
             pieces.append(

@@ -77,7 +77,7 @@ export function RecipeAssistantDialog({
             autoFocus
             className={`${inputClassName} mt-1 min-h-28`}
             onChange={event => setInstruction(event.target.value)}
-            placeholder="Make it vegetarian, cut the salt in half…"
+            placeholder="Make it vegetarian, cut the salt in half… You can also click Rewrite to clean up the whole recipe."
             value={instruction}
           />
         </label>

@@ -53,7 +53,7 @@ def test_summarize_hydration_with_starter():
     assert summary.adjustable
 
 
-def test_apply_hydration_keeps_total_and_fixed_ingredients():
+def test_apply_hydration_scales_liquids_only():
     content = """---
 title: Test Loaf
 tags:
@@ -63,12 +63,31 @@ tags:
 Mix @bread flour{500%g} with @water{350%g}, @olive oil{20%g}, and @salt{10%g}.
 """
     new_content, summary = apply_hydration(content, 80.0, _density)
-    assert abs(summary.percent - 80.0) < 0.5
-    # Adjustable pool was 500+350+20=870; salt 10 stays fixed; total 880
-    assert abs(summary.flour_g + summary.liquid_g - 870) < 0.5
+    assert "@bread flour{500%g}" in new_content
     assert "@salt{10%g}" in new_content
-    assert "%g" in new_content
-    # Effective H = liquid/flour ≈ 80%
+    assert summary.flour_g == 500
+    assert abs(summary.percent - 80.0) < 0.5
+    assert abs(summary.liquid_g - 400) < 0.5
+    assert abs(summary.liquid_g / summary.flour_g - 0.8) < 0.01
+
+
+def test_apply_hydration_keeps_flour_volume_quantity():
+    content = """---
+title: Cup Loaf
+tags:
+  - bread
+---
+
+Mix @bread flour{4%cup} with @water{350%g} and @salt{10%g}.
+"""
+    original = summarize_hydration(
+        "Mix @bread flour{4%cup} with @water{350%g} and @salt{10%g}.", _density
+    )
+    new_content, summary = apply_hydration(content, 80.0, _density)
+    assert "@bread flour{4%cup}" in new_content
+    assert "@salt{10%g}" in new_content
+    assert summary.flour_g == original.flour_g
+    assert abs(summary.percent - 80.0) < 0.5
     assert abs(summary.liquid_g / summary.flour_g - 0.8) < 0.01
 
 
@@ -82,15 +101,15 @@ tags:
 Mix @bread flour{400%g}, @sourdough starter{100%g}, @water{250%g}, and @salt{8%g}.
 """
     new_content, summary = apply_hydration(content, 75.0, _density)
+    assert "@bread flour{400%g}" in new_content
     assert "@sourdough starter{100%g}" in new_content
     assert "@salt{8%g}" in new_content
+    assert summary.flour_g == 400
     assert summary.starter_g == 100
     # (L + 50) / (F + 50) == 0.75
     effective_f = summary.flour_g + 50
     effective_l = summary.liquid_g + 50
     assert abs(effective_l / effective_f - 0.75) < 0.01
-    # Adjustable flour+liquid mass unchanged
-    assert abs(summary.flour_g + summary.liquid_g - 650) < 0.5
 
 
 def test_apply_hydration_rejects_non_bread():

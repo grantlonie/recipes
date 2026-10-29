@@ -48,19 +48,15 @@ export function serializeTimer(attrs: TimerAttrs): string {
 }
 
 export function formatTimerLabel(attrs: TimerAttrs): string {
+  const quantity = attrs.quantity.trim()
+  if (quantity) {
+    return `${quantity} ${abbreviateTimerUnit(attrs.unit, quantity)}`
+  }
   const name = attrs.name.trim()
-  if (name) {
+  if (name && name.toLowerCase() !== 'timer') {
     return name
   }
-  const quantity = attrs.quantity.trim()
-  const unit = attrs.unit.trim()
-  if (!quantity) {
-    return unit || 'timer'
-  }
-  if (!unit) {
-    return quantity
-  }
-  return `${quantity} ${unit}`
+  return 'timer'
 }
 
 export function timerUnitSelectValue(unit: string): TimerUnit {
@@ -94,6 +90,13 @@ export function timerAttrsToDurationMs(attrs: TimerAttrs): number | null {
     return Math.round(quantity * 60 * 60 * 1000)
   }
   return Math.round(quantity * 60 * 1000)
+}
+
+function abbreviateTimerUnit(unit: string, quantity: string): string {
+  if (timerUnitSelectValue(unit) === 'hours') {
+    return quantity.trim() === '1' ? 'hour' : 'hours'
+  }
+  return 'min'
 }
 
 function splitTimerAmount(amount: string) {
