@@ -164,10 +164,11 @@ export function RecipePage() {
   const hydrationPercent = localHydrationPercent ?? savedHydrationPercent ?? 0
   const isHydrationAdjusted =
     savedHydrationPercent != null && hydrationPercent !== savedHydrationPercent
+  const useScaledPreview = isScaled || isHydrationAdjusted
   const scaledQuery = useQuery({
-    enabled: Boolean(slug) && (isScaled || isHydrationAdjusted),
+    enabled: Boolean(slug) && useScaledPreview,
     placeholderData: (previousData, previousQuery) =>
-      previousQuery?.queryKey[1] === slug ? previousData : undefined,
+      useScaledPreview && previousQuery?.queryKey[1] === slug ? previousData : undefined,
     queryFn: () =>
       getScaledRecipe(slug, {
         hydration: isHydrationAdjusted ? hydrationPercent : undefined,
@@ -217,7 +218,7 @@ export function RecipePage() {
       navigate('/')
     },
   })
-  const recipe = scaledQuery.data ?? recipeQuery.data
+  const recipe = (useScaledPreview ? scaledQuery.data : undefined) ?? recipeQuery.data
   useEffect(() => {
     setImageFailed(false)
   }, [recipe?.image])
