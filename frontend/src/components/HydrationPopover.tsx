@@ -1,6 +1,6 @@
 import { ChevronDownIcon, MinusIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 import { updateRecipeHydration } from '../api'
 import { useRecipeSync } from '../RecipeSyncContext'
@@ -16,65 +16,68 @@ const TRIGGER_CLASS =
 const STEP_BUTTON_CLASS = '!h-8 !w-8'
 
 interface HydrationPopoverProps {
-  canEdit: boolean
+  canSave: boolean
   hydration: RecipeHydration
+  onPercentChange: (percent: number) => void
+  onSaved?: () => void
+  percent: number
+  previewError?: string | null
+  savedPercent: number
   slug: string
 }
 
-export function HydrationPopover({ canEdit, hydration, slug }: HydrationPopoverProps) {
+export function HydrationPopover({
+  canSave,
+  hydration,
+  onPercentChange,
+  onSaved,
+  percent,
+  previewError,
+  savedPercent,
+  slug,
+}: HydrationPopoverProps) {
   const queryClient = useQueryClient()
   const { notifyLocalChange } = useRecipeSync()
   const [open, setOpen] = useState(false)
-  const savedPercent = Math.round(hydration.percent ?? 0)
-  const [draftPercent, setDraftPercent] = useState(savedPercent)
 
-  useEffect(() => {
-    if (!open) {
-      setDraftPercent(Math.round(hydration.percent ?? 0))
-    }
-  }, [hydration.percent, open])
-
-  const dirty = draftPercent !== savedPercent
+  const dirty = percent !== savedPercent
   const saveMutation = useMutation({
-    mutationFn: (percent: number) => updateRecipeHydration(slug, percent),
+    mutationFn: (nextPercent: number) => updateRecipeHydration(slug, nextPercent),
     onSuccess: async (recipe: RecipeDetail) => {
       queryClient.setQueryData(['recipe', slug], recipe)
       queryClient.removeQueries({ queryKey: ['recipe', slug, 'scale'] })
       await storeRecipe(recipe)
       notifyLocalChange()
+      onSaved?.()
       setOpen(false)
     },
   })
 
-  const percentLabel =
-    hydration.percent == null ? 'Hydration' : `${Math.round(hydration.percent)}% hydration`
-
-  if (!canEdit) {
-    return <span className={TRIGGER_CLASS}>{percentLabel}</span>
-  }
+  const percentLabel = `${percent}% hydration`
+  const persistable = dirty && canSave
+  const busy = saveMutation.isPending
 
   function closePopover() {
     setOpen(false)
-    setDraftPercent(savedPercent)
   }
 
   function handleCancel() {
-    setDraftPercent(savedPercent)
+    onPercentChange(savedPercent)
   }
 
-  function handlePrimary() {
-    if (!dirty) {
-      setOpen(false)
+  function handleDone() {
+    setOpen(false)
+  }
+
+  function handleSave() {
+    if (!hydration.adjustable || busy) {
       return
     }
-    if (!hydration.adjustable || saveMutation.isPending) {
-      return
-    }
-    saveMutation.mutate(draftPercent)
+    saveMutation.mutate(percent)
   }
 
   function step(delta: number) {
-    setDraftPercent(current => Math.min(100, Math.max(40, current + delta)))
+    onPercentChange(Math.min(100, Math.max(40, percent + delta)))
   }
 
   function handleInputChange(value: string) {
@@ -85,7 +88,7 @@ export function HydrationPopover({ canEdit, hydration, slug }: HydrationPopoverP
     if (!Number.isFinite(parsed)) {
       return
     }
-    setDraftPercent(Math.min(100, Math.max(40, Math.round(parsed))))
+    onPercentChange(Math.min(100, Math.max(40, Math.round(parsed))))
   }
 
   return (
@@ -112,7 +115,7 @@ export function HydrationPopover({ canEdit, hydration, slug }: HydrationPopoverP
           <IconButton
             aria-label="Decrease hydration"
             className={STEP_BUTTON_CLASS}
-            disabled={draftPercent <= 40 || saveMutation.isPending}
+            disabled={percent <= 40 || !hydration.adjustable || busy}
             icon={<MinusIcon aria-hidden="true" className="h-4 w-4" />}
             onClick={() => step(-1)}
           />
@@ -120,19 +123,19 @@ export function HydrationPopover({ canEdit, hydration, slug }: HydrationPopoverP
             <input
               aria-label="Hydration percent"
               className="w-16 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-center text-sm tabular-nums text-stone-800 focus:border-orange-400 focus:outline-none dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-              disabled={saveMutation.isPending}
+              disabled={!hydration.adjustable || busy}
               max={100}
               min={40}
               onChange={event => handleInputChange(event.target.value)}
               type="number"
-              value={draftPercent}
+              value={percent}
             />
             <span className="text-sm font-semibold text-stone-600 dark:text-stone-300">%</span>
           </div>
           <IconButton
             aria-label="Increase hydration"
             className={STEP_BUTTON_CLASS}
-            disabled={draftPercent >= 100 || saveMutation.isPending}
+            disabled={percent >= 100 || !hydration.adjustable || busy}
             icon={<PlusIcon aria-hidden="true" className="h-4 w-4" />}
             onClick={() => step(1)}
           />
@@ -146,14 +149,17 @@ export function HydrationPopover({ canEdit, hydration, slug }: HydrationPopoverP
           <p className="text-xs text-red-600 dark:text-red-400">
             {saveMutation.error instanceof Error
               ? saveMutation.error.message
-              : 'Could not update hydration.'}
+              : 'Could not save hydration.'}
           </p>
+        ) : null}
+        {previewError ? (
+          <p className="text-xs text-red-600 dark:text-red-400">{previewError}</p>
         ) : null}
         <div className="flex items-center justify-end gap-2">
           {dirty ? (
             <Button
               className="!px-3 !py-1.5 text-xs"
-              disabled={saveMutation.isPending}
+              disabled={busy}
               onClick={handleCancel}
               variant="ghost"
             >
@@ -162,12 +168,22 @@ export function HydrationPopover({ canEdit, hydration, slug }: HydrationPopoverP
           ) : null}
           <Button
             className="w-16 !px-3 !py-1.5 text-xs"
-            disabled={dirty && (!hydration.adjustable || saveMutation.isPending)}
-            onClick={handlePrimary}
-            variant="primary"
+            disabled={busy}
+            onClick={handleDone}
+            variant={persistable ? 'ghost' : 'primary'}
           >
-            {dirty ? 'Save' : 'Done'}
+            Done
           </Button>
+          {persistable ? (
+            <Button
+              className="w-16 !px-3 !py-1.5 text-xs"
+              disabled={!hydration.adjustable || busy}
+              onClick={handleSave}
+              variant="primary"
+            >
+              Save
+            </Button>
+          ) : null}
         </div>
       </div>
     </Popover>

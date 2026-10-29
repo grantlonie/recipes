@@ -129,6 +129,26 @@ class RecipeRepository:
             }
         )
 
+    def preview_view(
+        self,
+        slug: str,
+        *,
+        content: str | None = None,
+        scaled_servings: float | None = None,
+    ) -> RecipeDetail:
+        if content is None:
+            return self.get_recipe(slug, scaled_servings=scaled_servings)
+
+        recipe = self.sync_slug(slug)
+        _, body = cooklang.parse_document(content)
+        ingredients = cooklang.parse_ingredients(
+            body, scale=scaled_servings, servings=recipe.servings
+        )
+        blocks = cooklang.parse_blocks(body)
+        if scaled_servings is not None:
+            blocks = cooklang.scale_blocks(blocks, scale=scaled_servings, servings=recipe.servings)
+        return recipe.model_copy(update={"blocks": blocks, "ingredients": ingredients})
+
     def write_recipe(
         self, slug: str, content: str, *, previous_slug: str | None = None
     ) -> RecipeDetail:

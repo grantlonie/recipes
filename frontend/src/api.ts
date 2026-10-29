@@ -55,8 +55,19 @@ export async function getRecipes(query: string): Promise<RecipeSummary[]> {
   return (data as SearchResult[]).map(result => result.recipe)
 }
 
-export async function getScaledRecipe(slug: string, servings: number): Promise<RecipeDetail> {
-  return request(`/api/recipe-scale/${slug}?servings=${servings}`)
+export async function getScaledRecipe(
+  slug: string,
+  options: { hydration?: number; servings?: number }
+): Promise<RecipeDetail> {
+  const params = new URLSearchParams()
+  if (options.hydration != null) {
+    params.set('hydration', String(options.hydration))
+  }
+  if (options.servings != null) {
+    params.set('servings', String(options.servings))
+  }
+  const query = params.toString()
+  return request(`/api/recipe-scale/${slug}${query ? `?${query}` : ''}`)
 }
 
 export async function getSourceText(
