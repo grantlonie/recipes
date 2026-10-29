@@ -217,7 +217,8 @@ export function RecipePage() {
       navigate('/')
     },
   })
-  const recipe = scaledQuery.data ?? recipeQuery.data
+  const recipe =
+    isScaled || isHydrationAdjusted ? (scaledQuery.data ?? recipeQuery.data) : recipeQuery.data
   useEffect(() => {
     setImageFailed(false)
   }, [recipe?.image])

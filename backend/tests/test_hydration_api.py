@@ -54,6 +54,7 @@ def test_hydration_on_detail_and_apply(tmp_path, monkeypatch):
         assert preview.status_code == 200
         preview_body = preview.json()
         assert abs(preview_body["hydration"]["percent"] - 80.0) < 0.5
+        assert preview_body["hydration"]["flour_g"] == 500
         assert (
             abs(preview_body["hydration"]["liquid_g"] / preview_body["hydration"]["flour_g"] - 0.8)
             < 0.01
@@ -64,7 +65,8 @@ def test_hydration_on_detail_and_apply(tmp_path, monkeypatch):
         water = next(item for item in preview_body["ingredients"] if item["name"] == "water")
         salt = next(item for item in preview_body["ingredients"] if item["name"] == "salt")
         assert salt["quantity"] == "10"
-        assert abs(float(flour["quantity"]) + float(water["quantity"]) - 850) < 0.5
+        assert float(flour["quantity"]) == 500
+        assert abs(float(water["quantity"]) - 400) < 0.5
         assert abs(float(water["quantity"]) / float(flour["quantity"]) - 0.8) < 0.01
 
         stored = client.get("/api/recipes/test-loaf")
@@ -85,7 +87,9 @@ def test_hydration_on_detail_and_apply(tmp_path, monkeypatch):
         assert updated.status_code == 200
         body = updated.json()
         assert abs(body["hydration"]["percent"] - 80.0) < 0.5
+        assert "@bread flour{500%g}" in body["content"]
         assert "@salt{10%g}" in body["content"]
+        assert body["hydration"]["flour_g"] == 500
         assert abs(body["hydration"]["liquid_g"] / body["hydration"]["flour_g"] - 0.8) < 0.01
         persisted = client.get("/api/recipes/test-loaf")
         assert abs(persisted.json()["hydration"]["percent"] - 80.0) < 0.5
@@ -133,6 +137,7 @@ def test_hydration_preview_with_scale(tmp_path, monkeypatch):
         water_g = float(water["scaled_quantity"] or water["quantity"])
         salt_g = float(salt["scaled_quantity"] or salt["quantity"])
         assert salt_g == 20
-        assert abs(flour_g + water_g - 1700) < 1
+        assert abs(flour_g - 1000) < 1
+        assert abs(water_g - 800) < 1
         assert abs(water_g / flour_g - 0.8) < 0.01
         assert "@water{350%g}" in body["content"]

@@ -61,7 +61,7 @@ export function HydrationPopover({
     setOpen(false)
   }
 
-  function handleCancel() {
+  function handleReset() {
     onPercentChange(savedPercent)
   }
 
@@ -155,35 +155,32 @@ export function HydrationPopover({
         {previewError ? (
           <p className="text-xs text-red-600 dark:text-red-400">{previewError}</p>
         ) : null}
-        <div className="flex items-center justify-end gap-2">
-          {dirty ? (
-            <Button
-              className="!px-3 !py-1.5 text-xs"
-              disabled={busy}
-              onClick={handleCancel}
-              variant="ghost"
-            >
-              Cancel
-            </Button>
-          ) : null}
-          <Button
-            className="w-16 !px-3 !py-1.5 text-xs"
-            disabled={busy}
-            onClick={handleDone}
-            variant={persistable ? 'ghost' : 'primary'}
-          >
-            Done
-          </Button>
+        <div className="flex items-center gap-2">
           {persistable ? (
             <Button
-              className="w-16 !px-3 !py-1.5 text-xs"
+              className="!px-3 !py-1.5 text-xs"
               disabled={!hydration.adjustable || busy}
               onClick={handleSave}
-              variant="primary"
+              variant="text"
             >
               Save
             </Button>
           ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            {dirty ? (
+              <Button
+                className="!px-3 !py-1.5 text-xs"
+                disabled={busy}
+                onClick={handleReset}
+                variant="ghost"
+              >
+                Reset
+              </Button>
+            ) : null}
+            <Button className="w-16 !px-3 !py-1.5 text-xs" disabled={busy} onClick={handleDone}>
+              Done
+            </Button>
+          </div>
         </div>
       </div>
     </Popover>

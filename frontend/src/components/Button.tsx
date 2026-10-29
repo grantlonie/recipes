@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
-type ButtonVariant = 'ghost' | 'primary' | 'secondary' | 'danger'
+type ButtonVariant = 'danger' | 'ghost' | 'primary' | 'secondary' | 'text'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode
@@ -13,6 +13,7 @@ const variants: Record<ButtonVariant, string> = {
   primary: 'bg-orange-600 text-white hover:bg-orange-700',
   secondary:
     'bg-orange-100 text-orange-800 hover:bg-orange-200 dark:bg-stone-700 dark:text-orange-200 dark:hover:bg-stone-600',
+  text: 'text-orange-600 hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-stone-700',
 }
 
 export function Button({ children, className = '', variant = 'primary', ...props }: ButtonProps) {
