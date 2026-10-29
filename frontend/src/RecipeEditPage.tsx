@@ -18,6 +18,7 @@ import { Button } from './components/Button'
 import { CameraCaptureDialog, isCameraCaptureSupported } from './components/CameraCaptureDialog'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { Dialog } from './components/Dialog'
+import { RecipeAssistantDialog } from './components/RecipeAssistantDialog'
 import { RecipeBodyEditor, type RecipeBodyEditorHandle } from './components/RecipeBodyEditor'
 import { TabPanel, Tabs } from './components/Tabs'
 import { TagMultiSelect } from './components/TagMultiSelect'
@@ -47,7 +48,7 @@ import { useUnitSystem } from './UnitSystemContext'
 
 const emptyBody = ''
 const RECIPE_PLACEHOLDER =
-  'Start writing your recipe from scratch, or paste text and click Rewrite.'
+  'Start writing your recipe from scratch, or paste text and click Assistant.'
 const MAX_SERVINGS = 12
 
 interface IngredientFormState {
@@ -107,7 +108,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [cookwareInitial, setCookwareInitial] = useState<CookwareFormState>(emptyCookwareForm)
   const [cookwareDraft, setCookwareDraft] = useState<CookwareFormState>(emptyCookwareForm)
   const [reimportConfirmOpen, setReimportConfirmOpen] = useState(false)
-  const [rewriteConfirmOpen, setRewriteConfirmOpen] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
   const [recipeSlug, setRecipeSlug] = useState(mode === 'new' ? 'new-recipe' : slug)
   const [servings, setServings] = useState(4)
   const [source, setSource] = useState('')
@@ -205,11 +206,17 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     },
   })
   const rewriteMutation = useMutation({
-    mutationFn: (text: string) => importRecipeText(text),
-    onMutate: () => {
-      startImport({ title: 'Rewriting recipe', total: 1 })
+    mutationFn: ({ instruction, text }: { instruction?: string; text: string }) =>
+      importRecipeText(text, instruction),
+    onMutate: variables => {
+      const adjusting = Boolean(variables.instruction?.trim())
+      startImport({ title: adjusting ? 'Adjusting recipe' : 'Rewriting recipe', total: 1 })
       updateProgress({
-        status: isNew ? 'Turning your text into Cooklang…' : 'Converting recipe text…',
+        status: adjusting
+          ? 'Updating recipe from your request…'
+          : isNew
+            ? 'Turning your text into Cooklang…'
+            : 'Converting recipe text…',
       })
     },
     onSuccess: preview => {
@@ -229,8 +236,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         unmatchedCount: uniqueUnmatchedCount(preview.unmatched_ingredients),
       })
     },
-    onError: error => {
-      failImport(error instanceof Error ? error.message : 'Rewrite failed')
+    onError: (error, variables) => {
+      const action = variables.instruction?.trim() ? 'Adjust' : 'Rewrite'
+      failImport(error instanceof Error ? error.message : `${action} failed`)
     },
   })
 
@@ -332,15 +340,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 Re Import
               </Button>
             ) : null}
-            {!isNew && !hasSource ? (
-              <Button
-                disabled={!canRewrite || rewriteMutation.isPending}
-                onClick={handleRewriteFromText}
-                variant="secondary"
-              >
-                Rewrite
-              </Button>
-            ) : null}
             <Button onClick={handleCancel} variant="ghost">
               Cancel
             </Button>
@@ -350,7 +349,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
           </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
           <Tabs
             active={activeTab}
             items={[
@@ -359,24 +358,18 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
             ]}
             onChange={setActiveTab}
           />
+          <Button
+            disabled={!canRewrite || rewriteMutation.isPending}
+            onClick={openAssistant}
+            variant="secondary"
+          >
+            Assistant
+          </Button>
         </div>
 
         <div className="mt-6">
           <TabPanel active={activeTab} id="recipe">
-            <div
-              className={`mb-3 flex flex-wrap items-center gap-2 ${
-                isNew ? 'justify-between' : 'justify-end'
-              }`}
-            >
-              {isNew ? (
-                <Button
-                  disabled={!body.trim() || rewriteMutation.isPending}
-                  onClick={handleRewrite}
-                  variant="secondary"
-                >
-                  {rewriteMutation.isPending ? 'Rewriting...' : 'Rewrite'}
-                </Button>
-              ) : null}
+            <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
               <div
                 className="inline-flex overflow-hidden rounded-full bg-orange-100 text-xs font-semibold text-orange-800 ring-1 ring-orange-200 dark:bg-stone-700 dark:text-orange-200 dark:ring-stone-600"
                 role="group"
@@ -499,16 +492,13 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
         titleId="reimport-confirm-title"
       />
 
-      <ConfirmDialog
-        confirmLabel="Rewrite"
-        confirming={rewriteMutation.isPending}
-        confirmingLabel="Rewriting..."
-        description="Rewriting will send the current recipe text to the AI and overwrite the title, metadata, and body with the converted recipe."
-        onCancel={() => setRewriteConfirmOpen(false)}
-        onConfirm={() => void confirmRewriteFromText()}
-        open={rewriteConfirmOpen}
-        title="Rewrite recipe?"
-        titleId="rewrite-confirm-title"
+      <RecipeAssistantDialog
+        canSubmit={canRewrite}
+        error={rewriteMutation.error ? rewriteMutation.error.message : null}
+        onClose={() => setAssistantOpen(false)}
+        onSubmit={handleAssistantSubmit}
+        open={assistantOpen}
+        submitting={rewriteMutation.isPending}
       />
 
       <Dialog
@@ -807,12 +797,35 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     await saveMutation.mutateAsync()
   }
 
-  async function handleRewrite() {
-    const text = body.trim()
-    if (!text) {
+  function openAssistant() {
+    if (!canRewrite) {
       return
     }
-    await rewriteMutation.mutateAsync(text)
+    setAssistantOpen(true)
+  }
+
+  function handleAssistantSubmit(instruction: string) {
+    const text = instruction
+      ? buildContent()
+      : isNew
+        ? body.trim()
+        : buildRewriteSourceText({
+            body,
+            cookTime,
+            description,
+            prepTime,
+            servings,
+            time,
+            title,
+          })
+    if (!text.trim()) {
+      return
+    }
+    setAssistantOpen(false)
+    void rewriteMutation.mutateAsync({
+      instruction: instruction || undefined,
+      text,
+    })
   }
 
   function handleReimportFromSource() {
@@ -825,30 +838,6 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   async function confirmReimportFromSource() {
     setReimportConfirmOpen(false)
     await reimportMutation.mutateAsync()
-  }
-
-  function handleRewriteFromText() {
-    if (!canRewrite) {
-      return
-    }
-    setRewriteConfirmOpen(true)
-  }
-
-  async function confirmRewriteFromText() {
-    const text = buildRewriteSourceText({
-      body,
-      cookTime,
-      description,
-      prepTime,
-      servings,
-      time,
-      title,
-    })
-    if (!text) {
-      return
-    }
-    setRewriteConfirmOpen(false)
-    await rewriteMutation.mutateAsync(text)
   }
 
   async function handleImageUpload(file: File) {
@@ -1099,6 +1088,7 @@ function InsertSegmentButton({ children, first = false, onClick }: InsertSegment
         first ? '' : 'border-l border-orange-200 dark:border-stone-600'
       }`}
       onClick={onClick}
+      onMouseDown={event => event.preventDefault()}
       type="button"
     >
       {children}

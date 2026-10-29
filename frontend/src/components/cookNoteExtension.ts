@@ -1,5 +1,14 @@
 import { mergeAttributes, Node } from '@tiptap/core'
-import { TextSelection } from '@tiptap/pm/state'
+import type { NodeType } from '@tiptap/pm/model'
+import { NodeSelection, TextSelection, type EditorState, type Transaction } from '@tiptap/pm/state'
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    cookNote: {
+      insertCookNote: () => ReturnType
+    }
+  }
+}
 
 export const CookNoteExtension = Node.create({
   name: 'cookNote',
@@ -23,6 +32,15 @@ export const CookNoteExtension = Node.create({
       ),
       0,
     ]
+  },
+
+  addCommands() {
+    return {
+      insertCookNote:
+        () =>
+        ({ dispatch, state, tr }) =>
+          applyInsertCookNote(state, tr, dispatch),
+    }
   },
 
   addKeyboardShortcuts() {
@@ -49,3 +67,56 @@ export const CookNoteExtension = Node.create({
     }
   },
 })
+
+export function applyInsertCookNote(
+  state: EditorState,
+  tr: Transaction,
+  dispatch?: (tr: Transaction) => void
+): boolean {
+  const noteType = state.schema.nodes.cookNote
+  if (!noteType) {
+    return false
+  }
+
+  const { $from, $to, empty } = state.selection
+  if ($from.depth < 1) {
+    const insertPos = $from.pos + ($from.nodeAfter?.nodeSize ?? 0)
+    return insertNoteAt(tr, noteType, insertPos, dispatch)
+  }
+
+  const posBefore = $from.before(1)
+  const posAfter = $from.after(1)
+  const block = $from.node(1)
+  const sameBlock = $to.depth >= 1 && $to.before(1) === posBefore
+  const selectedText = state.selection instanceof TextSelection && !empty
+  const convertCurrent =
+    block.type.name === 'paragraph' &&
+    !(state.selection instanceof NodeSelection) &&
+    (block.content.size === 0 || (selectedText && sameBlock))
+
+  if (convertCurrent) {
+    tr.setBlockType(posBefore, posAfter, noteType)
+    if (dispatch) {
+      dispatch(tr.scrollIntoView())
+    }
+    return true
+  }
+
+  const insertPos = $to.depth >= 1 ? $to.after(1) : posAfter
+  return insertNoteAt(tr, noteType, insertPos, dispatch)
+}
+
+function insertNoteAt(
+  tr: Transaction,
+  noteType: NodeType,
+  insertPos: number,
+  dispatch?: (tr: Transaction) => void
+): boolean {
+  const note = noteType.create()
+  tr.insert(insertPos, note)
+  tr.setSelection(TextSelection.near(tr.doc.resolve(insertPos + 1)))
+  if (dispatch) {
+    dispatch(tr.scrollIntoView())
+  }
+  return true
+}

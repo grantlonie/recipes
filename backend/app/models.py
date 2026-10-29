@@ -133,6 +133,7 @@ class ImportRequest(BaseModel):
 
 
 class ImportTextRequest(BaseModel):
+    instruction: str | None = None
     text: str
 
 

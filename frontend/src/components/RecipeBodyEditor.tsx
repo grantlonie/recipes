@@ -197,11 +197,7 @@ export const RecipeBodyEditor = forwardRef<RecipeBodyEditorHandle, RecipeBodyEdi
           if (!editor) {
             return
           }
-          editor
-            .chain()
-            .focus()
-            .insertContent({ type: 'cookNote', content: [{ type: 'text', text: '' }] })
-            .run()
+          editor.chain().focus().insertCookNote().run()
         },
         insertSection(title) {
           if (!editor) {

@@ -339,7 +339,12 @@ def import_recipe_text(
     ingredients: IngredientRepository = Depends(get_ingredients),
 ) -> ImportPreview:
     try:
-        return import_from_text(payload.text, settings=settings, ingredients=ingredients)
+        return import_from_text(
+            payload.text,
+            settings=settings,
+            ingredients=ingredients,
+            instruction=payload.instruction,
+        )
     except ImportError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
 
