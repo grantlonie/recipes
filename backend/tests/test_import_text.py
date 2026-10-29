@@ -30,6 +30,27 @@ def test_import_text_converts_recipe(tmp_path, monkeypatch):
         assert mocked.call_args.args[0] == "A chili recipe"
 
 
+def test_import_text_passes_instruction(tmp_path, monkeypatch):
+    preview = ImportPreview(
+        content="---\ntitle: Chili\n---\n\nSimmer @beans{}.\n",
+        suggested_slug="chili",
+        unmatched_ingredients=[],
+    )
+    client = _client(tmp_path, monkeypatch)
+    with client:
+        _login(client)
+        with patch("app.main.import_from_text", return_value=preview) as mocked:
+            response = client.post(
+                "/api/import/text",
+                json={"instruction": "Make it vegetarian", "text": "Current recipe"},
+            )
+
+        assert response.status_code == 200
+        mocked.assert_called_once()
+        assert mocked.call_args.args[0] == "Current recipe"
+        assert mocked.call_args.kwargs["instruction"] == "Make it vegetarian"
+
+
 def test_import_text_empty_returns_error(tmp_path, monkeypatch):
     client = _client(tmp_path, monkeypatch)
     with client:

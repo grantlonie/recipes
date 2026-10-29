@@ -56,6 +56,25 @@ def test_suggest_slug_uses_title():
     assert suggest_slug("https://example.com/recipe", content) == "chicken-bacon-pasta"
 
 
+def test_import_from_text_sends_instruction_to_model(
+    settings: Settings, ingredients: IngredientRepository
+):
+    recipe = "---\ntitle: Chili\n---\n\nBrown @beef{1%lb}.\n"
+    with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG) as mock_complete:
+        import_from_text(
+            recipe,
+            settings=settings,
+            ingredients=ingredients,
+            instruction="Make it vegetarian",
+        )
+
+    user_message = mock_complete.call_args.kwargs["user_message"]
+    assert "Editor request:" in user_message
+    assert "Make it vegetarian" in user_message
+    assert "Current recipe:" in user_message
+    assert "Brown @beef{1%lb}." in user_message
+
+
 def test_import_from_text_maps_catalog_ingredients(
     settings: Settings, ingredients: IngredientRepository
 ):
@@ -619,8 +638,7 @@ def test_ensure_bread_tags_infers_from_explicit_word():
 def test_ensure_bread_tags_infers_from_technique():
     metadata = {"title": "Simple White", "description": "Weeknight bake."}
     body = (
-        "Mix @all-purpose flour{500%g} with @water{350%g}. "
-        "Knead until smooth. Proof until doubled."
+        "Mix @all-purpose flour{500%g} with @water{350%g}. Knead until smooth. Proof until doubled."
     )
     _ensure_bread_tags(metadata, body)
     assert metadata["tags"] == ["bread"]

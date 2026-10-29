@@ -132,19 +132,22 @@ export async function importRecipe(url: string): Promise<ImportPreview> {
   }
 }
 
-export async function importRecipeText(text: string): Promise<ImportPreview> {
+export async function importRecipeText(text: string, instruction?: string): Promise<ImportPreview> {
   const controller = new AbortController()
   const timeoutId = window.setTimeout(() => controller.abort(), 100_000)
 
   try {
     return await request('/api/import/text', {
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({
+        instruction: instruction?.trim() || undefined,
+        text,
+      }),
       method: 'POST',
       signal: controller.signal,
     })
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error("Couldn't rewrite this recipe. The rewrite timed out.")
+      throw new Error("Couldn't update this recipe. The request timed out.")
     }
     throw error
   } finally {

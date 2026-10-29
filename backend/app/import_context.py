@@ -204,13 +204,34 @@ def build_user_message(
     *,
     source_url: str | None = None,
     max_chars: int = DEFAULT_MAX_SOURCE_CHARS,
+    instruction: str | None = None,
 ) -> str:
     cleaned = clean_source_text(extracted_text)
+    request = (instruction or "").strip()
+    if request:
+        parts = [
+            "Update this Cooklang recipe according to the editor's request.",
+            "The editor's request is part of the source of truth: you MAY add, remove,",
+            "or change ingredients, quantities, steps, notes, and front matter when asked.",
+            "Keep everything the request does not mention.",
+            "Return only the finished .cook document — no reasoning or checklists.",
+            'Front matter MUST start with title: "Recipe Name".',
+            "Never emit @salt and pepper{}; use @salt{} and @black pepper{} instead.",
+            "",
+            "Editor request:",
+            request,
+            "",
+        ]
+        if source_url:
+            parts.extend([f"Original source URL: {source_url}", ""])
+        parts.extend(["Current recipe:", truncate_source_text(cleaned, max_chars=max_chars)])
+        return "\n".join(parts)
+
     parts = [
         "Convert this recipe source into Cooklang.",
         'Front matter MUST start with title: "Recipe Name" — copy the name from the',
         "source (usually the first non-empty line / headline). Title is required.",
-        'Never emit @salt and pepper{}; use @salt{} and @black pepper{} instead.',
+        "Never emit @salt and pepper{}; use @salt{} and @black pepper{} instead.",
         "Return only the finished .cook document — no reasoning or checklists.",
         "",
     ]

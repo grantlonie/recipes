@@ -39,7 +39,7 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Never write {0%g}" in prompt
     assert "Avoid these mistakes:" in prompt
     assert "Put preparation words in (notes)" in prompt
-    assert '@pickled jalapeños{0.33%cup}(chopped)' in prompt
+    assert "@pickled jalapeños{0.33%cup}(chopped)" in prompt
     assert "@green bell pepper{1}(diced)" in prompt
     assert "Treat source spellings tbsp" in prompt
     assert '"1 tbsp fennel seeds"' in prompt
@@ -49,12 +49,18 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "when the source says 1 tbsp fennel seeds" in prompt
     assert "Use front-matter `description` for general recipe-level notes" in prompt
     assert "Step-specific tips stay as Cooklang `>` note lines" in prompt
-    assert 'description: "Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated."' in prompt
+    assert (
+        'description: "Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated."'
+        in prompt
+    )
     assert (
         'description: "Hearty beer bread. Sift the flour (or spoon into the cup). '
         'If not using beer, add a packet of active dry yeast."'
     ) in prompt
-    assert "> Soft crust: mix melted butter into the batter instead of pouring it over the top." in prompt
+    assert (
+        "> Soft crust: mix melted butter into the batter instead of pouring it over the top."
+        in prompt
+    )
     assert "> If the mixture looks dry, add a splash of water before simmering." in prompt
     assert "@pecans{0.5%cup}(optional)" in prompt
 
@@ -64,6 +70,24 @@ def test_build_user_message_requires_title_key():
     assert 'Front matter MUST start with title: "Recipe Name"' in message
     assert "Never emit @salt and pepper{}" in message
     assert "French Toast" in message
+
+
+def test_build_user_message_with_instruction_adjusts_current_recipe():
+    recipe = '---\ntitle: "Chili"\n---\n\nBrown @beef{1%lb}.\n'
+    message = build_user_message(recipe, instruction="Make it vegetarian")
+    assert "Update this Cooklang recipe according to the editor's request." in message
+    assert "Editor request:" in message
+    assert "Make it vegetarian" in message
+    assert "Current recipe:" in message
+    assert "Brown @beef{1%lb}." in message
+    assert "Convert this recipe source into Cooklang." not in message
+    assert "Source text:" not in message
+
+
+def test_build_user_message_blank_instruction_uses_convert_path():
+    message = build_user_message("French Toast\n\nWhisk eggs.", instruction="   ")
+    assert "Convert this recipe source into Cooklang." in message
+    assert "Editor request:" not in message
 
 
 def test_truncate_source_text_limits_length():
@@ -357,9 +381,7 @@ Shake.
     without_catalog = validate_imported_cooklang(content, source_text=source)
     assert any("triple sec" in warning for warning in without_catalog.warnings)
 
-    with_catalog = validate_imported_cooklang(
-        content, source_text=source, catalog=catalog
-    )
+    with_catalog = validate_imported_cooklang(content, source_text=source, catalog=catalog)
     assert with_catalog.warnings == []
     assert not with_catalog.needs_repair
 

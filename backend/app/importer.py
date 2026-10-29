@@ -88,6 +88,7 @@ def import_from_text(
     settings: Settings,
     ingredients: IngredientRepository,
     source_url: str | None = None,
+    instruction: str | None = None,
 ) -> ImportPreview:
     stripped = text.strip()
     if not stripped:
@@ -97,6 +98,7 @@ def import_from_text(
         source_url=source_url,
         settings=settings,
         ingredients=ingredients,
+        instruction=(instruction or "").strip() or None,
     )
 
 
@@ -272,6 +274,7 @@ def _import_extracted_text(
     image_scrape_note: str | None = None,
     settings: Settings,
     ingredients: IngredientRepository,
+    instruction: str | None = None,
 ) -> ImportPreview:
     trace = ImportTrace()
     if image_scrape_note:
@@ -279,10 +282,13 @@ def _import_extracted_text(
     models = resolve_import_models(settings)
     primary_model = models.text
     system_prompt = build_system_prompt()
+    request = (instruction or "").strip() or None
+    source_text = f"{request}\n\n{extracted_text}" if request else extracted_text
     user_message = build_user_message(
         extracted_text,
         source_url=source_url,
         max_chars=settings.import_max_source_chars,
+        instruction=request,
     )
     try:
         raw = complete_cooklang(
@@ -296,7 +302,7 @@ def _import_extracted_text(
     raw = cooklang.sanitize_front_matter(raw)
     raw, heal_notes = cooklang.heal_imported_cooklang(
         raw,
-        source_text=extracted_text,
+        source_text=source_text,
     )
     for note in heal_notes:
         trace.add(note)
@@ -330,7 +336,7 @@ def _import_extracted_text(
         raw = cooklang.sanitize_front_matter(raw)
         raw, repair_heal_notes = cooklang.heal_imported_cooklang(
             raw,
-            source_text=extracted_text,
+            source_text=source_text,
         )
         for note in repair_heal_notes:
             trace.add(note)
@@ -347,14 +353,14 @@ def _import_extracted_text(
         image_url=image_url,
         settings=settings,
         ingredients=ingredients,
-        source_text=extracted_text,
+        source_text=source_text,
         trace=trace,
         defer_remote_image=image_url is None and image_scrape_note is None,
     )
     return _with_import_metadata(
         _maybe_quality_repair(
             preview,
-            extracted_text=extracted_text,
+            extracted_text=source_text,
             source_url=source_url,
             image_url=image_url,
             settings=settings,
@@ -362,7 +368,7 @@ def _import_extracted_text(
             system_prompt=system_prompt,
             trace=trace,
         ),
-        source_text=extracted_text,
+        source_text=source_text,
         source_url=source_url,
         trace=trace,
     )
