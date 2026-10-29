@@ -21,7 +21,12 @@ from app.config import Settings, get_settings
 from app.density_estimate import estimate_ingredient_densities
 from app.extract import ExtractError, extract_text_from_path
 from app.fireworks_llm import LLMError
-from app.hydration import HydrationError, apply_hydration, summarize_hydration_from_content
+from app.hydration import (
+    HydrationError,
+    HydrationSummary,
+    apply_hydration,
+    summarize_hydration_from_content,
+)
 from app.import_models import (
     FIREWORKS_DASHBOARD_URL,
     FIREWORKS_MODELS_URL,
@@ -121,17 +126,17 @@ def with_hydration(recipe: RecipeDetail, ingredients: IngredientRepository) -> R
     summary = summarize_hydration_from_content(recipe.content, _density_lookup(ingredients))
     if summary is None:
         return recipe.model_copy(update={"hydration": None})
-    return recipe.model_copy(
-        update={
-            "hydration": RecipeHydration(
-                adjustable=summary.adjustable,
-                flour_g=summary.flour_g,
-                issues=summary.issues,
-                liquid_g=summary.liquid_g,
-                percent=summary.percent,
-                starter_g=summary.starter_g,
-            )
-        }
+    return recipe.model_copy(update={"hydration": _hydration_model(summary)})
+
+
+def _hydration_model(summary: HydrationSummary) -> RecipeHydration:
+    return RecipeHydration(
+        adjustable=summary.adjustable,
+        flour_g=summary.flour_g,
+        issues=summary.issues,
+        liquid_g=summary.liquid_g,
+        percent=summary.percent,
+        starter_g=summary.starter_g,
     )
 
 
@@ -471,15 +476,37 @@ def create_recipe(
 @app.get("/api/recipe-scale/{slug:path}")
 def get_scaled_recipe(
     slug: str,
-    servings: float,
+    hydration: float | None = Query(default=None),
+    servings: float | None = Query(default=None),
     repository: RecipeRepository = Depends(get_repository),
     ingredients: IngredientRepository = Depends(get_ingredients),
 ) -> RecipeDetail:
+    if hydration is None and servings is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="servings or hydration is required",
+        )
     try:
-        # Hydration is always from the base recipe (independent of scale).
-        return with_hydration(repository.get_recipe(slug, scaled_servings=servings), ingredients)
+        recipe = repository.get_recipe(slug)
     except StorageError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+    hydrated_content: str | None = None
+    applied_summary: HydrationSummary | None = None
+    if hydration is not None:
+        try:
+            hydrated_content, applied_summary = apply_hydration(
+                recipe.content, hydration, _density_lookup(ingredients)
+            )
+        except HydrationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+            ) from error
+
+    viewed = repository.preview_view(slug, content=hydrated_content, scaled_servings=servings)
+    if applied_summary is not None:
+        return viewed.model_copy(update={"hydration": _hydration_model(applied_summary)})
+    return with_hydration(viewed, ingredients)
 
 
 @app.get("/api/recipes/{slug:path}")

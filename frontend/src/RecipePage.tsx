@@ -135,6 +135,7 @@ export function RecipePage() {
     retry: false,
   })
   const [selectedScaleId, setSelectedScaleId] = useState(builtinScaleId(1))
+  const [localHydrationPercent, setLocalHydrationPercent] = useState<number | null>(null)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(() => new Set())
   const [cookwareDialogOpen, setCookwareDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -156,10 +157,29 @@ export function RecipePage() {
   const baseServings = recipeQuery.data?.servings ?? 1
   const targetServings = baseServings * scaleFactor
   const isScaled = scaleFactor !== 1
+  const savedHydrationPercent =
+    recipeQuery.data?.hydration?.percent == null
+      ? null
+      : Math.round(recipeQuery.data.hydration.percent)
+  const hydrationPercent = localHydrationPercent ?? savedHydrationPercent ?? 0
+  const isHydrationAdjusted =
+    savedHydrationPercent != null && hydrationPercent !== savedHydrationPercent
   const scaledQuery = useQuery({
-    enabled: Boolean(slug) && isScaled,
-    queryFn: () => getScaledRecipe(slug, targetServings),
-    queryKey: ['recipe', slug, 'scale', targetServings],
+    enabled: Boolean(slug) && (isScaled || isHydrationAdjusted),
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey[1] === slug ? previousData : undefined,
+    queryFn: () =>
+      getScaledRecipe(slug, {
+        hydration: isHydrationAdjusted ? hydrationPercent : undefined,
+        servings: isScaled ? targetServings : undefined,
+      }),
+    queryKey: [
+      'recipe',
+      slug,
+      'scale',
+      isScaled ? targetServings : null,
+      isHydrationAdjusted ? hydrationPercent : null,
+    ],
   })
   const bookmarkMutation = useMutation({
     mutationFn: () => updateRecipeMetadata(slug, { bookmarked: !recipeQuery.data?.bookmarked }),
@@ -252,6 +272,7 @@ export function RecipePage() {
 
   useEffect(() => {
     setCompletedSteps(new Set())
+    setLocalHydrationPercent(null)
     setManualUnitSystem(null)
     setEditingIngredientName(null)
   }, [slug])
@@ -326,6 +347,14 @@ export function RecipePage() {
       cancelled = true
     }
   }, [navigate, queryClient, removeRecentRecipe, revision, slug])
+
+  function handleHydrationPercentChange(percent: number) {
+    if (savedHydrationPercent != null && percent === savedHydrationPercent) {
+      setLocalHydrationPercent(null)
+      return
+    }
+    setLocalHydrationPercent(percent)
+  }
 
   function persistScalePrefs(next: RecipeScalePrefs) {
     const current = queryClient.getQueryData<RecipeDetail>(['recipe', slug])
@@ -406,6 +435,12 @@ export function RecipePage() {
   const blocks = getRecipeBlocks(recipe)
   const introNotes = descriptionNotes(recipe)
   const source = resolveSource(recipe)
+  const hydrationPreviewError =
+    isHydrationAdjusted && scaledQuery.isError
+      ? scaledQuery.error instanceof Error
+        ? scaledQuery.error.message
+        : 'Could not update hydration.'
+      : null
   const hasCookware = recipe.cookware.length > 0
   const hasNotes = introNotes.length > 0
 
@@ -629,8 +664,13 @@ export function RecipePage() {
             {recipeQuery.data?.hydration ? (
               <div className="mt-1 text-sm">
                 <HydrationPopover
-                  canEdit={auth.authenticated}
-                  hydration={recipeQuery.data.hydration}
+                  canSave={auth.authenticated}
+                  hydration={recipe.hydration ?? recipeQuery.data.hydration}
+                  onPercentChange={handleHydrationPercentChange}
+                  onSaved={() => setLocalHydrationPercent(null)}
+                  percent={hydrationPercent}
+                  previewError={hydrationPreviewError}
+                  savedPercent={savedHydrationPercent ?? hydrationPercent}
                   slug={slug}
                 />
               </div>
