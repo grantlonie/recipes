@@ -1,10 +1,11 @@
-const CACHE_NAME = 'recipes-app-v8'
+const CACHE_NAME = 'recipes-app-v9'
 const APP_SHELL = [
   '/',
   '/apple-touch-icon.png',
   '/favicon-32x32.png',
   '/favicon.ico',
-  '/logo.png',
+  '/fonts/fraunces-italic.woff2',
+  '/hat-icon.png',
   '/manifest.webmanifest',
   '/web-app-icon-192.png',
   '/web-app-icon-512.png',

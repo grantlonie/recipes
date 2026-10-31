@@ -15,6 +15,8 @@ def test_web_manifest_uses_absolute_share_target_action(monkeypatch):
     assert response.headers["content-type"].startswith("application/manifest+json")
 
     manifest = response.json()
+    assert manifest["name"] == "Recipes"
+    assert manifest["short_name"] == "Recipes"
     assert manifest["share_target"]["action"] == "https://recipes.example.com/import"
     assert manifest["share_target"]["method"] == "GET"
     assert manifest["share_target"]["enctype"] == "application/x-www-form-urlencoded"

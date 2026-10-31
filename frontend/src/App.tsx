@@ -31,6 +31,7 @@ import { RecipeSyncProvider, useRecipeSync } from './RecipeSyncContext'
 import { ReviewPage } from './ReviewPage'
 import { SettingsPage } from './SettingsPage'
 import { formatCountdown, useTimer } from './TimerContext'
+import { BrandMark } from './components/BrandMark'
 import { IconButton } from './components/IconButton'
 import { Popover } from './components/Popover'
 import { TimerDialog } from './components/TimerDialog'
@@ -93,12 +94,8 @@ function AppShell() {
             {isRecipeDetailPage ? (
               <RecipeDetailHeaderNav />
             ) : (
-              <Link
-                aria-label="G&E Recipes home"
-                className="inline-flex shrink-0 items-center"
-                to="/"
-              >
-                <img alt="G&E Recipes" className="h-8 w-auto sm:h-10" src="/logo.png" />
+              <Link aria-label="Recipes home" className="inline-flex shrink-0 items-center" to="/">
+                <BrandMark />
               </Link>
             )}
             <nav className="flex shrink-0 items-center gap-2 text-sm font-medium">
