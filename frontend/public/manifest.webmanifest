@@ -29,7 +29,7 @@
       "purpose": "maskable"
     }
   ],
-  "name": "G&E Recipes",
+  "name": "Recipes",
   "scope": "/",
   "share_target": {
     "action": "/import",
@@ -41,7 +41,7 @@
       "url": "url"
     }
   },
-  "short_name": "G&E Recipes",
+  "short_name": "Recipes",
   "start_url": "/",
   "theme_color": "#f97316"
 }
