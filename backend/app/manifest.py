@@ -34,7 +34,7 @@ def build_web_manifest(settings: Settings) -> dict[str, object]:
             },
         ],
         "id": "/",
-        "name": "G&E Recipes",
+        "name": "Recipes",
         "scope": "/",
         "share_target": {
             "action": f"{base_url}/import",
@@ -46,7 +46,7 @@ def build_web_manifest(settings: Settings) -> dict[str, object]:
                 "url": "url",
             },
         },
-        "short_name": "G&E Recipes",
+        "short_name": "Recipes",
         "start_url": "/",
         "theme_color": "#f97316",
     }
