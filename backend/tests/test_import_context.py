@@ -49,6 +49,8 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "when the source says 1 tbsp fennel seeds" in prompt
     assert "Use front-matter `description` for general recipe-level notes" in prompt
     assert "Step-specific tips stay as Cooklang `>` note lines" in prompt
+    assert "MUST start on its own line" in prompt
+    assert "Mix until smooth. > Do not overheat dough." in prompt
     assert (
         'description: "Hearty weeknight chili with kidney beans. Leftovers keep 3 days refrigerated."'
         in prompt

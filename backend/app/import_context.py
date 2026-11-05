@@ -74,6 +74,11 @@ Output rules:
 - Step-specific tips stay as Cooklang `>` note lines placed next to the related step
   (omit-if for that ingredient line, "instead of pouring" for that pour step). Keep each
   note concise (1-2 sentences). Do not copy thank-yous, review replies, or filler.
+  Each `>` note MUST start on its own line — never append it after step text.
+  Wrong: `Mix until smooth. > Do not overheat dough.`
+  Right:
+  Mix until smooth.
+  > Do not overheat dough.
   Example: `> Soft crust: mix melted butter into the batter instead of pouring it over.`
 - Substitution add-ons not on the Ingredients list: put general substitutions in
   `description` (plain text, no @ markers). Put substitutions that only apply to one
@@ -157,6 +162,7 @@ Add @fennel seeds{1%tsp} when the source says 1 tbsp fennel seeds.
 Use @granulated sugar{}(confectioners') for powdered sugar.
 If using juice instead of beer, add @instant yeast{}(dry active).
 If you prefer a softer crust, mix the butter into the batter.
+Mix until smooth. > Do not overheat dough.
 > Sifting flour is essential.
 > Let me re-check the celery amount and finalize the document.
 > If using a non-alcoholic beverage instead of beer, add yeast.
@@ -173,6 +179,8 @@ Add @green bell pepper{1}(diced) and @vanilla bean{1}(split).
 Season with @salt{}(to taste) and @black pepper{}(to taste). Oil the #baking pan{}.
 Add @fennel seeds{1%Tbsp} when the source says 1 tbsp fennel seeds.
 Dust with @powdered sugar{}(as needed).
+Mix until smooth.
+> Do not overheat dough.
 > Soft crust: mix melted butter into the batter instead of pouring it over the top.
 Stir in @pecans{0.5%cup}(optional) when pecans are on the Ingredients list.
 """
