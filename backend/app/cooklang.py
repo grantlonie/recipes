@@ -53,6 +53,9 @@ COOKWARE_RE = re.compile(
 )
 TIMER_RE = re.compile(rf"~(?P<name>[{TOKEN_CHARS}]*?)?\{{(?P<amount>[^}}]*)\}}")
 NOTE_RE = re.compile(r"^\s*>\s?(?P<note>.+)$", re.MULTILINE)
+# LLMs often append `> notes` after step prose instead of starting a new line.
+# Require a letter after `>` so comparisons like `temp > 80` stay in the step.
+INLINE_NOTE_RE = re.compile(r"(?<=\S)[ \t]+>\s*(?=[A-Za-z])")
 SECTION_LINE_RE = re.compile(r"^=+\s*(.+?)\s*=+\s*$")
 UNICODE_FRACTION_CHARS = "¼½¾⅓⅔⅛⅜⅝⅞"
 QUANTITY_PATTERN = (
@@ -213,6 +216,11 @@ def heal_imported_cooklang(
     if split_salt:
         body = cleaned_body
         notes.append("heal: split @salt and pepper into @salt and @black pepper")
+
+    cleaned_body, split_notes = split_inline_note_lines(body)
+    if split_notes:
+        body = cleaned_body
+        notes.append("heal: moved inline > notes onto their own lines")
 
     cleaned_body, dropped_notes = strip_llm_reasoning_notes(body)
     if dropped_notes:
@@ -820,17 +828,60 @@ def parse_timers(body: str) -> list[str]:
     return timers
 
 
+def split_inline_note_lines(body: str) -> tuple[str, bool]:
+    """Move mid-line Cooklang `>` notes onto their own lines.
+
+    Cooklang notes must start a line. Import/rewrite models often emit
+    ``Mix until smooth. > Do not overheat.`` which would otherwise stay
+    inside the step and never parse as a note.
+    """
+    if not body:
+        return body, False
+    newline = body.endswith("\n")
+    result: list[str] = []
+    changed = False
+    for line in body.splitlines():
+        pieces = _split_inline_notes_in_line(line)
+        if pieces != [line]:
+            changed = True
+        result.extend(pieces)
+    output = "\n".join(result)
+    if newline:
+        output += "\n"
+    return output, changed
+
+
+def _split_inline_notes_in_line(line: str) -> list[str]:
+    pieces: list[str] = []
+    rest = line
+    while True:
+        match = INLINE_NOTE_RE.search(rest)
+        if match is None:
+            if rest or not pieces:
+                pieces.append(rest)
+            return pieces
+        before = rest[: match.start()].rstrip()
+        after = rest[match.end() :].strip()
+        if before:
+            pieces.append(before)
+        if not after:
+            return pieces or [line]
+        rest = f"> {after}"
+
+
 def parse_notes(metadata: dict[str, Any], body: str) -> list[str]:
     notes: list[str] = []
     for key in ("description", "introduction"):
         value = metadata.get(key)
         if isinstance(value, str) and value.strip():
             notes.append(value.strip())
+    body, _ = split_inline_note_lines(body)
     notes.extend(match.group("note").strip() for match in NOTE_RE.finditer(body))
     return notes
 
 
 def parse_blocks(body: str) -> list[RecipeNote | RecipeSection | RecipeStep]:
+    body, _ = split_inline_note_lines(body)
     blocks: list[RecipeNote | RecipeSection | RecipeStep] = []
     for block in re.split(r"\n\s*\n", body.strip()):
         lines = block.splitlines()
@@ -1255,6 +1306,7 @@ def normalize_document(content: str) -> str:
     metadata, body = parse_document(content)
     normalize_document_refs(metadata)
     validate_document_refs(metadata)
+    body, _ = split_inline_note_lines(body)
     return render_document(metadata, normalize_body_amounts(body))
 
 
@@ -1262,6 +1314,7 @@ def prepare_imported_content(content: str) -> str:
     metadata, body = parse_document(trim_cooklang_document(content))
     strip_app_owned_import_keys(metadata)
     body, _ = split_salt_and_pepper_markers(body)
+    body, _ = split_inline_note_lines(body)
     body, _ = strip_llm_reasoning_notes(body)
     body = normalize_ingredient_amounts(strip_import_error_notes(body))
     return normalize_document(render_document(metadata, body))
@@ -1462,6 +1515,7 @@ def strip_comments(body: str) -> str:
 
 
 def strip_note_lines(body: str) -> str:
+    body, _ = split_inline_note_lines(body)
     return "\n".join(line for line in body.splitlines() if not NOTE_RE.match(line))
 
 

@@ -8,6 +8,7 @@ from app.cooklang import (
     parse_cookware,
     parse_document,
     parse_ingredients,
+    parse_notes,
     prepare_imported_content,
     render_document,
     sanitize_front_matter,
@@ -15,6 +16,7 @@ from app.cooklang import (
     scale_steps,
     site_from_url,
     split_amount,
+    split_inline_note_lines,
     trim_cooklang_document,
 )
 from app.importer import _invalid_import_reason
@@ -392,6 +394,24 @@ Season with @salt{}(to taste).
     assert any("self-talk" in note or "trimmed trailing LLM reasoning" in note for note in notes)
 
 
+def test_heal_splits_inline_note_onto_own_line():
+    raw = """---
+title: "Milk Bread"
+---
+
+Mix until smooth. > Do not overheat dough; keep mixer temperature below 80°F.
+"""
+    healed, notes = heal_imported_cooklang(raw)
+    _metadata, body = parse_document(healed)
+
+    assert "smooth. >" not in body
+    assert "Mix until smooth.\n> Do not overheat dough; keep mixer temperature below 80°F." in body
+    assert any("inline" in note and ">" in note for note in notes)
+    blocks = parse_blocks(body)
+    assert [block.kind for block in blocks] == ["step", "note"]
+    assert blocks[1].text == "Do not overheat dough; keep mixer temperature below 80°F."
+
+
 def test_heal_splits_salt_and_pepper_marker():
     raw = """---
 title: "Steak"
@@ -520,6 +540,47 @@ Bake for ~{1%hour}."""
     assert blocks[1].text == "Soft crust: mix butter into the batter."
     assert blocks[2].text == "If not using beer, add yeast."
     assert blocks[3].text == "Bake for ~{1%hour}."
+
+
+def test_parse_blocks_splits_note_appended_to_step():
+    blocks = parse_blocks(
+        "Mix on medium 7 minutes until smooth. > Do not overheat dough; "
+        "keep mixer temperature below 80°F."
+    )
+
+    assert [block.kind for block in blocks] == ["step", "note"]
+    assert blocks[0].text == "Mix on medium 7 minutes until smooth."
+    assert blocks[1].text == "Do not overheat dough; keep mixer temperature below 80°F."
+
+
+def test_parse_blocks_splits_multiple_inline_notes():
+    blocks = parse_blocks("Mix until smooth. > Keep the dough cool. > Cover the bowl.")
+
+    assert [block.kind for block in blocks] == ["step", "note", "note"]
+    assert blocks[0].text == "Mix until smooth."
+    assert blocks[1].text == "Keep the dough cool."
+    assert blocks[2].text == "Cover the bowl."
+
+
+def test_parse_blocks_keeps_greater_than_comparisons_in_steps():
+    blocks = parse_blocks("Cook until the internal temperature is > 80°F.")
+
+    assert [block.kind for block in blocks] == ["step"]
+    assert blocks[0].text == "Cook until the internal temperature is > 80°F."
+
+
+def test_parse_notes_includes_note_appended_to_step():
+    notes = parse_notes({}, "Mix until smooth. > Do not overheat dough.")
+
+    assert notes == ["Do not overheat dough."]
+
+
+def test_split_inline_note_lines_is_idempotent():
+    original = "Mix until smooth.\n> Do not overheat dough.\n"
+    split, changed = split_inline_note_lines(original)
+
+    assert changed is False
+    assert split == original
 
 
 def test_parse_ingredients_keeps_braced_multi_word_names_together():
@@ -668,6 +729,16 @@ def test_parse_ingredients_excludes_note_line_references():
     assert ingredients[0].note == "seafood"
 
 
+def test_parse_ingredients_excludes_note_appended_to_step():
+    ingredients = parse_ingredients(
+        "Add @flour{200%g}. Mix until smooth. > Start with @flour{100%g} more if dry."
+    )
+
+    assert [ingredient.name for ingredient in ingredients] == ["flour"]
+    assert ingredients[0].quantity == "200"
+    assert ingredients[0].unit == "g"
+
+
 def test_scale_blocks_scales_note_ingredient_amounts():
     blocks = parse_blocks(
         "\n".join(
@@ -681,6 +752,19 @@ def test_scale_blocks_scales_note_ingredient_amounts():
 
     assert scaled[0].text == "Add @chicken broth{1672%g}."
     assert scaled[1].text == "Start with @chicken broth{1434%g} of stock."
+
+
+def test_normalize_document_splits_inline_notes():
+    content = """---
+title: Test
+---
+
+Mix until smooth. > Do not overheat dough.
+"""
+    normalized = normalize_document(content)
+
+    assert "smooth. >" not in normalized
+    assert "Mix until smooth.\n> Do not overheat dough." in normalized
 
 
 def test_normalize_document_converts_fractions_to_decimals():

@@ -1,10 +1,6 @@
 import type { JSONContent } from '@tiptap/core'
 
-import {
-  extractCookwareTokens,
-  serializeCookware,
-  type CookwareAttrs,
-} from './cooklangCookware'
+import { extractCookwareTokens, serializeCookware, type CookwareAttrs } from './cooklangCookware'
 import { extractTokens, serializeIngredient, type IngredientAttrs } from './cooklangTokens'
 import { extractTimerTokens, serializeTimer, type TimerAttrs } from './cooklangTimers'
 import type { RecipeBlock, RecipeDetail } from './types'
@@ -12,9 +8,12 @@ import type { RecipeBlock, RecipeDetail } from './types'
 const SECTION_LINE_RE = /^=+\s*(.+?)\s*=+\s*$/
 const NOTE_LINE_RE = /^>\s?(.*)$/
 const FRONT_MATTER_RE = /^---\s*\n[\s\S]*?\n---\s*\n?/
+// LLMs often append `> notes` after step prose. Require a letter after `>` so
+// comparisons like `temp > 80` stay in the step.
+const INLINE_NOTE_RE = /(?<=\S)[ \t]+>\s*(?=[A-Za-z])/
 
 export function parseCooklangBody(body: string): JSONContent {
-  const lines = body.split('\n')
+  const lines = body.split('\n').flatMap(splitInlineNoteLines)
   return {
     type: 'doc',
     content: lines.map(parseCooklangLine),
@@ -29,7 +28,7 @@ export function serializeCooklangBody(doc: JSONContent): string {
 export function parseRecipeBlocks(body: string): RecipeBlock[] {
   const blocks: RecipeBlock[] = []
   for (const block of body.trim().split(/\n\s*\n/)) {
-    const lines = block.split('\n')
+    const lines = block.split('\n').flatMap(splitInlineNoteLines)
     let index = 0
     while (index < lines.length) {
       const stripped = lines[index].trim()
@@ -97,6 +96,29 @@ function parseCooklangLine(line: string): JSONContent {
 
   const content = parseLineContent(line)
   return content ? { type: 'paragraph', content } : { type: 'paragraph' }
+}
+
+function splitInlineNoteLines(line: string): string[] {
+  const pieces: string[] = []
+  let rest = line
+  while (true) {
+    const match = rest.match(INLINE_NOTE_RE)
+    if (!match || match.index == null) {
+      if (rest || !pieces.length) {
+        pieces.push(rest)
+      }
+      return pieces
+    }
+    const before = rest.slice(0, match.index).trimEnd()
+    const after = rest.slice(match.index + match[0].length).trim()
+    if (before) {
+      pieces.push(before)
+    }
+    if (!after) {
+      return pieces.length ? pieces : [line]
+    }
+    rest = `> ${after}`
+  }
 }
 
 type InlineMarker =
