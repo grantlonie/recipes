@@ -50,6 +50,7 @@ const emptyBody = ''
 const RECIPE_PLACEHOLDER =
   'Start writing your recipe from scratch, or paste text and click Assistant.'
 const MAX_SERVINGS = 12
+const PLACEHOLDER_TITLES = new Set(['new recipe', 'untitled recipe'])
 
 interface IngredientFormState {
   fixed: boolean
@@ -110,14 +111,14 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   const [reimportConfirmOpen, setReimportConfirmOpen] = useState(false)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [recipeSlug, setRecipeSlug] = useState(mode === 'new' ? 'new-recipe' : slug)
-  const [servings, setServings] = useState(4)
+  const [servings, setServings] = useState<number | ''>(4)
   const [source, setSource] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
   const [time, setTime] = useState('')
   const [prepTime, setPrepTime] = useState('')
   const [cookTime, setCookTime] = useState('')
-  const [title, setTitle] = useState('New Recipe')
+  const [title, setTitle] = useState('')
   const isNew = mode === 'new'
   const hasSource = Boolean(source.trim())
   const canRewrite = Boolean(body.trim())
@@ -406,6 +407,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 <input
                   className={inputClassName}
                   onChange={event => setTitle(event.target.value)}
+                  placeholder="Recipe name"
                   value={title}
                 />
               </Field>
@@ -413,8 +415,9 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
                 <input
                   className={inputClassName}
                   max={MAX_SERVINGS}
-                  min="1"
-                  onChange={event => setServings(clampServings(Number(event.target.value) || 1))}
+                  min={1}
+                  onBlur={commitServings}
+                  onChange={handleServingsChange}
                   type="number"
                   value={servings}
                 />
@@ -739,7 +742,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     options: { skipTags?: boolean } = {}
   ) {
     setBaseMetadata(metadata)
-    setTitle(getString(metadata.title) || 'New Recipe')
+    setTitle(getString(metadata.title))
     if (!options.skipTags) {
       setTags(getTagsFromMetadata(metadata.tags))
     }
@@ -760,7 +763,8 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     setBody(nextBody || emptyBody)
   }
 
-  function buildContent() {
+  function buildContent(options: { titleFallback?: string } = {}) {
+    const titleFallback = options.titleFallback ?? 'Untitled Recipe'
     const nextPrep = prepTime.trim()
     const nextCook = cookTime.trim()
     const nextTotal = time.trim()
@@ -769,10 +773,10 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       bookmarked,
       description: description.trim() || undefined,
       image: image.trim() || undefined,
-      servings,
+      servings: resolvedServings(servings),
       source: source.trim() || undefined,
       tags,
-      title: title.trim() || 'Untitled Recipe',
+      title: providedRecipeTitle(title) || titleFallback || undefined,
     }
     delete metadata.duration
     delete metadata['time.prep']
@@ -793,6 +797,23 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
     navigate(isNew ? '/' : `/recipes/${slug}`)
   }
 
+  function handleServingsChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value
+    if (raw === '') {
+      setServings('')
+      return
+    }
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) {
+      return
+    }
+    setServings(clampServings(parsed))
+  }
+
+  function commitServings() {
+    setServings(current => resolvedServings(current))
+  }
+
   async function handleSave() {
     await saveMutation.mutateAsync()
   }
@@ -805,19 +826,18 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
   }
 
   function handleAssistantSubmit(instruction: string) {
+    const recipeTitle = providedRecipeTitle(title)
     const text = instruction
-      ? buildContent()
-      : isNew
-        ? body.trim()
-        : buildRewriteSourceText({
-            body,
-            cookTime,
-            description,
-            prepTime,
-            servings,
-            time,
-            title,
-          })
+      ? buildContent({ titleFallback: '' })
+      : buildRewriteSourceText({
+          body,
+          cookTime,
+          description,
+          prepTime,
+          servings: resolvedServings(servings),
+          time,
+          title: recipeTitle,
+        })
     if (!text.trim()) {
       return
     }
@@ -1298,6 +1318,18 @@ function ingredientFormFromAttrs(attrs: IngredientAttrs): IngredientFormState {
 
 function clampServings(value: number): number {
   return Math.min(MAX_SERVINGS, Math.max(1, Math.round(value)))
+}
+
+function resolvedServings(value: number | ''): number {
+  return value === '' ? 1 : clampServings(value)
+}
+
+function providedRecipeTitle(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed || PLACEHOLDER_TITLES.has(trimmed.toLowerCase())) {
+    return ''
+  }
+  return trimmed
 }
 
 function splitDocument(content: string) {

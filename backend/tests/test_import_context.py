@@ -13,7 +13,9 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Ingredient catalog" not in prompt
     assert "You convert recipes into Cooklang" in prompt
     assert "`title` is REQUIRED" in prompt
-    assert "Copy the recipe name from the source" in prompt
+    assert "Copy the recipe name from the source when present" in prompt
+    assert "infer a concise dish title from the ingredients and method" in prompt
+    assert 'Do not use placeholders such as "New Recipe"' in prompt
     assert "Never write @salt and pepper{}" in prompt
     assert "Never put your own reasoning" in prompt
     assert "do not use Title: or name:" in prompt
@@ -68,6 +70,9 @@ def test_build_system_prompt_omits_ingredient_catalog():
 def test_build_user_message_requires_title_key():
     message = build_user_message("French Toast\n\nWhisk eggs.")
     assert 'Front matter MUST start with title: "Recipe Name"' in message
+    assert "Copy the name from the" in message
+    assert "source when present" in message
+    assert "If the source has no recipe name, infer a concise dish title" in message
     assert "Never emit @salt and pepper{}" in message
     assert "French Toast" in message
 
@@ -78,6 +83,7 @@ def test_build_user_message_with_instruction_adjusts_current_recipe():
     assert "Update this Cooklang recipe according to the editor's request." in message
     assert "Editor request:" in message
     assert "Make it vegetarian" in message
+    assert "If the current recipe has no title, infer a concise dish name" in message
     assert "Current recipe:" in message
     assert "Brown @beef{1%lb}." in message
     assert "Convert this recipe source into Cooklang." not in message
@@ -87,6 +93,7 @@ def test_build_user_message_with_instruction_adjusts_current_recipe():
 def test_build_user_message_blank_instruction_uses_convert_path():
     message = build_user_message("French Toast\n\nWhisk eggs.", instruction="   ")
     assert "Convert this recipe source into Cooklang." in message
+    assert "If the source has no recipe name, infer a concise dish title" in message
     assert "Editor request:" not in message
 
 
