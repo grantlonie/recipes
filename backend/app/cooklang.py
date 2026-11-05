@@ -413,6 +413,7 @@ def guess_title_from_source_text(source_text: str) -> str | None:
         "prep time",
         "cook time",
         "total time",
+        "time:",
         "makes ",
         "recipe text",
     )
@@ -431,7 +432,11 @@ def guess_title_from_source_text(source_text: str) -> str | None:
         # Strip trailing site noise / trademark marks.
         cleaned = line.replace("®", "").replace("©", "").replace("™", "").strip()
         cleaned = re.sub(r"\s+", " ", cleaned)
-        return cleaned or None
+        if not cleaned or cleaned.casefold() in {"new recipe", "recipe", "untitled recipe"}:
+            continue
+        if not _looks_like_title_line(cleaned):
+            continue
+        return cleaned
     return None
 
 

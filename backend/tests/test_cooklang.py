@@ -333,6 +333,29 @@ Ingredients
     assert any("from source" in note for note in notes)
 
 
+def test_heal_skips_servings_and_steps_when_recovering_title():
+    raw = """---
+description: "Weeknight pasta."
+---
+
+Boil @pasta{1%lb}.
+"""
+    source = """Servings: 4
+Prep time: 10 minutes
+Time: 30 minutes
+
+Brown @beef{1%lb}.
+Add @garlic{3%cloves}.
+
+Lemon Garlic Pasta
+"""
+    healed, notes = heal_imported_cooklang(raw, source_text=source)
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Lemon Garlic Pasta"
+    assert "Boil @pasta{1%lb}." in body
+    assert any("from source" in note for note in notes)
+
+
 def test_heal_recovers_title_from_source_text():
     raw = """---
 description: "Classic french toast."
