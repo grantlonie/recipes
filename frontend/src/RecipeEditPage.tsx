@@ -50,7 +50,7 @@ const emptyBody = ''
 const RECIPE_PLACEHOLDER =
   'Start writing your recipe from scratch, or paste text and click Assistant.'
 const MAX_SERVINGS = 12
-const PLACEHOLDER_TITLES = new Set(['new recipe', 'untitled recipe'])
+const PLACEHOLDER_TITLES = new Set(['new recipe', 'recipe', 'recipe name', 'untitled recipe'])
 
 interface IngredientFormState {
   fixed: boolean
@@ -230,6 +230,7 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
               preserveImage: true,
               preserveSource: true,
               preserveTags: true,
+              preserveTitle: true,
             }
       )
       completeImport({
@@ -879,6 +880,12 @@ export function RecipeEditPage({ mode }: RecipeEditPageProps) {
       : withImportedImage(parsed.metadata, importedImage)
     if (options.preserveSource) {
       metadata = { ...metadata, source: source.trim() || undefined }
+    }
+    if (options.preserveTitle) {
+      const currentTitle = providedRecipeTitle(title)
+      if (currentTitle) {
+        metadata = { ...metadata, title: currentTitle }
+      }
     }
     const currentBookmarked = bookmarked
     const currentTags = tags

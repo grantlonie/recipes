@@ -16,6 +16,7 @@ def test_build_system_prompt_omits_ingredient_catalog():
     assert "Copy the recipe name from the source when present" in prompt
     assert "infer a concise dish title from the ingredients and method" in prompt
     assert 'Do not use placeholders such as "New Recipe"' in prompt
+    assert '"Recipe Name"' in prompt
     assert "Never write @salt and pepper{}" in prompt
     assert "Never put your own reasoning" in prompt
     assert "do not use Title: or name:" in prompt
@@ -71,18 +72,21 @@ def test_build_system_prompt_omits_ingredient_catalog():
 
 def test_build_user_message_requires_title_key():
     message = build_user_message("French Toast\n\nWhisk eggs.")
-    assert 'Front matter MUST start with title: "Recipe Name"' in message
+    assert "Front matter MUST start with a title: key using the recipe's actual name." in message
+    assert "Never emit placeholders such as Recipe Name" in message
     assert "Copy the name from the" in message
     assert "source when present" in message
     assert "If the source has no recipe name, infer a concise dish title" in message
     assert "Never emit @salt and pepper{}" in message
     assert "French Toast" in message
+    assert 'title: "Recipe Name"' not in message
 
 
 def test_build_user_message_with_instruction_adjusts_current_recipe():
     recipe = '---\ntitle: "Chili"\n---\n\nBrown @beef{1%lb}.\n'
     message = build_user_message(recipe, instruction="Make it vegetarian")
     assert "Update this Cooklang recipe according to the editor's request." in message
+    assert "Keep the existing title exactly. Do not rename the recipe." in message
     assert "Editor request:" in message
     assert "Make it vegetarian" in message
     assert "If the current recipe has no title, infer a concise dish name" in message
@@ -90,6 +94,7 @@ def test_build_user_message_with_instruction_adjusts_current_recipe():
     assert "Brown @beef{1%lb}." in message
     assert "Convert this recipe source into Cooklang." not in message
     assert "Source text:" not in message
+    assert 'title: "Recipe Name"' not in message
 
 
 def test_build_user_message_blank_instruction_uses_convert_path():

@@ -71,8 +71,43 @@ def test_import_from_text_sends_instruction_to_model(
     user_message = mock_complete.call_args.kwargs["user_message"]
     assert "Editor request:" in user_message
     assert "Make it vegetarian" in user_message
+    assert "Keep the existing title exactly. Do not rename the recipe." in user_message
     assert "Current recipe:" in user_message
     assert "Brown @beef{1%lb}." in user_message
+    assert 'title: "Recipe Name"' not in user_message
+
+
+def test_import_from_text_with_instruction_keeps_existing_title(
+    settings: Settings, ingredients: IngredientRepository
+):
+    recipe = '---\ntitle: "Chili"\n---\n\nBrown @beef{1%lb}.\n'
+    rewritten = """---
+title: Vegetarian Chili
+---
+
+Simmer @beans{}.
+"""
+    with patch("app.importer.complete_cooklang", return_value=rewritten):
+        preview = import_from_text(
+            recipe,
+            settings=settings,
+            ingredients=ingredients,
+            instruction="Make it vegetarian",
+        )
+
+    metadata, body = cooklang_mod.parse_document(preview.content)
+    assert metadata["title"] == "Chili"
+    assert "Simmer @beans{}." in body
+
+
+def test_import_from_text_without_instruction_keeps_model_title(
+    settings: Settings, ingredients: IngredientRepository
+):
+    with patch("app.importer.complete_cooklang", return_value=SAMPLE_COOKLANG):
+        preview = import_from_text("A pasta recipe", settings=settings, ingredients=ingredients)
+
+    metadata, _body = cooklang_mod.parse_document(preview.content)
+    assert metadata["title"] == "Chicken & bacon pasta"
 
 
 def test_import_from_text_maps_catalog_ingredients(

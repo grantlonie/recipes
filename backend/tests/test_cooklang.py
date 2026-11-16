@@ -1,4 +1,5 @@
 from app.cooklang import (
+    existing_recipe_title,
     format_yaml_quoted_string,
     heal_imported_cooklang,
     metadata_cook_time,
@@ -18,6 +19,7 @@ from app.cooklang import (
     split_amount,
     split_inline_note_lines,
     trim_cooklang_document,
+    usable_recipe_title,
 )
 from app.importer import _invalid_import_reason
 
@@ -376,6 +378,47 @@ Ingredients
     assert metadata["title"] == "French Toast"
     assert "Whisk @eggs{2}" in body
     assert any("from source" in note for note in notes)
+
+
+def test_usable_recipe_title_rejects_placeholders():
+    assert usable_recipe_title("Chili") == "Chili"
+    assert usable_recipe_title(" Recipe Name ") is None
+    assert usable_recipe_title("recipe") is None
+    assert usable_recipe_title("") is None
+    assert usable_recipe_title(None) is None
+
+
+def test_existing_recipe_title_reads_front_matter():
+    content = '---\ntitle: "Chili"\n---\n\nBrown @beef{1%lb}.\n'
+    assert existing_recipe_title(content) == "Chili"
+    assert existing_recipe_title("---\ntitle: Recipe Name\n---\n\nCook.\n") is None
+    assert existing_recipe_title("Brown @beef{1%lb}.\n") is None
+
+
+def test_heal_replaces_placeholder_title_from_fallback():
+    raw = """---
+title: Recipe Name
+description: "Weeknight chili."
+---
+
+Brown @beef{1%lb}.
+"""
+    healed, notes = heal_imported_cooklang(raw, fallback_title="Chili")
+    metadata, body = parse_document(healed)
+    assert metadata["title"] == "Chili"
+    assert "Brown @beef{1%lb}." in body
+    assert any("from source" in note for note in notes)
+    assert _invalid_import_reason(healed) is None
+
+
+def test_invalid_import_reason_rejects_placeholder_title():
+    raw = """---
+title: Recipe Name
+---
+
+Brown @beef{1%lb}.
+"""
+    assert _invalid_import_reason(raw) == "missing title"
 
 
 def test_heal_does_not_treat_step_as_title():
