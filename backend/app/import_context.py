@@ -112,8 +112,8 @@ Output rules:
   If the source has no recipe name (no headline, or only servings/times/
   ingredients/steps), infer a concise dish title from the ingredients and method
   (example: garlic, chicken, lemon, and roasting steps → "Lemon Garlic Roast Chicken").
-  Do not use placeholders such as "New Recipe", "Untitled Recipe", or "Recipe",
-  and do not use metadata labels such as "Servings".
+  Do not use placeholders such as "New Recipe", "Untitled Recipe", "Recipe",
+  or "Recipe Name", and do not use metadata labels such as "Servings".
   Always write title/description/introduction as single-line double-quoted YAML strings.
   Escape internal double quotes as \\". Apostrophes and & are fine inside double quotes —
   do not wrap titles in single quotes, and do not use Title: or name: instead of title:.
@@ -227,10 +227,13 @@ def build_user_message(
             "The editor's request is part of the source of truth: you MAY add, remove,",
             "or change ingredients, quantities, steps, notes, and front matter when asked.",
             "Keep everything the request does not mention.",
+            "Keep the existing title exactly. Do not rename the recipe.",
             "Return only the finished .cook document — no reasoning or checklists.",
-            'Front matter MUST start with title: "Recipe Name".',
+            "Front matter MUST start with a title: key using the recipe's actual name.",
+            'Never emit placeholders such as "Recipe Name", "New Recipe",',
+            '"Untitled Recipe", or "Recipe".',
             "If the current recipe has no title, infer a concise dish name from the",
-            "ingredients and steps unless the editor request names it.",
+            "ingredients and steps.",
             "Never emit @salt and pepper{}; use @salt{} and @black pepper{} instead.",
             "",
             "Editor request:",
@@ -244,10 +247,11 @@ def build_user_message(
 
     parts = [
         "Convert this recipe source into Cooklang.",
-        'Front matter MUST start with title: "Recipe Name". Copy the name from the',
-        "source when present (usually the first non-empty line / headline).",
+        "Front matter MUST start with a title: key using the recipe's actual name.",
+        "Copy the name from the source when present (usually the first non-empty",
+        "line / headline). Never emit placeholders such as Recipe Name or New Recipe.",
         "If the source has no recipe name, infer a concise dish title from the",
-        "ingredients and steps. Do not use placeholders such as New Recipe.",
+        "ingredients and steps.",
         "Title is required.",
         "Never emit @salt and pepper{}; use @salt{} and @black pepper{} instead.",
         "Return only the finished .cook document — no reasoning or checklists.",

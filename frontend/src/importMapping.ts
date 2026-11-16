@@ -40,6 +40,7 @@ export interface PendingImport {
   preserveImage?: boolean
   preserveSource?: boolean
   preserveTags?: boolean
+  preserveTitle?: boolean
   suggestedSlug?: string
 }
 

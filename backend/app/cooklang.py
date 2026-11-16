@@ -25,6 +25,14 @@ TITLE_KEY_ALIASES = frozenset(
         "recipe_title",
     }
 )
+PLACEHOLDER_TITLES = frozenset(
+    {
+        "new recipe",
+        "recipe",
+        "recipe name",
+        "untitled recipe",
+    }
+)
 APP_OWNED_IMPORT_KEYS = frozenset(
     {
         "review",
@@ -86,6 +94,27 @@ def parse_document(content: str) -> tuple[dict[str, Any], str]:
         metadata = {}
     clean_metadata_notes(metadata)
     return metadata, content[match.end() :]
+
+
+def usable_recipe_title(value: object) -> str | None:
+    """Return a real recipe title, or None for missing/placeholder values."""
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped or stripped.casefold() in PLACEHOLDER_TITLES:
+        return None
+    return stripped
+
+
+def existing_recipe_title(content: str) -> str | None:
+    """Read a usable title from Cooklang front matter, if present."""
+    try:
+        metadata, _body = parse_document(content)
+    except Exception:
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    return usable_recipe_title(metadata.get("title"))
 
 
 def sanitize_front_matter(content: str) -> str:
@@ -195,7 +224,7 @@ def heal_imported_cooklang(
             metadata.pop(key, None)
             notes.append(f"heal: dropped invalid {key} ref ({value})")
 
-    if not metadata.get("title"):
+    if not usable_recipe_title(metadata.get("title")):
         recovered, body, recover_note = recover_missing_title(
             body,
             fallback_title=fallback_title,
@@ -206,10 +235,10 @@ def heal_imported_cooklang(
                 body = _strip_broken_front_matter_prefix(body)
             metadata = {"title": recovered, **{k: v for k, v in metadata.items() if k != "title"}}
             notes.append(recover_note)
-        elif not recovered or not has_front_matter:
+        elif not str(metadata.get("title") or "").strip() or not has_front_matter:
             return cleaned, notes
 
-    if not metadata.get("title") or not body.strip():
+    if not str(metadata.get("title") or "").strip() or not body.strip():
         return cleaned, notes
 
     cleaned_body, split_salt = split_salt_and_pepper_markers(body)
@@ -314,7 +343,7 @@ def recover_missing_title(
     Prefer source/fallback over body text: body often starts with ==Section==
     labels like Preparation, which are not recipe titles.
     """
-    guessed = (fallback_title or "").strip() or guess_title_from_source_text(source_text or "")
+    guessed = usable_recipe_title(fallback_title) or guess_title_from_source_text(source_text or "")
     if guessed:
         return guessed, body, "heal: recovered title from source"
 
@@ -432,7 +461,7 @@ def guess_title_from_source_text(source_text: str) -> str | None:
         # Strip trailing site noise / trademark marks.
         cleaned = line.replace("®", "").replace("©", "").replace("™", "").strip()
         cleaned = re.sub(r"\s+", " ", cleaned)
-        if not cleaned or cleaned.casefold() in {"new recipe", "recipe", "untitled recipe"}:
+        if not usable_recipe_title(cleaned):
             continue
         if not _looks_like_title_line(cleaned):
             continue

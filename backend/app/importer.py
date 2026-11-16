@@ -283,6 +283,7 @@ def _import_extracted_text(
     primary_model = models.text
     system_prompt = build_system_prompt()
     request = (instruction or "").strip() or None
+    keep_title = cooklang.existing_recipe_title(extracted_text) if request else None
     source_text = f"{request}\n\n{extracted_text}" if request else extracted_text
     user_message = build_user_message(
         extracted_text,
@@ -302,6 +303,7 @@ def _import_extracted_text(
     raw = cooklang.sanitize_front_matter(raw)
     raw, heal_notes = cooklang.heal_imported_cooklang(
         raw,
+        fallback_title=keep_title,
         source_text=source_text,
     )
     for note in heal_notes:
@@ -327,7 +329,8 @@ def _import_extracted_text(
                     f"{user_message}\n\n"
                     "The previous output was invalid Cooklang. "
                     "Return only valid Cooklang with YAML front matter. "
-                    'Front matter must start with title: "Recipe Name".'
+                    "Front matter must start with a title: key using the recipe's "
+                    "actual name, not a placeholder such as Recipe Name."
                 ),
                 model=repair_model,
             )
@@ -336,6 +339,7 @@ def _import_extracted_text(
         raw = cooklang.sanitize_front_matter(raw)
         raw, repair_heal_notes = cooklang.heal_imported_cooklang(
             raw,
+            fallback_title=keep_title,
             source_text=source_text,
         )
         for note in repair_heal_notes:
@@ -357,7 +361,7 @@ def _import_extracted_text(
         trace=trace,
         defer_remote_image=image_url is None and image_scrape_note is None,
     )
-    return _with_import_metadata(
+    preview = _with_import_metadata(
         _maybe_quality_repair(
             preview,
             extracted_text=source_text,
@@ -372,6 +376,9 @@ def _import_extracted_text(
         source_url=source_url,
         trace=trace,
     )
+    if keep_title:
+        preview = _preserve_existing_title(preview, keep_title)
+    return preview
 
 
 def _finalize_import(
@@ -819,6 +826,17 @@ def _has_usable_image(metadata: dict) -> bool:
     return bool(value) and (cooklang.is_ref_url(value) or cooklang.is_ref_file(value))
 
 
+def _preserve_existing_title(preview: ImportPreview, title: str) -> ImportPreview:
+    metadata, body = cooklang.parse_document(preview.content)
+    if cooklang.usable_recipe_title(metadata.get("title")) == title:
+        return preview
+    rest = {key: value for key, value in metadata.items() if key != "title"}
+    content = cooklang.render_document({"title": title, **rest}, body)
+    if not content.endswith("\n"):
+        content += "\n"
+    return preview.model_copy(update={"content": content})
+
+
 def _is_valid_import(content: str) -> bool:
     return _invalid_import_reason(content) is None
 
@@ -828,7 +846,7 @@ def _invalid_import_reason(content: str) -> str | None:
         metadata, body = cooklang.parse_document(content.strip())
     except Exception as error:
         return f"parse error: {error}"
-    if not metadata.get("title"):
+    if not cooklang.usable_recipe_title(metadata.get("title")):
         return "missing title"
     if not body.strip():
         return "empty body"
